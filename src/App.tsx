@@ -6,6 +6,9 @@ import {
   Loader2, ArrowRight, Server, Play, ShieldAlert, Cpu
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { joinQueue, createQueueSSE, getQueueStatus } from './api/queue';
+import { createOrder } from './api/orders';
+import { confirmPayment, triggerWebhook } from './api/payments';
 
 // Product Interface
 interface Product {
@@ -189,7 +192,7 @@ export default function App() {
     if (queueStatus === 'WAITING' && !isSandbox && targetProduct) {
       if (window.EventSource) {
         // SSE mode
-        sse = new EventSource(`/api/v1/queue/stream/${targetProduct.id}`);
+        sse = createQueueSSE(targetProduct.id);
         sse.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
@@ -212,15 +215,12 @@ export default function App() {
       // Fallback/Simultaneous Poll
       pollInterval = setInterval(async () => {
         try {
-          const res = await fetch(`/api/v1/queue/status?productId=${targetProduct.id}`);
-          if (res.ok) {
-            const data = await res.json();
-            setQueuePosition(data.position);
-            if (data.status === 'PROCESSING' || data.status === 'DONE') {
-              setQueueStatus('PROCESSING');
-              setQueueTicket(data.token || 'tkt_backend_verified');
-              if (pollInterval) clearInterval(pollInterval);
-            }
+          const data = await getQueueStatus(targetProduct.id);
+          setQueuePosition(data.position);
+          if (data.status === 'PROCESSING' || data.status === 'DONE') {
+            setQueueStatus('PROCESSING');
+            setQueueTicket(data.token || 'tkt_backend_verified');
+            if (pollInterval) clearInterval(pollInterval);
           }
         } catch (e) {
           console.error('Polling error', e);
@@ -248,9 +248,7 @@ export default function App() {
       setOrderState('NONE');
 
       if (!isSandbox) {
-        // Call real queue join backend
-        fetch(`/api/v1/queue/join/${product.id}`, { method: 'POST' })
-          .catch(e => console.error('Failed to join queue', e));
+        joinQueue(product.id).catch(e => console.error('Failed to join queue', e));
       }
     } else {
       // Regular product: Directly create order
@@ -273,29 +271,13 @@ export default function App() {
       }, 1200);
     } else {
       try {
-        const res = await fetch('/api/v1/orders', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer test-token'
-          },
-          body: JSON.stringify({
-            accessTicket: ticket,
-            items: [{ productId: product.id, quantity: 1 }]
-          })
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setOrderId(data.orderId);
-          setOrderPaymentKey(data.orderPaymentKey);
-          setOrderState('CHECKOUT');
-        } else {
-          setOrderState('FAILED');
-          alert('주문 생성 실패. 재고 부족 또는 대기열 티켓 검증 오류.');
-        }
-      } catch (e) {
+        const data = await createOrder([{ productId: product.id, quantity: 1 }], ticket);
+        setOrderId(data.orderId);
+        setOrderPaymentKey(data.orderPaymentKey);
+        setOrderState('CHECKOUT');
+      } catch {
         setOrderState('FAILED');
-        console.error('Create order API error', e);
+        alert('주문 생성 실패. 재고 부족 또는 대기열 티켓 검증 오류.');
       }
     }
   };
@@ -316,28 +298,12 @@ export default function App() {
       }, 1500);
     } else {
       try {
-        const res = await fetch('/api/v1/payments/toss/confirm', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer test-token'
-          },
-          body: JSON.stringify({
-            tossPaymentKey: mockTossKey,
-            orderId: orderId,
-            amount: paymentAmount
-          })
-        });
-        if (res.ok) {
-          setOrderState('PAID');
-          setQueueStatus('IDLE');
-        } else {
-          setOrderState('FAILED');
-          alert('결제 승인 거절됨.');
-        }
-      } catch (e) {
+        await confirmPayment(mockTossKey, orderId, paymentAmount);
+        setOrderState('PAID');
+        setQueueStatus('IDLE');
+      } catch {
         setOrderState('FAILED');
-        console.error('Payment confirm API error', e);
+        alert('결제 승인 거절됨.');
       }
     }
   };
@@ -353,32 +319,9 @@ export default function App() {
       alert(`[로컬 시뮬레이션] 결제 웹훅 수신 완료: ${status}. 재고 차감 및 Saga 트랜잭션이 완료되었습니다.`);
     } else {
       try {
-        const res = await fetch('/api/v1/payments/toss/webhook', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Signature-256': 'sha256=mock-signature-here'
-          },
-          body: JSON.stringify({
-            eventType: 'PAYMENT_STATUS_CHANGED',
-            createdAt: new Date().toISOString(),
-            data: {
-              paymentKey: tossPaymentKey,
-              orderId: orderId,
-              status: status === 'SUCCESS' ? 'DONE' : 'ABORTED',
-              method: '카드',
-              totalAmount: paymentAmount,
-              approvedAt: new Date().toISOString()
-            }
-          })
-        });
-        if (res.ok) {
-          alert(`웹훅 시뮬레이션 성공! (${status === 'SUCCESS' ? '결제완료 재고확정' : '결제취소 Saga 보상 실행됨'})`);
-        } else {
-          alert('웹훅 호출에 실패했습니다.');
-        }
-      } catch (e) {
-        console.error(e);
+        await triggerWebhook(tossPaymentKey, orderId, paymentAmount, status);
+        alert(`웹훅 시뮬레이션 성공! (${status === 'SUCCESS' ? '결제완료 재고확정' : '결제취소 Saga 보상 실행됨'})`);
+      } catch {
         alert('웹훅 시뮬레이션 중 오류가 발생했습니다.');
       }
     }

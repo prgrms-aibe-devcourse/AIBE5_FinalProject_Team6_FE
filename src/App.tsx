@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Sparkles, Ticket, CreditCard, TrendingUp, Bot, Clock, 
-  AlertTriangle, Heart, MessageSquare, ShoppingBag, Activity, 
-  User, RefreshCw, CheckCircle, X, ChevronRight, ShoppingCart, 
-  Info, Loader2, ArrowRight, Server, Play, ShieldAlert, Cpu
+import {
+  Sparkles, Ticket, CreditCard, Bot, Clock,
+  ShoppingBag, Activity,
+  CheckCircle, X, ShoppingCart,
+  Loader2, ArrowRight, Server, Play, ShieldAlert, Cpu
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -35,7 +35,7 @@ export default function App() {
   const [backendLatency, setBackendLatency] = useState<number | null>(null);
 
   // Products state
-  const [products, setProducts] = useState<Product[]>([
+  const [products] = useState<Product[]>(() => [
     {
       id: 'prod_regular_001',
       name: '아티스트 공식 응원봉 Ver.2',
@@ -105,7 +105,6 @@ export default function App() {
 
   // System simulated metrics
   const [activeConnections, setActiveConnections] = useState<number>(342);
-  const [rateLimitStatus, setRateLimitStatus] = useState<'NORMAL' | 'WARNING'>('NORMAL');
 
   // Auto-scroll chat
   useEffect(() => {
@@ -129,7 +128,7 @@ export default function App() {
           setBackendConnected(false);
           setIsSandbox(true);
         }
-      } catch (e) {
+      } catch {
         setBackendConnected(false);
         setIsSandbox(true);
       }
@@ -152,7 +151,7 @@ export default function App() {
   }, []);
 
   // Countdown timer calculation for drops products
-  const [now, setNow] = useState<number>(Date.now());
+  const [now, setNow] = useState<number>(() => Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
@@ -443,7 +442,7 @@ export default function App() {
         const err = await res.json();
         setChatMessages(prev => [...prev, { sender: 'bot', text: `오류가 발생했습니다: ${err.error || '연결 실패'}`, timestamp: new Date() }]);
       }
-    } catch (e) {
+    } catch {
       setChatMessages(prev => [...prev, { sender: 'bot', text: 'Gemini API 서버에 접속할 수 없습니다. .env에 GEMINI_API_KEY가 등록되어 있는지 확인하세요.', timestamp: new Date() }]);
     } finally {
       setIsChatLoading(false);

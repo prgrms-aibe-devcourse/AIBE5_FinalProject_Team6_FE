@@ -1,14 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Users, Building2, MessageSquare, ShoppingBag, AlertTriangle, Image as ImageIcon, Activity, Menu, X, Check, XCircle, ChevronRight, Search, Loader2 } from 'lucide-react';
-import { AgencyApplication, ApplicationStatus } from '../types/partnership';
+import type { AgencyApplication, ApplicationStatus } from '../types/partnership';
+import { getAdminApplications, reviewApplication } from '../api/agencyApplications';
 
 interface AdminAppProps {
   onLogout: () => void;
-  applications: AgencyApplication[];
-  onUpdateStatus: (id: string, status: ApplicationStatus, rejectionReason?: string) => void;
 }
 
-export default function AdminApp({ onLogout, applications, onUpdateStatus }: AdminAppProps) {
+export default function AdminApp({ onLogout }: AdminAppProps) {
   const [activeMenu, setActiveMenu] = useState('agencies');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [agencyTab, setAgencyTab] = useState<ApplicationStatus | 'ALL'>('ALL');
@@ -16,6 +15,8 @@ export default function AdminApp({ onLogout, applications, onUpdateStatus }: Adm
   const [rejectionReason, setRejectionReason] = useState('');
   const [loading, setLoading] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [applications, setApplications] = useState<AgencyApplication[]>([]);
+  const [appsLoading, setAppsLoading] = useState(true);
 
   useEffect(() => {
     if (toast) {
@@ -23,6 +24,13 @@ export default function AdminApp({ onLogout, applications, onUpdateStatus }: Adm
       return () => clearTimeout(timer);
     }
   }, [toast]);
+
+  useEffect(() => {
+    getAdminApplications()
+      .then(setApplications)
+      .catch(() => setApplications([]))
+      .finally(() => setAppsLoading(false));
+  }, []);
 
   const navItems = [
     { id: 'dashboard', icon: Activity, label: 'Dashboard' },
@@ -41,11 +49,18 @@ export default function AdminApp({ onLogout, applications, onUpdateStatus }: Adm
 
   const handleApprove = async (id: string) => {
     setLoading('APPROVING');
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    onUpdateStatus(id, 'APPROVED');
-    setLoading(null);
-    setSelectedApp(null);
-    setToast('Artist 계정이 생성되었습니다');
+    try {
+      await reviewApplication(id, 'APPROVED');
+      setApplications(prev => prev.map(app =>
+        app.id === id ? { ...app, status: 'APPROVED' as ApplicationStatus } : app,
+      ));
+      setToast('Artist 계정이 생성되었습니다');
+    } catch {
+      setToast('승인 처리 중 오류가 발생했습니다');
+    } finally {
+      setLoading(null);
+      setSelectedApp(null);
+    }
   };
 
   const handleReject = async (id: string) => {
@@ -54,12 +69,21 @@ export default function AdminApp({ onLogout, applications, onUpdateStatus }: Adm
       return;
     }
     setLoading('REJECTING');
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    onUpdateStatus(id, 'REJECTED', rejectionReason);
-    setLoading(null);
-    setSelectedApp(null);
-    setRejectionReason('');
-    setToast('반려 완료되었습니다');
+    try {
+      await reviewApplication(id, 'REJECTED', rejectionReason);
+      setApplications(prev => prev.map(app =>
+        app.id === id
+          ? { ...app, status: 'REJECTED' as ApplicationStatus, rejectionReason }
+          : app,
+      ));
+      setToast('반려 완료되었습니다');
+    } catch {
+      setToast('반려 처리 중 오류가 발생했습니다');
+    } finally {
+      setLoading(null);
+      setSelectedApp(null);
+      setRejectionReason('');
+    }
   };
 
   return (
@@ -73,7 +97,7 @@ export default function AdminApp({ onLogout, applications, onUpdateStatus }: Adm
       )}
 
       {/* Dark Sidebar */}
-      <div 
+      <div
         className={`${sidebarOpen ? 'w-64' : 'w-20'} bg-[#1A1A1A] text-white transition-all duration-300 flex flex-col shrink-0 relative z-20`}
       >
         <div className="h-[72px] flex items-center justify-between px-6 border-b border-[#333]">
@@ -88,8 +112,8 @@ export default function AdminApp({ onLogout, applications, onUpdateStatus }: Adm
               key={item.id}
               onClick={() => setActiveMenu(item.id)}
               className={`flex items-center gap-3 px-3 py-3 rounded-xl transition-all ${
-                activeMenu === item.id 
-                  ? 'bg-white/10 text-white' 
+                activeMenu === item.id
+                  ? 'bg-white/10 text-white'
                   : 'text-[#888] hover:bg-white/5 hover:text-white'
               }`}
               title={item.label}
@@ -155,10 +179,10 @@ export default function AdminApp({ onLogout, applications, onUpdateStatus }: Adm
                     ].map(tab => (
                       <button
                         key={tab.id}
-                        onClick={() => setAgencyTab(tab.id as any)}
+                        onClick={() => setAgencyTab(tab.id as ApplicationStatus | 'ALL')}
                         className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${
-                          agencyTab === tab.id 
-                            ? 'bg-[#111] text-white' 
+                          agencyTab === tab.id
+                            ? 'bg-[#111] text-white'
                             : 'text-[#888] hover:text-[#111]'
                         }`}
                       >
@@ -168,9 +192,9 @@ export default function AdminApp({ onLogout, applications, onUpdateStatus }: Adm
                  </div>
                  <div className="relative">
                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#888]" />
-                   <input 
-                    type="text" 
-                    placeholder="기획사/아티스트 검색" 
+                   <input
+                    type="text"
+                    placeholder="기획사/아티스트 검색"
                     className="pl-10 pr-4 py-2 border border-[#EDE8E2] rounded-xl bg-white text-sm focus:outline-none w-64"
                    />
                  </div>
@@ -188,7 +212,13 @@ export default function AdminApp({ onLogout, applications, onUpdateStatus }: Adm
                      </tr>
                    </thead>
                    <tbody className="divide-y divide-[#EDE8E2]">
-                     {filteredApps.length === 0 ? (
+                     {appsLoading ? (
+                       <tr>
+                         <td colSpan={5} className="p-32 text-center">
+                           <Loader2 className="w-8 h-8 animate-spin text-[#888] mx-auto" />
+                         </td>
+                       </tr>
+                     ) : filteredApps.length === 0 ? (
                        <tr>
                          <td colSpan={5} className="p-32 text-center text-[#888]">
                             신청 목록이 없습니다.
@@ -196,8 +226,8 @@ export default function AdminApp({ onLogout, applications, onUpdateStatus }: Adm
                        </tr>
                      ) : (
                        filteredApps.map(app => (
-                        <tr 
-                          key={app.id} 
+                        <tr
+                          key={app.id}
                           onClick={() => setSelectedApp(app)}
                           className="hover:bg-black/[0.02] cursor-pointer transition-colors group"
                         >
@@ -406,10 +436,10 @@ export default function AdminApp({ onLogout, applications, onUpdateStatus }: Adm
                </div>
                <button onClick={() => setSelectedApp(null)} className="p-2 hover:bg-[#F7F3EE] rounded-full transition-colors"><X/></button>
             </div>
-            
+
             <div className="flex-1 overflow-y-auto p-12 custom-scrollbar">
               <div className="grid grid-cols-2 gap-x-12 gap-y-16">
-                
+
                 {/* Section: Applicant */}
                 <div className="space-y-8">
                   <div className="flex items-center gap-2 mb-4">
@@ -499,7 +529,7 @@ export default function AdminApp({ onLogout, applications, onUpdateStatus }: Adm
                   <div className="flex flex-col gap-6">
                     <div>
                       <label className="block text-sm font-black mb-4">반려 사유 입력 <span className="text-[#888] font-medium">(반려 시 필수)</span></label>
-                      <textarea 
+                      <textarea
                         value={rejectionReason}
                         onChange={e => setRejectionReason(e.target.value)}
                         placeholder="심사에 통과하지 못한 구체적 사유를 입력해주세요. 신청자 이메일로 발송됩니다."
@@ -507,14 +537,14 @@ export default function AdminApp({ onLogout, applications, onUpdateStatus }: Adm
                       ></textarea>
                     </div>
                     <div className="flex gap-4">
-                      <button 
+                      <button
                         onClick={() => handleReject(selectedApp.id)}
                         disabled={loading !== null}
                         className="flex-1 h-16 rounded-2xl border-2 border-red-100 bg-red-50 text-red-600 font-black text-lg transition-all hover:bg-red-100 disabled:opacity-50 flex items-center justify-center gap-3"
                       >
                         {loading === 'REJECTING' ? <Loader2 className="w-6 h-6 animate-spin" /> : '반려'}
                       </button>
-                      <button 
+                      <button
                         onClick={() => handleApprove(selectedApp.id)}
                         disabled={loading !== null}
                         className="flex-[2] h-16 rounded-2xl bg-[#111] text-white font-black text-lg transition-all hover:bg-black/90 active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-3"

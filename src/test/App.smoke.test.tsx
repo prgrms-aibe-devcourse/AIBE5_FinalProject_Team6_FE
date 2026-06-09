@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react'
 import App from '../App'
 
 beforeAll(() => {
-  // sandbox mode: fetch 실패 → isSandbox=true 자동 설정
+  // sandbox mode: fetch 실패 → role='FAN' 자동 설정
   vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
   vi.stubGlobal('EventSource', vi.fn().mockImplementation(() => ({
     onmessage: null,
@@ -18,8 +18,8 @@ describe('App (sandbox)', () => {
     expect(screen.getByText('FANDROPS')).toBeInTheDocument()
   })
 
-  it('아티스트 스토어 섹션이 존재한다', () => {
+  it('인기 드롭 섹션이 존재한다', async () => {
     render(<App />)
-    expect(screen.getByText('아티스트 스토어')).toBeInTheDocument()
+    expect(await screen.findByText('인기 드롭')).toBeInTheDocument()
   })
 })

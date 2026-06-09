@@ -60,7 +60,7 @@ npx tsc --noEmit
 ## BE API 연동 규칙
 
 - **Base URL**: Vite proxy → `/api/v1/*` → `http://localhost:8080`
-- **인증**: `Authorization: Bearer <token>` 헤더 (MVP: `test-token`)
+- **인증**: `Authorization: Bearer <token>` 헤더 — `fd_access_token` (localStorage, `src/api/auth.ts` 관리)
 - **결제 식별자**:
   - `orderPaymentKey` = 서버가 주문 생성 시 발급 (`POST /orders` 응답)
   - `tossPaymentKey` = Toss PG Widget이 발급 (클라이언트에서 생성)
@@ -77,7 +77,6 @@ npx tsc --noEmit
 
 ```
 [ ] 신규 컴포넌트: Props 인터페이스 선언 확인
-[ ] API 호출: isSandbox/real 양 분기 구현 확인
 [ ] 환경변수: .env.example 동기화 확인
 [ ] console.log 제거 확인
 [ ] npx tsc --noEmit 오류 0건

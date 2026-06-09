@@ -17,18 +17,12 @@ export default function AdminApp({ onLogout, applications, onUpdateStatus }: Adm
   const [loading, setLoading] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
-  // Styles inherited or replicated from FanApp where needed
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  
   useEffect(() => {
     if (toast) {
       const timer = setTimeout(() => setToast(null), 3000);
       return () => clearTimeout(timer);
     }
   }, [toast]);
-
-  if (!mounted) return null;
 
   const navItems = [
     { id: 'dashboard', icon: Activity, label: 'Dashboard' },

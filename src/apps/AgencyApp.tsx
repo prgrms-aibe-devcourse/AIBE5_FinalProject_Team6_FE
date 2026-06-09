@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { LayoutDashboard, PenTool, Image, Calendar as CalendarIcon, Package, ShoppingCart, Users, UserCircle, LogOut, CheckCircle2, Activity, History, ArrowUpRight, ArrowDownRight, Clock, Plus, Camera, Upload, X } from 'lucide-react';
+import { useState } from 'react';
+import { LayoutDashboard, PenTool, Image, Calendar as CalendarIcon, Package, ShoppingCart, Users, UserCircle, LogOut, CheckCircle2, Activity, ArrowUpRight, ArrowDownRight, Clock, Plus, Upload, X } from 'lucide-react';
 
 export default function AgencyApp({ onLogout }: { onLogout: () => void }) {
   const [activeMenu, setActiveMenu] = useState('dashboard');
@@ -127,10 +127,6 @@ export default function AgencyApp({ onLogout }: { onLogout: () => void }) {
     setShowNoticeModal(false);
     alert('새 공지사항이 등록되었습니다!');
   };
-
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  if (!mounted) return null;
 
   const navItems = [
     { id: 'dashboard', icon: LayoutDashboard, label: 'Agency Dashboard' },
@@ -462,7 +458,7 @@ export default function AgencyApp({ onLogout }: { onLogout: () => void }) {
                   </div>
 
                   <div className="space-y-4">
-                    {banners.sort((a,b) => a.order - b.order).map((banner, i) => (
+                    {banners.sort((a,b) => a.order - b.order).map((banner) => (
                       <div key={banner.id} className="flex items-center gap-6 p-5 bg-[#F7F3EE] rounded-2xl border border-transparent hover:border-[#C2507A] transition-all group">
                          <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center font-black text-[#C2507A] border border-[#EDE8E2]">
                             {banner.order}

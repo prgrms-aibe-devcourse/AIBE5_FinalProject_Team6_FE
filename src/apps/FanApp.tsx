@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Plus, Search, Calendar, Heart, Share2, Filter, Image as ImageIcon, Smile, MoreHorizontal, MessageSquare, Video, Radio, Bell, Pin, Play, Youtube, ChevronLeft, ChevronRight, ChevronDown, Trophy, X, User, ShoppingBag, Star, LogOut, Ticket, Settings, ThumbsUp, CheckCircle2, Gift } from 'lucide-react';
+import { Plus, Search, Calendar, Heart, Share2, Filter, Image as ImageIcon, Smile, MoreHorizontal, MessageSquare, Video, Radio, Bell, Pin, Play, Youtube, ChevronLeft, ChevronRight, X, User, ShoppingBag, LogOut, Ticket, Settings, ThumbsUp, CheckCircle2, Gift } from 'lucide-react';
 
 
 // --- NEW MOCK DATA ---
@@ -60,16 +60,7 @@ const STORE_HERO_SLIDES = [
   { k: 2, tag: 'FANDROPS', title: '아티스트 공식 스토어', line: '전 상품 무료배송 이벤트 진행 중', grad: 'linear-gradient(135deg, #C2507A, #7F77DD)' },
 ];
 
-function isScheduledDropItem(item: { status: string }) {
-  return item.status === 'OPEN_TODAY' || item.status === 'OPEN_TOMORROW' || item.status === 'OPEN_WEEK';
-}
 
-function getStoreDropOpenLabel(status: string) {
-  if (status === 'OPEN_TODAY') return '오늘 오픈';
-  if (status === 'OPEN_TOMORROW') return '내일 오픈';
-  if (status === 'OPEN_WEEK') return '이번 주 오픈';
-  return '';
-}
 
 export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () => void, onApply: () => void, role?: any }) {
   const [favoriteArtists, setFavoriteArtists] = useState([
@@ -92,7 +83,7 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
     if (!content?.trim()) return;
 
     const newComment = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       author: role === 'ARTIST' ? 'Starlight' : 'Me',
       content: content.trim(),
       time: 'Just now'
@@ -173,7 +164,7 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
     const artistName = 'Starlight'; 
     
     const newPostObj = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       artistId: selectedArtist.id,
       author: role === 'ARTIST' ? artistName : 'Me',
       role: role,
@@ -207,23 +198,23 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
     if (role === 'ARTIST' && !selectedArtist) {
       const starlight = favoriteArtists.find(a => a.id === 'starlight');
       if (starlight) {
-        setSelectedArtist(starlight);
-        setBoardTab('FEED');
+        setTimeout(() => {
+          setSelectedArtist(starlight);
+          setBoardTab('FEED');
+        }, 0);
       }
     }
   }, [role, selectedArtist, favoriteArtists]);
 
-  const [showAuth, setShowAuth] = useState(false);
-  const [authMode, setAuthMode] = useState<'LOGIN' | 'SIGNUP'>('LOGIN');
   const [showCart, setShowCart] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
+  const [showNotifications] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   
   const [myPageTab, setMyPageTab] = useState('OVERVIEW');
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [queueActive, setQueueActive] = useState(false);
   const [queuePosition, setQueuePosition] = useState(247);
-  const [seatMapUnlocked, setSeatMapUnlocked] = useState(false); 
+  const [, setSeatMapUnlocked] = useState(false);
 
   // New Filter & Sort States
   const [storeArtist, setStoreArtist] = useState('ALL');
@@ -251,7 +242,6 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
   }, [activeTab, selectedProduct]);
 
   
-  const [selectedArtistsFilter, setSelectedArtistsFilter] = useState<string[]>([]);
   const [productMainImg, setProductMainImg] = useState(0);
   const [productQty, setProductQty] = useState(1);
   const [productOption, setProductOption] = useState('Version A');
@@ -281,14 +271,14 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
   const [attendanceStep, setAttendanceStep] = useState<'IDLE' | 'STAMPING' | 'REWARD'>('IDLE');
   const [triggeredArtists, setTriggeredArtists] = useState<string[]>([]);
 
-  const [notices, setNotices] = useState([
+  const [notices] = useState([
     { id: 'n1', tag: 'NOTICE', title: 'Starlight Studio 2주년 기념 라이브 콘서트 상세 안내', date: '2026.05.20', type: 'NOTICE' },
     { id: 'n2', tag: 'TICKET', title: '별빛스튜디오 팬미팅 2025 티켓 오픈 안내', date: '2026.06.15', type: 'TICKET' },
     { id: 'n3', tag: '이벤트', title: 'Echo 특별판 포토북 출시 기념 팬사인회', date: '2026.05.10', type: 'EVENT' },
     { id: 'n4', tag: '공지', title: '공식 팬클럽 멤버십 키트 배송 지연 안내', date: '2026.05.08', type: 'NOTICE' },
   ]);
 
-  const [schedules, setSchedules] = useState([
+  const [schedules] = useState([
     { id: 's1', date: '14', month: '2026.05', time: '15:00 KST', title: '음악중심 방송 출연', category: 'VIDEO', noticeId: null },
     { id: 's2', date: '15', month: '2026.05', time: '22:00 KST', title: '심야 라디오 게스트 출연', category: 'RADIO', noticeId: null },
     { id: 's3', date: '01', month: '2026.06', time: '18:00 KST', title: 'Echo 특별판 포토북 출시', category: 'RELEASE', noticeId: 'n3' },
@@ -306,9 +296,11 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
         setShowAttendanceBanner(true);
       }, 600);
       return () => clearTimeout(timer);
-    } else {
-      setShowAttendanceBanner(false);
     }
+    const timer = setTimeout(() => {
+      setShowAttendanceBanner(false);
+    }, 0);
+    return () => clearTimeout(timer);
   }, [boardTab, selectedArtist, triggeredArtists]);
 
   // Trigger Intersection Observer again when activeTab changes
@@ -317,7 +309,7 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
     const script = document.createElement('script');
     script.src = 'https://cdn.jsdelivr.net/npm/lenis@1.1.14/dist/lenis.min.js';
     script.onload = () => {
-      // @ts-ignore
+      // @ts-expect-error: window.Lenis is loaded at runtime via CDN
       const lenis = new window.Lenis({
         duration: 1.2,
         easing: (t: number) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
@@ -2163,16 +2155,6 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
         <ChevronRight size={16} />
       </button>
     </div>
-    {(() => {
-      const searchLower = storeSearch.toLowerCase();
-      const list = DUMMY_STORE_ITEMS.filter((item) => {
-        if (storeSearch && !item.title.toLowerCase().includes(searchLower) && !item.artist.toLowerCase().includes(searchLower)) return false;
-        if (storeArtist !== 'ALL' && item.artistId !== storeArtist) return false;
-        if (storeCategory !== '전체' && item.category !== storeCategory) return false;
-        return true;
-      });
-      return null; // Removed Popular items section as requested
-    })()}
   </div>
   <div style={{ padding: '8px 0 0 0' }}>
     <div style={{ background: 'white', border: '1px solid #E5E5E5', borderRadius: '16px', padding: '24px', marginBottom: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
@@ -2275,9 +2257,6 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
       });
       filteredItems = getSortedItems(filteredItems, storeSort);
       
-      const dropItems = filteredItems.filter(isScheduledDropItem);
-      const retailItems = filteredItems.filter((i) => i.status === 'ON_SALE' || i.status === 'SOLD_OUT');
-
       const pagedItems = filteredItems.slice(0, storePage * itemsPerPage);
       const hasMore = pagedItems.length < filteredItems.length;
 

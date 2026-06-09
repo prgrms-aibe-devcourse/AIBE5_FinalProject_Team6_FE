@@ -1,12 +1,6 @@
-import { useState, useEffect } from 'react';
-
 // Common dummy data and designs are shared inside the components.
 
 export default function DevSwitcher({ currentRole, onRoleChange }: { currentRole: 'FAN' | 'ARTIST' | 'ADMIN' | 'AGENCY', onRoleChange: (r: 'FAN'|'ARTIST'|'ADMIN'|'AGENCY') => void }) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  if (!mounted) return null;
-
   return (
     <div style={{
       position: 'fixed',

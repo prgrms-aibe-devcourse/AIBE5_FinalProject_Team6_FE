@@ -1,0 +1,3253 @@
+import { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
+import { Plus, Search, Calendar, Heart, Share2, Filter, Image as ImageIcon, Smile, MoreHorizontal, MessageSquare, Video, Radio, Bell, Pin, Play, Youtube, ChevronLeft, ChevronRight, ChevronDown, Trophy, X, User, ShoppingBag, Star, LogOut, Ticket, Settings, ThumbsUp, CheckCircle2, Gift } from 'lucide-react';
+
+
+// --- NEW MOCK DATA ---
+const ALL_ARTISTS = [
+  { id: 'ALL', name: '전체', count: 0 },
+  { id: 'starlight', name: '별빛스튜디오', count: 12847 },
+  { id: 'moonlight', name: '문라이트', count: 3201 },
+  { id: 'neonbuzz', name: '네온버즈', count: 891 },
+  { id: 'prism', name: '프리즘', count: 422 }
+];
+
+const STORE_CATEGORIES = ['전체', '포토카드', '굿즈', '앨범', '의류', '키링'];
+
+const SORT_OPTIONS = ['마감임박순', '최신등록순', '낮은가격순', '높은가격순', '인기순'];
+
+const DUMMY_STORE_ITEMS = [
+    { id: 'S1', artistId: 'starlight', artist: '별빛스튜디오', category: '포토카드', title: '한정 포토북 3D 에디션', price: 49000, stock: 40, maxStock: 200, status: 'OPEN_TODAY', openDate: new Date(new Date().setHours(20, 0, 0, 0)), createdAt: new Date('2025-05-10'), sales: 1540 },
+    { id: 'S2', artistId: 'moonlight', artist: '문라이트', category: '굿즈', title: '1주년 기념 아크릴 스탠드', price: 29000, stock: 275, maxStock: 500, status: 'ON_SALE', createdAt: new Date('2025-05-01'), sales: 2100 },
+    { id: 'S3', artistId: 'neonbuzz', artist: '네온버즈', category: '앨범', title: '데뷔 앨범 한정반', price: 35000, stock: 0, maxStock: 100, status: 'SOLD_OUT', createdAt: new Date('2025-04-15'), sales: 5000 },
+    { id: 'S4', artistId: 'starlight', artist: '별빛스튜디오', category: '굿즈', title: '공식 후드 티셔츠', price: 65000, stock: 120, maxStock: 171, status: 'ON_SALE', createdAt: new Date('2025-05-05'), sales: 850 },
+    { id: 'S5', artistId: 'moonlight', artist: '문라이트', category: '포토카드', title: '여름 한정 포토카드 SET', price: 22000, stock: 15, maxStock: 214, status: 'OPEN_TOMORROW', openDate: new Date(new Date().setDate(new Date().getDate() + 1)), createdAt: new Date('2025-05-12'), sales: 120 },
+    { id: 'S6', artistId: 'starlight', artist: '별빛스튜디오', category: '앨범', title: '2nd 미니앨범 ECHO', price: 18000, stock: 200, maxStock: 500, status: 'ON_SALE', createdAt: new Date('2025-05-02'), sales: 3000 },
+    { id: 'S7', artistId: 'prism', artist: '프리즘', category: '키링', title: '홀로그램 아크릴 키링', price: 12000, stock: 50, maxStock: 166, status: 'OPEN_WEEK', openDate: new Date(new Date().setDate(new Date().getDate() + 3)), createdAt: new Date('2025-05-14'), sales: 50 },
+    { id: 'S8', artistId: 'neonbuzz', artist: '네온버즈', category: '굿즈', title: '형광 응원봉', price: 45000, stock: 300, maxStock: 375, status: 'ON_SALE', createdAt: new Date('2025-05-10'), sales: 700 }
+];
+
+function formatTimeLeft(targetDate: Date | null | undefined): string {
+  if (!targetDate) return "";
+  const now = new Date();
+  const diff = targetDate.getTime() - now.getTime();
+  if (diff <= 0) return "00:00:00";
+  const h = Math.floor(diff / (1000 * 60 * 60)).toString().padStart(2, '0');
+  const m = Math.floor((diff / 1000 / 60) % 60).toString().padStart(2, '0');
+  const s = Math.floor((diff / 1000) % 60).toString().padStart(2, '0');
+  return `${h}:${m}:${s}`;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getSortedItems(items: any[], sortKey: string) {
+  return [...items].sort((a, b) => {
+    if (sortKey === '마감임박순') {
+        const aT = a.openDate ? a.openDate.getTime() : 9999999999999;
+        const bT = b.openDate ? b.openDate.getTime() : 9999999999999;
+        return aT - bT;
+    }
+    if (sortKey === '최신등록순') return b.createdAt.getTime() - a.createdAt.getTime();
+    if (sortKey === '낮은가격순') return a.price - b.price;
+    if (sortKey === '높은가격순') return b.price - a.price;
+    if (sortKey === '인기순') return b.sales - a.sales;
+    return 0;
+  });
+}
+
+const STORE_HERO_SLIDES = [
+  { k: 0, tag: 'STORE PICK', title: '이번 주 한정 드롭', line: '포토북 · 굿즈 · 앨범 프리오더', grad: 'linear-gradient(135deg, #C8BEB6, #9A8B82)' },
+  { k: 1, tag: 'STARLIGHT', title: 'Echo 스페셜 에디션', line: '오픈 알림 받고 놓치지 마세요', grad: 'linear-gradient(135deg, #2D2B3B, #5c4d6e)' },
+  { k: 2, tag: 'FANDROPS', title: '아티스트 공식 스토어', line: '전 상품 무료배송 이벤트 진행 중', grad: 'linear-gradient(135deg, #C2507A, #7F77DD)' },
+];
+
+function isScheduledDropItem(item: { status: string }) {
+  return item.status === 'OPEN_TODAY' || item.status === 'OPEN_TOMORROW' || item.status === 'OPEN_WEEK';
+}
+
+function getStoreDropOpenLabel(status: string) {
+  if (status === 'OPEN_TODAY') return '오늘 오픈';
+  if (status === 'OPEN_TOMORROW') return '내일 오픈';
+  if (status === 'OPEN_WEEK') return '이번 주 오픈';
+  return '';
+}
+
+export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () => void, onApply: () => void, role?: any }) {
+  const [favoriteArtists, setFavoriteArtists] = useState([
+    { id: 'starlight', name: 'Starlight', bg: 'linear-gradient(135deg, #FF9A9E, #FECFEF)' },
+    { id: 'rose', name: 'ROSE', bg: 'linear-gradient(135deg, #fccb90, #d57eeb)' }
+  ]);
+  const [selectedArtist, setSelectedArtist] = useState<any>(null);
+  const [boardTab, setBoardTab] = useState('FEED');
+  const [postInput, setPostInput] = useState('');
+  const [commentInputs, setCommentInputs] = useState<{[key: string]: string}>({});
+  const [commentsMap, setCommentsMap] = useState<{[key: string]: any[]}>({
+    'p1': [
+      { id: 'c1', author: 'Fan_A', content: 'Love you so much! ❤️', time: '1 hour ago' },
+      { id: 'c2', author: 'Fan_B', content: 'Beautiful photo!', time: '30 mins ago' }
+    ]
+  });
+
+  const handleCommentSubmit = (postId: string) => {
+    const content = commentInputs[postId];
+    if (!content?.trim()) return;
+
+    const newComment = {
+      id: Date.now().toString(),
+      author: role === 'ARTIST' ? 'Starlight' : 'Me',
+      content: content.trim(),
+      time: 'Just now'
+    };
+
+    setCommentsMap(prev => ({
+      ...prev,
+      [postId]: [...(prev[postId] || []), newComment]
+    }));
+
+    setCommentInputs(prev => ({
+      ...prev,
+      [postId]: ''
+    }));
+
+    setAllPosts(prev => prev.map(p => p.id === postId ? { ...p, comments: (parseInt(p.comments.toString()) + 1).toString() } : p));
+  };
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [activeTab, setActiveTab] = useState('HOME');
+  const [isArtistAuthorized, setIsArtistAuthorized] = useState(false);
+  
+  const [allPosts, setAllPosts] = useState<any[]>([
+    {
+      id: 'p1',
+      artistId: 'starlight',
+      author: 'Starlight',
+      role: 'ARTIST',
+      isOfficial: true,
+      content: "Thank you all for joining our live stream today! 🎤✨ Let's make more amazing memories together. Here's a behind-the-scenes shot!",
+      time: '2 hours ago',
+      likes: '12.4K',
+      comments: '852',
+      hasImage: true
+    },
+    {
+      id: 'p3',
+      artistId: 'moonlight',
+      author: 'Moonlight',
+      role: 'ARTIST',
+      isOfficial: true,
+      content: "깜짝 뉴스! 다음 프로젝트의 스포일러를 살짝 공개합니다. 이게 뭘 의미하는지 맞혀보세요? 👀✨",
+      time: '1일 전',
+      likes: '25.1K',
+      comments: '4.2K',
+      hasImage: false
+    },
+    {
+      id: 'p4',
+      artistId: 'starlight',
+      author: 'Starlight',
+      role: 'ARTIST',
+      isOfficial: true,
+      content: "새로운 앨범 'ECHO' 작업 중입니다! 여러분께 곧 들려드릴 수 있을 것 같아 설레네요. 조금만 더 기다려주세요! ❤️🎧",
+      time: '3시간 전',
+      likes: '15.8K',
+      comments: '1.5K',
+      hasImage: false
+    },
+    {
+      id: 'p5',
+      artistId: 'starlight',
+      author: 'Starlight',
+      role: 'ARTIST',
+      isOfficial: true,
+      content: "연습실에서 한 컷! 오늘도 열심히 달리고 있습니다. 여러분의 응원이 큰 힘이 돼요! 🔥💪",
+      time: '5시간 전',
+      likes: '10.2K',
+      comments: '920',
+      hasImage: true
+    }
+  ]);
+
+  const handlePostSubmit = () => {
+    if (!postInput.trim() || !selectedArtist) return;
+    
+    // If role is ARTIST, the user is 'Starlight' (as per persona) regardless of the board
+    const artistName = 'Starlight'; 
+    
+    const newPostObj = {
+      id: Date.now().toString(),
+      artistId: selectedArtist.id,
+      author: role === 'ARTIST' ? artistName : 'Me',
+      role: role,
+      isOfficial: role === 'ARTIST',
+      content: postInput,
+      time: 'Just now',
+      likes: '0',
+      comments: '0',
+      hasImage: false,
+      isNew: true
+    };
+    
+    setAllPosts([newPostObj, ...allPosts]);
+    setPostInput('');
+  };
+
+  const currentArtistPosts = allPosts.filter(p => p.artistId === selectedArtist?.id);
+  const currentOfficialPosts = currentArtistPosts.filter(p => p.isOfficial);
+
+  const [notifications, setNotifications] = useState([
+    { id: 1, title: '새 댓글', content: '회원님의 포스트에 "Fan_A"님이 댓글을 남겼습니다.', time: '2시간 전', isRead: false },
+    { id: 2, title: '재입고 알림', content: '신청하신 "에코 파스텔 숄더백" 상품이 재입고되었습니다.', time: '4시간 전', isRead: false },
+    { id: 3, title: '투표 시작', content: '새로운 굿즈 투표 "에코백 디자인 결정"이 시작되었습니다.', time: '5시간 전', isRead: true },
+    { id: 4, title: '스케줄림', content: '음악중심 방송 출연 1시간 전입니다.', time: '12시간 전', isRead: true },
+  ]);
+
+  const [showArtistSearch, setShowArtistSearch] = useState(false);
+  
+  // Auto-select artist board if role is ARTIST
+  useEffect(() => {
+    if (role === 'ARTIST' && !selectedArtist) {
+      const starlight = favoriteArtists.find(a => a.id === 'starlight');
+      if (starlight) {
+        setSelectedArtist(starlight);
+        setBoardTab('FEED');
+      }
+    }
+  }, [role, selectedArtist, favoriteArtists]);
+
+  const [showAuth, setShowAuth] = useState(false);
+  const [authMode, setAuthMode] = useState<'LOGIN' | 'SIGNUP'>('LOGIN');
+  const [showCart, setShowCart] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  
+  const [myPageTab, setMyPageTab] = useState('OVERVIEW');
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [queueActive, setQueueActive] = useState(false);
+  const [queuePosition, setQueuePosition] = useState(247);
+  const [seatMapUnlocked, setSeatMapUnlocked] = useState(false); 
+
+  // New Filter & Sort States
+  const [storeArtist, setStoreArtist] = useState('ALL');
+  const [storeCategory, setStoreCategory] = useState('전체');
+  const [storeSort, setStoreSort] = useState('마감임박순');
+  const [storeSearch, setStoreSearch] = useState('');
+  const [storePage, setStorePage] = useState(1);
+  const itemsPerPage = 6;
+  const [isStoreSortDropdownOpen, setIsStoreSortDropdownOpen] = useState(false);
+  const [storeBannerIdx, setStoreBannerIdx] = useState(0);
+
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (activeTab !== 'STORE' || selectedProduct) return;
+    const t = setInterval(() => {
+      setStoreBannerIdx((i) => (i + 1) % STORE_HERO_SLIDES.length);
+    }, 4500);
+    return () => clearInterval(t);
+  }, [activeTab, selectedProduct]);
+
+  
+  const [selectedArtistsFilter, setSelectedArtistsFilter] = useState<string[]>([]);
+  const [productMainImg, setProductMainImg] = useState(0);
+  const [productQty, setProductQty] = useState(1);
+  const [productOption, setProductOption] = useState('Version A');
+  const [showOptionDropdown, setShowOptionDropdown] = useState(false);
+  const [productTab, setProductTab] = useState('DETAIL'); // DETAIL | DELIVERY | REVIEW
+
+  const [checkoutData, setCheckoutData] = useState<any>(null);
+  const [checkoutForm, setCheckoutForm] = useState({ name: '', phone1: '010', phone2: '', phone3: '', zipcode: '', req: '부재시 문앞에 놓아주세요', defaultAddr: false });
+  const [payMethod, setPayMethod] = useState('toss');
+
+  // Rank Game State (Removed as per user request)
+  
+  const [goodsVotes, setGoodsVotes] = useState([
+    { id: 1, title: '에코백 디자인 A', category: '에코백', votes: 1240, img: 'https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&q=80&w=400', color: '#E5D9D1' },
+    { id: 2, title: '에코백 디자인 B', category: '에코백', votes: 890, img: 'https://images.unsplash.com/photo-1622560480605-d83c853bc5c3?auto=format&fit=crop&q=80&w=400', color: '#D1E5DE' },
+    { id: 3, title: '응원봉 실리콘 커버', category: '액세서리', votes: 2150, img: 'https://images.unsplash.com/photo-1618335829737-2228ad3088fe?auto=format&fit=crop&q=80&w=400', color: '#E5D1E1' },
+    { id: 4, title: '아티스트 시그니처 향수', category: '뷰티', votes: 1560, img: 'https://images.unsplash.com/photo-1541643600914-78b084683601?auto=format&fit=crop&q=80&w=400', color: '#E2E5D1' },
+  ]);
+  const [hasVoted, setHasVoted] = useState<number[]>([]);
+  const [collectedCards, setCollectedCards] = useState<any[]>([]);
+
+  // Attendance Event State
+  const [showAttendance, setShowAttendance] = useState(false);
+  const [isAllowNotification, setIsAllowNotification] = useState(true);
+  const [isNotifUpdating, setIsNotifUpdating] = useState(false);
+  const [showAttendanceBanner, setShowAttendanceBanner] = useState(false);
+  const [attendanceStep, setAttendanceStep] = useState<'IDLE' | 'STAMPING' | 'REWARD'>('IDLE');
+  const [triggeredArtists, setTriggeredArtists] = useState<string[]>([]);
+
+  const [notices, setNotices] = useState([
+    { id: 'n1', tag: 'NOTICE', title: 'Starlight Studio 2주년 기념 라이브 콘서트 상세 안내', date: '2026.05.20', type: 'NOTICE' },
+    { id: 'n2', tag: 'TICKET', title: '별빛스튜디오 팬미팅 2025 티켓 오픈 안내', date: '2026.06.15', type: 'TICKET' },
+    { id: 'n3', tag: '이벤트', title: 'Echo 특별판 포토북 출시 기념 팬사인회', date: '2026.05.10', type: 'EVENT' },
+    { id: 'n4', tag: '공지', title: '공식 팬클럽 멤버십 키트 배송 지연 안내', date: '2026.05.08', type: 'NOTICE' },
+  ]);
+
+  const [schedules, setSchedules] = useState([
+    { id: 's1', date: '14', month: '2026.05', time: '15:00 KST', title: '음악중심 방송 출연', category: 'VIDEO', noticeId: null },
+    { id: 's2', date: '15', month: '2026.05', time: '22:00 KST', title: '심야 라디오 게스트 출연', category: 'RADIO', noticeId: null },
+    { id: 's3', date: '01', month: '2026.06', time: '18:00 KST', title: 'Echo 특별판 포토북 출시', category: 'RELEASE', noticeId: 'n3' },
+    { id: 's4', date: '12', month: '2026.06', time: '19:00 KST', title: 'Starlight Studio 2주년 기념 라이브 콘서트', category: 'LIVE', noticeId: 'n1' },
+  ]);
+
+  const [selectedSchedule, setSelectedSchedule] = useState<any>(null);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [selectedNotice, setSelectedNotice] = useState<any>(null);
+
+  // Trigger Attendance Banner when entering Artist tab (Feed is default entry)
+  useEffect(() => {
+    if (boardTab === 'FEED' && selectedArtist && !triggeredArtists.includes(selectedArtist.id)) {
+      const timer = setTimeout(() => {
+        setShowAttendanceBanner(true);
+      }, 600);
+      return () => clearTimeout(timer);
+    } else {
+      setShowAttendanceBanner(false);
+    }
+  }, [boardTab, selectedArtist, triggeredArtists]);
+
+  // Trigger Intersection Observer again when activeTab changes
+  useEffect(() => {
+    // 1. Lenis Smooth Scroll Initialization
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/lenis@1.1.14/dist/lenis.min.js';
+    script.onload = () => {
+      // @ts-ignore
+      const lenis = new window.Lenis({
+        duration: 1.2,
+        easing: (t: number) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+        direction: 'vertical',
+        gestureDirection: 'vertical',
+        smooth: true,
+        mouseMultiplier: 1,
+        touchMultiplier: 2,
+      });
+
+      const header = document.querySelector('.floating-header');
+      
+      lenis.on('scroll', (e: any) => {
+        if (e.scroll > 50) {
+          header?.classList.add('is-scrolled');
+        } else {
+          header?.classList.remove('is-scrolled');
+        }
+      });
+
+      function raf(time: number) {
+        lenis.raf(time);
+        requestAnimationFrame(raf);
+      }
+      requestAnimationFrame(raf);
+    };
+    document.head.appendChild(script);
+
+    return () => {
+      if (document.head.contains(script)) {
+        document.head.removeChild(script);
+      }
+    };
+  }, []);
+
+  // Set up reveal animation for newly mounted elements on tab change
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('is-revealed');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { 
+      threshold: 0.1, 
+      rootMargin: '0px 0px -50px 0px' 
+    });
+
+    const timer = setTimeout(() => {
+      document.querySelectorAll('.reveal').forEach((el) => observer.observe(el));
+    }, 50);
+
+    return () => {
+      observer.disconnect();
+      clearTimeout(timer);
+    };
+  }, [activeTab, selectedArtist, boardTab, myPageTab, storeArtist, storePage, storeSearch]);
+
+  // Queue countdown effect
+  useEffect(() => {
+    if (queueActive && queuePosition > 0) {
+      const timer = setTimeout(() => {
+        setQueuePosition(p => p > 0 ? p - 1 : 0);
+      }, 50); // fast for demo
+      return () => clearTimeout(timer);
+    }
+    if (queueActive && queuePosition === 0) {
+      const finishTimer = setTimeout(() => {
+        setQueueActive(false);
+        setSeatMapUnlocked(true);
+      }, 500);
+      return () => clearTimeout(finishTimer);
+    }
+  }, [queueActive, queuePosition]);
+
+  if (role === 'ARTIST' && !isArtistAuthorized) {
+    return (
+      <div className="min-h-screen bg-[#F7F3EE] flex items-center justify-center font-sans p-6">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white rounded-[32px] p-10 w-full max-w-md shadow-[0_32px_64px_rgba(0,0,0,0.08)] border border-[#EDE8E2]"
+        >
+          <div className="text-center mb-10">
+            <div className="font-mono text-xs tracking-[4px] text-[#C2507A] font-bold mb-4 uppercase">Artist Portal</div>
+            <h2 className="text-3xl font-black tracking-tight text-[#111]">Artist Login</h2>
+          </div>
+          
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-[#888] uppercase tracking-wider ml-1">Email or ID</label>
+              <input 
+                type="text" 
+                defaultValue="starlight_admin"
+                className="w-full bg-[#F7F3EE] border border-[#EDE8E2] px-6 py-4 rounded-2xl focus:outline-none focus:border-[#C2507A] transition-all font-medium" 
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-[#888] uppercase tracking-wider ml-1">Password</label>
+              <input 
+                type="password" 
+                defaultValue="password"
+                className="w-full bg-[#F7F3EE] border border-[#EDE8E2] px-6 py-4 rounded-2xl focus:outline-none focus:border-[#C2507A] transition-all font-medium" 
+              />
+            </div>
+
+            <button 
+              onClick={() => {
+                setIsArtistAuthorized(true);
+                setActiveTab('WORKSPACE');
+                const starlight = favoriteArtists.find(a => a.id === 'starlight');
+                if (starlight) {
+                  setSelectedArtist(starlight);
+                  setBoardTab('FEED');
+                }
+              }}
+              className="w-full bg-[#111] text-white py-5 rounded-2xl font-bold hover:bg-black transition-all shadow-lg active:scale-[0.98] mt-4"
+            >
+              Artist 로그인하기
+            </button>
+            
+            <div className="pt-6 border-t border-[#F7F3EE] text-center">
+              <button 
+                onClick={onLogout}
+                className="text-sm font-bold text-[#888] hover:text-[#C2507A] transition-colors"
+              >
+                ← Back to main
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fandrops-container" ref={containerRef}>
+      <style>{`
+        @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap');
+
+        :root {
+          --bg-cream: #F7F3EE;
+          --bg-white: #FFFFFF;
+          --point-rose: #C2507A;
+          --point-violet: #7F77DD;
+          --text-main: #111111;
+          --text-sub: #888888;
+          --border: rgba(200, 190, 180, 0.4);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body { 
+          background-color: var(--bg-cream); 
+          color: var(--text-main); 
+          font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+          overflow-x: hidden;
+          -webkit-font-smoothing: antialiased;
+        }
+
+        .fandrops-container::after {
+          content: ""; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+          pointer-events: none; z-index: 9999; opacity: 0.04;
+          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        }
+
+        .reveal { 
+          opacity: 0; 
+          transform: translateY(30px); 
+          transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1); 
+        }
+        .reveal.is-revealed { 
+          opacity: 1; 
+          transform: translateY(0); 
+        }
+        
+        .delay-100 { transition-delay: 100ms; }
+        .delay-200 { transition-delay: 200ms; }
+        .delay-300 { transition-delay: 300ms; }
+
+        .wrapper { max-width: 1200px; margin: 0 auto; width: 100%; padding: 0 40px; }
+
+        .floating-header {
+          position: fixed; top: 24px; left: 50%; transform: translateX(-50%);
+          width: calc(100% - 80px); max-width: 1200px; height: 64px;
+          background: rgba(255, 255, 255, 0.6); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+          border: 1px solid rgba(255, 255, 255, 0.4); border-radius: 16px;
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 0 32px; z-index: 100; transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .floating-header.is-scrolled {
+          background: rgba(255, 255, 255, 0.9); box-shadow: 0 12px 32px rgba(0,0,0,0.05); border-color: rgba(255, 255, 255, 1);
+        }
+
+        .logo { font-size: 16px; font-weight: 800; letter-spacing: 4px; cursor: pointer; }
+        nav { display: flex; gap: 40px; }
+        .n-item { font-size: 13px; font-weight: 600; color: var(--text-sub); cursor: pointer; transition: color 0.3s; position: relative; letter-spacing: 0.5px; }
+        .n-item:hover, .n-item.active { color: var(--text-main); }
+        .n-item.active::after { content: ''; position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; background: var(--point-rose); border-radius: 50%; }
+
+        .h-icons { display: flex; align-items: center; gap: 24px; }
+        .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #E8E0D8, #D0C6BE); border: 2px solid white; cursor: pointer; transition: transform 0.2s; }
+        .avatar:hover { transform: scale(1.05); }
+
+        .section { padding: 60px 0; }
+        .section-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 40px; }
+        .s-title-group h2 { font-size: 24px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 8px; }
+        .s-title-group p { font-size: 14px; color: var(--text-sub); font-weight: 500; letter-spacing: 0.5px; }
+
+        /* Community Bar */
+        .community-bar { margin: 20px 0 60px; }
+        .community-scroll { display: flex; gap: 20px; overflow-x: auto; padding-bottom: 16px; -ms-overflow-style: none; scrollbar-width: none; }
+        .community-scroll::-webkit-scrollbar { display: none; }
+        
+        .c-add-btn {
+          width: 64px; height: 64px; border-radius: 50%; border: 2px dashed var(--border);
+          background: transparent; color: var(--text-sub); display: flex; align-items: center; justify-content: center;
+          cursor: pointer; flex-shrink: 0; transition: all 0.2s;
+        }
+        .c-add-btn:hover { border-color: var(--point-rose); color: var(--point-rose); transform: scale(1.05); }
+
+        .c-artist-item { display: flex; flex-direction: column; align-items: center; gap: 10px; cursor: pointer; transition: transform 0.2s; }
+        .c-artist-item:hover { transform: translateY(-4px); }
+        .c-artist-avatar {
+          width: 64px; height: 64px; border-radius: 50%; background: var(--bg-white);
+          border: 1px solid var(--border); box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+          display: flex; align-items: center; justify-content: center; overflow: hidden;
+        }
+        .c-artist-item span { font-size: 12px; font-weight: 700; color: var(--text-main); }
+
+        /* Grids */
+        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; }
+
+        /* Standard Cards */
+        .card { background: var(--bg-white); border-radius: 20px; border: 1px solid var(--border); overflow: hidden; transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease, border-color 0.3s ease; display: flex; flex-direction: column; }
+        .card:hover { transform: translateY(-6px); box-shadow: 0 20px 40px rgba(194, 80, 122, 0.1); border-color: var(--point-rose); }
+        .c-img { height: 240px; position: relative; background: #EDE8E2; }
+        .c-tag { position: absolute; top: 16px; left: 16px; background: rgba(255,255,255,0.9); backdrop-filter: blur(8px); padding: 6px 12px; border-radius: 8px; font-size: 11px; font-weight: 800; }
+        .c-status { position: absolute; top: 16px; right: 16px; background: var(--point-rose); color: white; padding: 6px 12px; border-radius: 8px; font-size: 11px; font-weight: 800; }
+        .c-body { padding: 24px; flex: 1; display: flex; flex-direction: column; }
+        .c-body h3 { font-size: 18px; font-weight: 700; letter-spacing: -0.5px; line-height: 1.4; margin-bottom: 24px; flex: 1; }
+        .c-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; padding-top: 24px; border-top: 1px dashed var(--border); }
+        .c-price { font-size: 20px; font-weight: 800; color: var(--point-rose); }
+        .c-btn { background: var(--bg-cream); color: var(--text-main); border: 1px solid var(--border); padding: 10px 20px; border-radius: 10px; font-size: 12px; font-weight: 800; cursor: pointer; transition: all 0.2s; }
+        .card:hover .c-btn { background: var(--point-rose); color: white; border-color: var(--point-rose); }
+
+        /* Artist Card */
+        .artist-card { background: var(--bg-white); border-radius: 24px; padding: 32px 24px; text-align: center; border: 1px solid var(--border); transition: all 0.3s ease; display: flex; flex-direction: column; align-items: center; cursor: pointer; }
+        .artist-card:hover { transform: translateY(-6px); box-shadow: 0 20px 40px rgba(194, 80, 122, 0.1); border-color: var(--point-rose); }
+        .ac-avatar { width: 100px; height: 100px; border-radius: 50%; margin-bottom: 20px; background: #EDE8E2; border: 4px solid var(--bg-cream); box-shadow: 0 8px 24px rgba(0,0,0,0.08); }
+        .ac-name { font-size: 20px; font-weight: 800; margin-bottom: 8px; }
+        .ac-desc { font-size: 13px; color: var(--text-sub); font-weight: 500; margin-bottom: 24px; line-height: 1.4; }
+        .ac-btn { background: var(--bg-cream); border: 1px solid var(--border); padding: 10px 24px; border-radius: 20px; font-size: 12px; font-weight: 700; transition: all 0.2s; color: var(--text-main); width: 100%; }
+        .artist-card:hover .ac-btn { background: var(--point-rose); color: white; border-color: var(--point-rose); }
+
+        /* Store List Banner */
+        .store-banner { background: linear-gradient(135deg, #2D2B3B, #1A1924); border-radius: 24px; padding: 60px; color: white; display: flex; justify-content: space-between; align-items: center; margin-bottom: 60px; box-shadow: 0 24px 48px rgba(0,0,0,0.1); }
+        .sb-title { font-size: 32px; font-weight: 800; margin-bottom: 12px; }
+        .sb-desc { font-size: 15px; color: rgba(255,255,255,0.7); font-weight: 500; }
+        
+        /* Filter Bar */
+        .filter-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+        .fb-tabs { display: flex; gap: 24px; }
+        .f-tab { font-size: 14px; font-weight: 700; color: var(--text-sub); cursor: pointer; transition: color 0.2s; }
+        .f-tab.active { color: var(--text-main); }
+        .f-tab:hover { color: var(--text-main); }
+
+        /* Page Layout Pad */
+        .page-content { padding-top: 140px; min-height: 80vh; }
+
+        /* Countdown & Community Restored */
+        .countdown-divider {
+          width: 100%;
+          background: linear-gradient(90deg, var(--point-rose), var(--point-violet));
+          border-radius: 24px;
+          padding: 40px 64px;
+          color: white;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin: 40px 0 60px;
+          box-shadow: 0 20px 40px rgba(194, 80, 122, 0.2);
+        }
+        .community-bar { 
+          background: var(--bg-white);
+          border-radius: 24px;
+          padding: 32px 40px;
+          border: 1px solid var(--border);
+          box-shadow: 0 12px 32px rgba(0,0,0,0.03);
+          margin: 20px 0 60px; 
+        }
+
+        /* --- Artist Board (Weverse Style) --- */
+        .ab-layout { display: flex; gap: 32px; max-width: 1100px; margin: 0 auto; align-items: flex-start; }
+        .media-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+        .media-card { display: flex; flex-direction: column; gap: 12px; cursor: pointer; }
+        .media-item { border-radius: 12px; background: #eee; height: 180px; overflow: hidden; position: relative; transition: transform 0.2s, box-shadow 0.2s; }
+        .media-card:hover .media-item { transform: translateY(-4px); box-shadow: 0 12px 24px rgba(0,0,0,0.1); }
+        .media-item img { width: 100%; height: 100%; object-fit: cover; }
+        .media-item:hover .mi-overlay { opacity: 1; }
+        .mi-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.3); opacity: 0; transition: opacity 0.2s; display: flex; align-items: center; justify-content: center; color: white; }
+        .mi-title { font-size: 15px; font-weight: 700; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .mi-meta { font-size: 13px; color: var(--text-sub); display: flex; gap: 8px; align-items: center; margin-top: 4px; }
+        .yt-badge { background: #FF0000; color: white; border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: 800; display: inline-flex; align-items: center; gap: 2px; }
+
+        .notice-list { display: flex; flex-direction: column; gap: 16px; }
+        .notice-item { padding: 24px; background: var(--bg-white); border-radius: 16px; border: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
+        .notice-item:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.03); }
+        .ni-tag { color: var(--point-rose); font-weight: 800; font-size: 11px; margin-bottom: 8px; }
+        .ni-title { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+        .ni-date { font-size: 13px; color: var(--text-sub); }
+        
+        .pagination { display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 40px; }
+        .page-btn { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.2s; border: 1px solid var(--border); background: var(--bg-white); color: var(--text-sub); }
+        .page-btn.active { background: var(--text-main); color: white; border-color: var(--text-main); }
+        .page-btn:hover:not(.active) { background: #f5f5f5; color: var(--text-main); }
+
+        /* Schedule & Forms */
+        .schedule-list { display: flex; flex-direction: column; gap: 16px; }
+        .schedule-month { font-size: 20px; font-weight: 800; border-bottom: 2px solid var(--text-main); padding-bottom: 12px; margin-top: 24px; margin-bottom: 8px; }
+        .schedule-month:first-child { margin-top: 0; }
+        .schedule-item { display: flex; gap: 24px; align-items: center; padding: 20px; background: var(--bg-white); border-radius: 16px; border: 1px solid var(--border); transition: transform 0.2s, box-shadow 0.2s; cursor: pointer; }
+        .schedule-item:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.03); }
+        .si-date { font-size: 24px; font-weight: 800; color: var(--point-violet); width: 40px; text-align: center; }
+        .si-info { flex: 1; }
+        .si-time { font-size: 12px; font-weight: 800; color: var(--text-sub); margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+        .si-title { font-size: 16px; font-weight: 700; }
+        
+        /* Auth Modal */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(8px); padding: 20px; }
+        .modal-content { background: var(--bg-white); width: 100%; max-width: 440px; border-radius: 24px; padding: 40px; position: relative; box-shadow: 0 24px 48px rgba(0,0,0,0.1); }
+        .m-close { position: absolute; right: 24px; top: 24px; cursor: pointer; color: var(--text-sub); transition: color 0.2s; }
+        .m-close:hover { color: var(--text-main); }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; font-size: 13px; font-weight: 700; margin-bottom: 8px; color: var(--text-sub); }
+        .form-input { width: 100%; border: 1px solid var(--border); background: var(--bg-cream); padding: 14px 16px; border-radius: 12px; font-family: inherit; font-size: 15px; outline: none; transition: border-color 0.2s; }
+        .form-input:focus { border-color: var(--text-main); background: var(--bg-white); }
+        .btn-primary { width: 100%; background: var(--text-main); color: white; border: none; padding: 16px; border-radius: 12px; font-size: 15px; font-weight: 800; cursor: pointer; transition: transform 0.2s; margin-top: 8px; }
+        .btn-primary:active { transform: scale(0.98); }
+        .social-btn { width: 100%; border: 1px solid var(--border); background: var(--bg-white); padding: 14px; border-radius: 12px; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 12px; transition: background 0.2s; }
+        .social-btn:hover { background: #f5f5f5; }
+        .auth-switch { text-align: center; margin-top: 24px; font-size: 13px; font-weight: 600; color: var(--text-sub); }
+        .auth-switch span { color: var(--text-main); cursor: pointer; text-decoration: underline; margin-left: 6px; }
+
+        /* Goods Voting Styles */
+        .vote-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; margin-top: 24px; }
+        .vote-card { background: var(--bg-white); border-radius: 20px; overflow: hidden; border: 1px solid var(--border); transition: all 0.3s; position: relative; }
+        .vote-card:hover { transform: translateY(-4px); box-shadow: 0 12px 24px rgba(0,0,0,0.06); }
+        .vote-img { height: 240px; width: 100%; display: flex; align-items: center; justify-content: center; }
+        .vote-img img { max-height: 80%; max-width: 80%; object-fit: contain; }
+        .vote-body { padding: 24px; }
+        .vote-info { margin-bottom: 20px; }
+        .vote-category { font-size: 12px; font-weight: 800; color: var(--point-rose); margin-bottom: 4px; text-transform: uppercase; }
+        .vote-title { font-size: 18px; font-weight: 800; color: var(--text-main); margin-bottom: 8px; }
+        .vote-count { font-size: 14px; font-weight: 600; color: var(--text-sub); display: flex; align-items: center; gap: 6px; }
+        .vote-btn { width: 100%; padding: 14px; border-radius: 12px; font-weight: 800; font-size: 15px; cursor: pointer; transition: all 0.2s; border: none; }
+        .vote-btn.active { background: var(--point-rose); color: white; }
+        .vote-btn.disabled { background: var(--border); color: var(--text-sub); cursor: default; }
+
+        /* Attendance Modal Styles */
+        .attendance-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 32px 0; }
+        .day-cell { 
+          aspect-ratio: 1; border-radius: 16px; background: var(--bg-cream); border: 1px solid var(--border);
+          display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative;
+          transition: all 0.3s; overflow: hidden;
+        }
+        .day-cell.active { border-color: var(--point-rose); background: #fff; box-shadow: 0 4px 12px rgba(194, 80, 122, 0.1); }
+        .day-num { font-size: 12px; font-weight: 800; color: var(--text-sub); margin-bottom: 4px; }
+        .day-cell.active .day-num { color: var(--point-rose); }
+        .stamp-icon { color: var(--point-rose); }
+        .final-day { grid-column: span 2; aspect-ratio: auto !important; min-height: 80px; }
+        
+        .reward-reveal {
+          text-align: center;
+          padding: 20px;
+        }
+        .photocard-preview {
+          width: 200px; height: 280px; border-radius: 16px; margin: 0 auto 24px;
+          background: linear-gradient(135deg, #FF9A9E, #FECFEF);
+          box-shadow: 0 20px 40px rgba(0,0,0,0.2); border: 4px solid white;
+          overflow: hidden; position: relative;
+        }
+        .photocard-preview img { width: 100%; height: 100%; object-fit: cover; filter: brightness(1.1) contrast(1.1); }
+        .shine {
+          position: absolute; inset: 0; 
+          background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.4) 50%, transparent 60%);
+          animation: shine-sweep 3s infinite;
+        }
+        @keyframes shine-sweep { 
+          0% { transform: translateX(-150%) skewX(-25deg); }
+          50% { transform: translateX(150%) skewX(-25deg); }
+          100% { transform: translateX(150%) skewX(-25deg); }
+        }
+
+        /* My Page Dashboard */
+        .mp-sidebar { width: 280px; flex-shrink: 0; background: var(--bg-white); border-radius: 24px; padding: 32px 24px; border: 1px solid var(--border); }
+        .mp-nav-item { display: flex; align-items: center; gap: 12px; padding: 16px; border-radius: 12px; cursor: pointer; font-weight: 700; color: var(--text-sub); transition: all 0.2s; margin-bottom: 4px; }
+        .mp-nav-item:hover, .mp-nav-item.active { background: var(--bg-cream); color: var(--text-main); }
+        .mp-stat { display: flex; align-items: center; justify-content: space-between; padding: 16px 0; border-bottom: 1px dashed var(--border); }
+        .mp-stat:last-child { border-bottom: none; }
+        
+        /* Cart Drawer */
+        .cart-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; display: flex; justify-content: flex-end; backdrop-filter: blur(8px); }
+        .cart-drawer { background: var(--bg-white); width: 100%; max-width: 480px; height: 100%; display: flex; flex-direction: column; animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+        @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+        .cart-header { padding: 32px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .cart-body { flex: 1; overflow-y: auto; padding: 32px; }
+        .cart-item { display: flex; gap: 16px; margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px dashed var(--border); }
+        .cart-item:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+        .ci-img { width: 80px; height: 80px; background: var(--bg-cream); border-radius: 12px; }
+        .ci-info { flex: 1; }
+        .ci-title { font-size: 15px; font-weight: 700; margin-bottom: 8px; }
+        .ci-price { font-size: 14px; font-weight: 800; color: var(--point-rose); }
+        .cart-footer { padding: 32px; border-top: 1px solid var(--border); background: var(--bg-white); }
+        .cf-row { display: flex; justify-content: space-between; margin-bottom: 16px; font-size: 14px; font-weight: 700; }
+        .cf-total { display: flex; justify-content: space-between; margin-bottom: 24px; font-size: 20px; font-weight: 800; color: var(--point-rose); }
+
+        .ab-main { flex: 1; min-width: 0; }
+        .ab-sidebar { width: 320px; flex-shrink: 0; position: sticky; top: 120px; display: flex; flex-direction: column; gap: 24px; }
+
+        .live-banner { background: linear-gradient(90deg, #ff0f7b, #f89b29); border-radius: 16px; padding: 16px 24px; color: white; display: flex; align-items: center; gap: 16px; margin-bottom: 32px; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
+        .live-banner:hover { transform: translateY(-2px); box-shadow: 0 12px 24px rgba(255, 15, 123, 0.3); }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255,255,255,0.7); opacity: 1; } 70% { box-shadow: 0 0 0 10px rgba(255,255,255,0); opacity: 0.6; } 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); opacity: 1; } }
+        .lb-pulse { width: 10px; height: 10px; background: white; border-radius: 50%; animation: pulse 1.5s infinite; flex-shrink: 0; }
+        .lb-content { flex: 1; }
+        .lb-title { font-weight: 800; font-size: 15px; margin-bottom: 2px; }
+        .lb-desc { font-weight: 500; font-size: 13px; opacity: 0.9; }
+
+        /* Sidebar Widgets */
+        .widget { background: var(--bg-white); border-radius: 20px; border: 1px solid var(--border); padding: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.02); }
+        .w-header { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 800; margin-bottom: 16px; color: var(--text-main); border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+        .w-item { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; border-bottom: 1px dashed var(--border); cursor: pointer; transition: opacity 0.2s; }
+        .w-item:hover { opacity: 0.7; }
+        .w-item:last-child { border-bottom: none; padding-bottom: 0; margin-bottom: -8px; }
+        .w-item-icon { padding: 8px; background: var(--bg-cream); border-radius: 10px; color: var(--point-rose); display: flex; align-items: center; justify-content: center; }
+        .w-item-content { flex: 1; }
+        .w-item-title { font-size: 14px; font-weight: 700; margin-bottom: 4px; line-height: 1.3; }
+        .w-item-date { font-size: 12px; color: var(--text-sub); }
+
+        .tag-pill { display: inline-block; padding: 6px 12px; background: var(--bg-cream); color: var(--text-main); border-radius: 20px; font-size: 12px; font-weight: 700; margin: 0 8px 8px 0; cursor: pointer; transition: all 0.2s; }
+        .tag-pill:hover { background: var(--point-rose); color: white; }
+
+        .board-header { position: relative; border-radius: 24px; overflow: hidden; margin-bottom: 32px; background: #111; color: white; display:flex; align-items:flex-end; padding: 40px; height: 320px; }
+        .bh-bg { position: absolute; inset: 0; opacity: 0.6; mix-blend-mode: overlay; background-image: linear-gradient(to top, rgba(0,0,0,0.8), transparent); transition: transform 0.5s; }
+        .bh-bg-color { position: absolute; inset: 0; opacity: 0.8; }
+        .board-header:hover .bh-bg { transform: scale(1.05); }
+        .bh-content { position: relative; z-index: 10; display: flex; align-items: center; gap: 24px; width: 100%; }
+        .bh-avatar { width: 100px; height: 100px; border-radius: 50%; border: 4px solid rgba(255,255,255,0.2); background: var(--bg-cream); flex-shrink: 0; }
+        .bh-info { flex: 1; }
+        .bh-name { font-size: 32px; font-weight: 800; letter-spacing: -1px; margin-bottom: 8px; }
+        .bh-stats { font-size: 14px; font-weight: 500; opacity: 0.8; }
+        .bh-join-btn { background: var(--point-rose); color: white; border: none; padding: 12px 32px; border-radius: 12px; font-size: 14px; font-weight: 800; cursor: pointer; transition: background 0.2s; }
+        .bh-join-btn:hover { background: #E26F96; }
+
+        .board-nav { display: flex; gap: 32px; margin-bottom: 32px; border-bottom: 1px solid var(--border); padding-bottom: 0px; }
+        .bn-item { font-size: 16px; font-weight: 700; color: var(--text-sub); cursor: pointer; position: relative; transition: color 0.2s; padding-bottom: 16px; margin-bottom: -1px; }
+        .bn-item.active { color: var(--text-main); }
+        .bn-item.active::after { content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 3px; background: var(--text-main); border-radius: 3px 3px 0 0; }
+
+        .post-composer { background: var(--bg-white); border-radius: 20px; border: 1px solid var(--border); padding: 20px; margin-bottom: 32px; display: flex; gap: 16px; align-items: flex-start; box-shadow: 0 4px 12px rgba(0,0,0,0.02); }
+        .pc-avatar { width: 40px; height: 40px; border-radius: 50%; background: #E8E0D8; flex-shrink: 0; }
+        .pc-input-area { flex: 1; }
+        .pc-input { width: 100%; min-height: 40px; border: none; font-family: inherit; font-size: 15px; outline: none; background: transparent; resize: none; color: var(--text-main); padding-top: 10px; }
+        .pc-input::placeholder { color: #BBB; }
+        .pc-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 12px; }
+        .pc-tools { display: flex; gap: 16px; color: var(--text-sub); }
+        .pc-tools svg { cursor: pointer; transition: color 0.2s; }
+        .pc-tools svg:hover { color: var(--point-rose); }
+        .pc-submit { background: var(--text-main); color: white; border: none; padding: 8px 24px; border-radius: 20px; font-size: 13px; font-weight: 700; cursor: pointer; }
+
+        .feed-post { background: var(--bg-white); border-radius: 20px; border: 1px solid var(--border); padding: 24px; margin-bottom: 24px; transition: transform 0.2s; cursor: pointer; }
+        .feed-post:hover { border-color: rgba(0,0,0,0.1); box-shadow: 0 8px 24px rgba(0,0,0,0.03); }
+        .fp-header { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; }
+        .fp-avatar { width: 48px; height: 48px; border-radius: 50%; background: #eee; }
+        .fp-avatar.artist-badge { border: 2px solid var(--point-rose); }
+        .fp-meta { flex: 1; }
+        .fp-author { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+        .fp-badge { background: #f0f0f0; color: #666; font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 800; }
+        .fp-badge.artist { 
+          background: linear-gradient(135deg, var(--point-rose), var(--point-violet)); 
+          color: white; 
+          border: none;
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          padding: 2px 8px;
+          border-radius: 12px;
+          box-shadow: 0 2px 4px rgba(194, 80, 122, 0.2);
+        }
+        .fp-time { font-size: 12px; color: var(--text-sub); margin-top: 2px; }
+        .fp-content { font-size: 15px; line-height: 1.6; margin-bottom: 16px; word-break: break-word; }
+        .fp-image { width: 100%; border-radius: 12px; height: 300px; margin-bottom: 16px; background: #f5f5f5; }
+        .fp-footer { display: flex; gap: 24px; color: var(--text-sub); font-size: 13px; font-weight: 600; }
+        .fp-action { display: flex; align-items: center; gap: 6px; cursor: pointer; transition: color 0.2s; }
+        .fp-action:hover { color: var(--point-rose); }
+        .fp-comments { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border); }
+        .fp-comment-item { margin-bottom: 12px; font-size: 13px; }
+        .fp-comment-author { font-weight: 800; margin-right: 8px; color: var(--text-main); }
+        .fp-comment-content { color: var(--text-sub); line-height: 1.4; }
+        .fp-comment-input-area { display: flex; gap: 12px; margin-top: 16px; align-items: center; }
+        .fp-comment-input { flex: 1; background: var(--bg-cream); border: 1px solid var(--border); padding: 8px 16px; border-radius: 20px; font-size: 13px; outline: none; }
+        .fp-comment-input:focus { border-color: var(--point-rose); background: white; }
+        .fp-comment-submit { color: var(--point-rose); font-weight: 800; font-size: 13px; border: none; background: none; cursor: pointer; }
+        .fp-comment-submit:disabled { color: var(--text-sub); opacity: 0.5; cursor: default; }
+
+        /* New Responsive Modal & Overlay Styles */
+        .modal-content-custom {
+          background: white;
+          width: 90%;
+          max-width: 440px;
+          border-radius: 32px;
+          overflow: hidden;
+          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+          display: flex;
+          flex-direction: column;
+          max-height: 90vh;
+          position: relative;
+          box-sizing: border-box;
+        }
+        .modal-header-accent {
+          height: 160px;
+          background: #111;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          position: relative;
+          padding: 32px;
+          flex-shrink: 0;
+          text-align: center;
+          box-sizing: border-box;
+        }
+        .modal-header-bg {
+          position: absolute;
+          inset: 0;
+          opacity: 0.15;
+          background: linear-gradient(135deg, #C2507A, #7F77DD);
+        }
+        .modal-body-custom {
+          padding: 32px;
+          flex: 1;
+          overflow-y: auto;
+          background: white;
+          box-sizing: border-box;
+        }
+        .schedule-grid-50 {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 16px;
+          margin-bottom: 32px;
+        }
+        .schedule-info-box {
+          padding: 16px;
+          background: #F7F3EE;
+          border-radius: 20px;
+          border: 1px solid #EDE8E2;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+
+        .notice-full-overlay {
+          position: fixed;
+          inset: 0;
+          background: #F7F3EE;
+          z-index: 2000;
+          overflow-y: auto;
+          display: flex;
+          flex-direction: column;
+          box-sizing: border-box;
+        }
+        .notice-detail-container {
+          width: 100%;
+          max-width: 768px;
+          margin: 0 auto;
+          min-height: 100vh;
+          display: flex;
+          flex-direction: column;
+          box-sizing: border-box;
+        }
+        .notice-detail-header {
+          position: sticky;
+          top: 0;
+          background: rgba(247, 243, 238, 0.85);
+          backdrop-filter: blur(12px);
+          padding: 20px 32px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          border-bottom: 1px solid #EDE8E2;
+          z-index: 100;
+        }
+        .notice-detail-main {
+          flex: 1;
+          background: white;
+          margin: 16px 16px 0 16px;
+          border-radius: 40px 40px 0 0;
+          padding: 64px 40px;
+          box-shadow: 0 -10px 40px rgba(0,0,0,0.03);
+          border: 1px solid #EDE8E2;
+          border-bottom: none;
+          box-sizing: border-box;
+        }
+        @media (max-width: 640px) {
+          .notice-detail-main {
+            padding: 40px 24px;
+            margin: 12px 12px 0 12px;
+          }
+        }
+      `}</style>
+
+      {/* Shared Header */}
+      {activeTab !== 'CHECKOUT' && (!selectedArtist && role !== 'ARTIST') && (
+      <header className="floating-header">
+        <div className="logo" onClick={() => { 
+          if (role === 'ARTIST') {
+            setBoardTab('FEED');
+            return;
+          }
+          setActiveTab('HOME'); 
+          setSelectedArtist(null); 
+        }}>FANDROPS</div>
+        <nav>
+          {(role === 'ARTIST' ? ['WORKSPACE'] : ['HOME', 'ARTISTS', 'STORE', 'MY PAGE']).map(tab => (
+            <div 
+              key={tab} 
+              className={`n-item ${(activeTab === tab && !selectedArtist) || (role === 'ARTIST' && tab === 'WORKSPACE') ? 'active' : ''}`}
+              onClick={() => { 
+                if (role === 'ARTIST') return;
+                setActiveTab(tab); 
+                setSelectedArtist(null); 
+                setSelectedProduct(null); 
+              }}
+            >
+              {tab}
+            </div>
+          ))}
+        </nav>
+        <div className="h-icons">
+          {role !== 'ARTIST' && (
+            <>
+              <Search size={20} color="var(--text-main)" style={{cursor:'pointer'}} />
+              <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => setActiveTab('NOTIFICATIONS')}>
+                <Bell size={20} color="var(--text-main)" />
+                {notifications.filter(n => !n.isRead).length > 0 && (
+                  <div style={{ position: 'absolute', top: '-4px', right: '-4px', background: 'var(--point-rose)', color: 'white', fontSize: '10px', fontWeight: 800, width: '16px', height: '16px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {notifications.filter(n => !n.isRead).length}
+                  </div>
+                )}
+              </div>
+              <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => setShowCart(true)}>
+                <ShoppingBag size={20} color="var(--text-main)" />
+                <div style={{ position: 'absolute', top: '-4px', right: '-4px', background: 'var(--point-rose)', color: 'white', fontSize: '10px', fontWeight: 800, width: '16px', height: '16px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>2</div>
+              </div>
+            </>
+          )}
+          <div className="avatar" onClick={() => { 
+            if (role === 'ARTIST') return;
+            setActiveTab('MY PAGE'); 
+            setSelectedArtist(null); 
+          }}></div>
+          {role === 'ARTIST' && (
+            <button 
+              onClick={onLogout}
+              style={{ padding: '8px 12px', background: '#F7F3EE', border: '1px solid #EDE8E2', borderRadius: '12px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
+            >
+              로그아웃
+            </button>
+          )}
+        </div>
+      </header>
+      )}
+
+      {activeTab === 'CHECKOUT' && (
+        <header style={{ position: 'absolute', top: '24px', left: '40px', background: 'transparent', zIndex: 10 }}>
+           <button onClick={() => { setActiveTab('HOME'); setCheckoutData(null); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-main)', fontWeight: 800, cursor: 'pointer', border: 'none', background: 'none' }}>
+              <ChevronLeft size={20} /> 취소하고 주문 페이지 나가기
+           </button>
+        </header>
+      )}
+
+      {activeTab === 'NOTIFICATIONS' && (
+        <div style={{ background: 'var(--bg-white)', minHeight: '100vh', padding: '120px 40px 60px' }}>
+          <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' }}>
+              <h1 style={{ fontSize: '32px', fontWeight: 900 }}>알림</h1>
+              <button 
+                onClick={() => setActiveTab('HOME')} 
+                style={{ background: 'none', border: 'none', color: 'var(--text-sub)', fontWeight: 700, cursor: 'pointer', fontSize: '15px' }}
+              >
+                닫기
+              </button>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {notifications.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--text-sub)', fontWeight: 600 }}>새로운 알림이 없습니다.</div>
+              ) : (
+                notifications.map(n => (
+                  <div key={n.id} style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '20px', padding: '24px', position: 'relative', opacity: n.isRead ? 0.7 : 1 }}>
+                    {!n.isRead && <div style={{ position: 'absolute', top: 24, right: 24, width: '8px', height: '8px', background: 'var(--point-rose)', borderRadius: '50%' }}></div>}
+                    <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--point-rose)', marginBottom: '8px' }}>{n.title}</div>
+                    <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '8px', color: 'var(--text-main)' }}>{n.content}</div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-sub)', fontWeight: 600 }}>{n.time}</div>
+                  </div>
+                )).reverse()
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- CART DRAWER --- */}
+      {showCart && (
+        <div className="cart-overlay" onClick={() => setShowCart(false)}>
+          <div className="cart-drawer" onClick={e => e.stopPropagation()}>
+            <div className="cart-header">
+              <h2 style={{ fontSize: '24px', fontWeight: 800 }}>장바구니 (2)</h2>
+              <X size={24} style={{ cursor: 'pointer' }} onClick={() => setShowCart(false)} />
+            </div>
+            
+            <div className="cart-body">
+              <div className="cart-item">
+                <div className="ci-img" style={{ background: 'linear-gradient(135deg, #E8E0D8, #D5CCC2)' }}></div>
+                <div className="ci-info">
+                  <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-sub)', marginBottom: '4px' }}>STARLIGHT</div>
+                  <div className="ci-title">Echo Special Photobook</div>
+                  <div className="ci-price">₩49,000</div>
+                  <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
+                      <button style={{ background: 'var(--bg-white)', border: 'none', padding: '4px 12px', cursor: 'pointer' }}>-</button>
+                      <div style={{ padding: '4px 12px', fontSize: '13px', fontWeight: 700, borderLeft: '1px solid var(--border)', borderRight: '1px solid var(--border)' }}>1</div>
+                      <button style={{ background: 'var(--bg-white)', border: 'none', padding: '4px 12px', cursor: 'pointer' }}>+</button>
+                    </div>
+                    <span style={{ fontSize: '12px', color: 'var(--text-sub)', cursor: 'pointer', textDecoration: 'underline' }}>삭제</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="cart-item">
+                <div className="ci-img" style={{ background: 'linear-gradient(135deg, #a18cd1, #fbc2eb)' }}></div>
+                <div className="ci-info">
+                  <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-sub)', marginBottom: '4px' }}>LUNA GIRLS</div>
+                  <div className="ci-title">Summer Special Poster Set</div>
+                  <div className="ci-price">₩15,000</div>
+                  <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
+                      <button style={{ background: 'var(--bg-white)', border: 'none', padding: '4px 12px', cursor: 'pointer' }}>-</button>
+                      <div style={{ padding: '4px 12px', fontSize: '13px', fontWeight: 700, borderLeft: '1px solid var(--border)', borderRight: '1px solid var(--border)' }}>1</div>
+                      <button style={{ background: 'var(--bg-white)', border: 'none', padding: '4px 12px', cursor: 'pointer' }}>+</button>
+                    </div>
+                    <span style={{ fontSize: '12px', color: 'var(--text-sub)', cursor: 'pointer', textDecoration: 'underline' }}>삭제</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="cart-footer">
+              <div className="cf-row">
+                <span>상품 합계</span>
+                <span>₩64,000</span>
+              </div>
+              <div className="cf-row">
+                <span>Shipping</span>
+                <span>₩3,000</span>
+              </div>
+              <div className="cf-total">
+                <span>Total</span>
+                <span>₩67,000</span>
+              </div>
+              <button className="btn-primary" onClick={() => { setShowCart(false); setCheckoutData({ title: '여러 상품 (장바구니)', price: 61000, qty: 1, option: '다중 선택' }); setActiveTab('CHECKOUT'); }}>주문하기</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- AUTH MODAL --- */}
+
+      <div className="wrapper">
+        {/* --- NOTIFICATION STACK --- */}
+        {showNotifications && (
+          <div style={{ position: 'fixed', top: '80px', right: '40px', width: '360px', maxHeight: '500px', background: 'white', borderRadius: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.15)', zIndex: 1000, overflow: 'hidden', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: 800 }}>Notifications</h3>
+              <button onClick={() => setNotifications(notifications.map(n => ({ ...n, isRead: true })))} style={{ fontSize: '12px', fontWeight: 700, color: 'var(--point-rose)', background: 'none', border: 'none', cursor: 'pointer' }}>Mark all as read</button>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }} className="hide-scrollbar">
+              {notifications.map(n => (
+                <div key={n.id} style={{ padding: '16px 24px', cursor: 'pointer', borderBottom: '1px solid rgba(0,0,0,0.03)', background: n.isRead ? 'transparent' : 'rgba(194, 80, 122, 0.03)', transition: 'background 0.2s' }} className="hover-item">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 800, color: n.isRead ? 'var(--text-main)' : 'var(--point-rose)' }}>{n.title}</span>
+                    <span style={{ fontSize: '11px', color: 'var(--text-sub)' }}>{n.time}</span>
+                  </div>
+                  <p style={{ fontSize: '13px', color: 'var(--text-sub)', lineHeight: 1.4 }}>{n.content}</p>
+                </div>
+              ))}
+            </div>
+            <div style={{ padding: '16px', borderTop: '1px solid var(--border)', textAlign: 'center' }}>
+               <button className="btn-secondary" style={{ width: '100%', fontSize: '13px' }}>View all activities</button>
+            </div>
+          </div>
+        )}
+
+        {/* --- ARTIST SEARCH MODAL --- */}
+        {showArtistSearch && (
+          <div className="cart-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowArtistSearch(false)}>
+            <div style={{ width: '100%', maxWidth: '500px', background: 'white', borderRadius: '32px', padding: '40px', position: 'relative' }} onClick={e => e.stopPropagation()}>
+               <X size={24} style={{ position: 'absolute', top: 32, right: 32, cursor: 'pointer', color: '#888' }} onClick={() => setShowArtistSearch(false)} />
+               <h2 style={{ fontSize: '24px', fontWeight: 800, marginBottom: '24px' }}>아티스트 검색</h2>
+               <div style={{ position: 'relative', marginBottom: '32px' }}>
+                 <Search size={20} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#ccc' }} />
+                 <input 
+                   type="text" 
+                   autoFocus
+                   placeholder="아티스트 이름을 입력하세요" 
+                   style={{ width: '100%', padding: '16px 16px 16px 52px', borderRadius: '16px', border: '1px solid var(--border)', fontSize: '16px', outline: 'none', background: 'var(--bg-cream)' }} 
+                 />
+               </div>
+               
+               <div style={{ marginBottom: '32px' }}>
+                 <p style={{ fontSize: '13px', fontWeight: 800, color: '#888', marginBottom: '16px', letterSpacing: '1px' }}>추천 아티스트</p>
+                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+                    {ALL_ARTISTS.filter(a => a.id !== 'ALL').map(a => (
+                      <div key={a.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={() => { 
+                        if (!favoriteArtists.find(fa => fa.id === a.id)) {
+                          setFavoriteArtists([...favoriteArtists, { id: a.id, name: a.name, bg: 'linear-gradient(135deg, #eee, #ddd)' }]);
+                        }
+                        setShowArtistSearch(false);
+                      }}>
+                        <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '14px' }}>
+                          {a.name.substring(0,3)}
+                        </div>
+                        <span style={{ fontSize: '13px', fontWeight: 700 }}>{a.name}</span>
+                      </div>
+                    ))}
+                 </div>
+               </div>
+            </div>
+          </div>
+        )}
+
+        {/* --- EDIT PROFILE MODAL --- */}
+        {showEditProfile && (
+          <div className="cart-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowEditProfile(false)}>
+            <div style={{ width: '100%', maxWidth: '440px', background: 'white', borderRadius: '32px', padding: '40px', position: 'relative' }} onClick={e => e.stopPropagation()}>
+               <X size={24} style={{ position: 'absolute', top: 32, right: 32, cursor: 'pointer', color: '#888' }} onClick={() => setShowEditProfile(false)} />
+               <h2 style={{ fontSize: '24px', fontWeight: 800, marginBottom: '32px' }}>프로필 수정</h2>
+               
+               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '32px' }}>
+                 <div style={{ width: '100px', height: '100px', borderRadius: '50%', background: 'linear-gradient(135deg, #E8E0D8, #D5CCC2)', marginBottom: '16px', border: '4px solid white', boxShadow: '0 8px 24px rgba(0,0,0,0.08)' }}></div>
+                 <button className="c-btn" style={{ background: 'var(--bg-cream)', padding: '8px 16px', borderRadius: '20px' }}>사진 변경</button>
+               </div>
+
+               <div className="form-group" style={{ marginBottom: '20px' }}>
+                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px', color: 'var(--text-sub)' }}>닉네임</label>
+                 <input type="text" defaultValue="Dreamer99" className="form-input" style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--bg-cream)', padding: '14px 16px', borderRadius: '12px', fontSize: '15px' }} />
+               </div>
+               
+               <div className="form-group" style={{ marginBottom: '32px' }}>
+                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px', color: 'var(--text-sub)' }}>소개말</label>
+                 <textarea rows={3} placeholder="자신을 소개해 보세요!" className="form-input" style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--bg-cream)', padding: '14px 16px', borderRadius: '12px', fontSize: '15px', resize: 'none' }}></textarea>
+               </div>
+
+               <button className="btn-primary" onClick={() => {
+                 setNotifications([...notifications, { id: Date.now(), title: '프로필 업데이트', content: '프로필 수정이 완료되었습니다.', time: '방금 전', isRead: false }]);
+                 setShowEditProfile(false);
+               }} style={{ width: '100%', background: 'var(--text-main)', color: 'white', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 800 }}>저장하기</button>
+            </div>
+          </div>
+        )}
+
+        {/* --- ARTIST BOARD PAGE --- */}
+        {selectedArtist && (
+          <div className="page-content reveal" style={{ 
+            paddingTop: role === 'ARTIST' ? '120px' : '40px', 
+            paddingRight: '40px',
+            paddingBottom: '100px',
+            paddingLeft: '40px',
+            maxWidth: '1200px', 
+            margin: '0 auto' 
+          }}>
+            {role !== 'ARTIST' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginBottom: '24px', fontWeight: 800, color: 'var(--text-main)', transition: 'color 0.2s', width: 'fit-content' }} onClick={() => setSelectedArtist(null)}>
+                <ChevronLeft size={24} /> 뒤로가기
+              </div>
+            )}
+            <div className="board-header">
+              <div className="bh-bg-color" style={{ background: selectedArtist.bg }}></div>
+              <div className="bh-bg"></div>
+              <div className="bh-content">
+                <div className="bh-avatar" style={{ background: selectedArtist.bg }}></div>
+                <div className="bh-info">
+                  <div className="bh-name">{selectedArtist.name}</div>
+                  <div className="bh-stats">{selectedArtist.type || 'Artist'} · {selectedArtist.followers || '10K'} 팔로워</div>
+                </div>
+                {role === 'ARTIST' ? (
+                  <button className="bh-join-btn" onClick={onLogout} style={{ background: '#333' }}>로그아웃</button>
+                ) : (
+                  <button className="bh-join-btn">팔로우</button>
+                )}
+              </div>
+            </div>
+
+            <div className="board-nav reveal delay-100">
+              {['FEED', 'ARTIST', 'VOTE', 'MEDIA', 'NOTICE', 'SCHEDULE'].map(tab => (
+                <div 
+                  key={tab} 
+                  className={`bn-item ${boardTab === tab ? 'active' : ''}`}
+                  onClick={() => setBoardTab(tab)}
+                >
+                  {tab === 'FEED' ? '피드' : tab === 'ARTIST' ? '아티스트' : tab === 'VOTE' ? '굿즈투표' : tab === 'MEDIA' ? '미디어' : tab === 'NOTICE' ? '공지사항' : tab === 'SCHEDULE' ? '스케줄' : tab}
+                </div>
+              ))}
+            </div>
+
+            <div className="ab-layout">
+              <div className="ab-main">
+                {/* FEED TAB */}
+                {boardTab === 'FEED' && (
+                  <div className="reveal">
+                    {/* Live Banner */}
+                    <div className="live-banner">
+                      <div className="lb-pulse"></div>
+                      <div className="lb-content">
+                        <div className="lb-title">{selectedArtist.name} 라이브 방송 중! 🔴</div>
+                        <div className="lb-desc">Starlight Studio 2주년 기념 카운트다운...</div>
+                      </div>
+                      <button className="c-btn" style={{ background: 'white', color: '#ff0f7b', padding: '8px 16px' }}>스트리밍 시청</button>
+                    </div>
+
+                    {/* Attendance Event Banner */}
+                    {showAttendanceBanner && (
+                      <motion.div 
+                        className="live-banner" 
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        style={{ 
+                          background: 'linear-gradient(135deg, #FF9A8B, #FF6A88, #FF99AC)', 
+                          border: 'none', 
+                          marginBottom: '24px', 
+                          cursor: 'pointer',
+                          boxShadow: '0 10px 25px rgba(255, 106, 136, 0.2)',
+                          padding: '20px 24px'
+                        }}
+                        onClick={() => {
+                          setShowAttendance(true);
+                          setAttendanceStep('STAMPING');
+                          setTriggeredArtists(prev => [...prev, selectedArtist.id]);
+                          setShowAttendanceBanner(false);
+                        }}
+                      >
+                        <div style={{ width: '44px', height: '44px', background: 'rgba(255,255,255,0.2)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', backdropFilter: 'blur(4px)' }}>
+                          <Calendar size={22} />
+                        </div>
+                        <div className="lb-content" style={{ marginLeft: '16px' }}>
+                          <div className="lb-title" style={{ color: 'white', fontSize: '16px', fontWeight: 800 }}>7일 출석 챌린지 ✨</div>
+                          <div className="lb-desc" style={{ color: 'rgba(255,255,255,0.9)', fontSize: '13px', fontWeight: 500 }}>미공개 디지털 포토카드를 획득할 수 있는 마지막 기회!</div>
+                        </div>
+                        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px', color: 'white', fontWeight: 800, fontSize: '14px', background: 'rgba(255,255,255,0.2)', padding: '8px 16px', borderRadius: '20px' }}>
+                          참여하기 <ChevronRight size={16} />
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {role === 'ARTIST' && (
+                      <div className="post-composer">
+                        <div className="pc-avatar"></div>
+                        <div className="pc-input-area">
+                          <textarea 
+                            className="pc-input" 
+                            placeholder="팬들에게 전할 소식을 작성해 보세요!"
+                            value={postInput}
+                            onChange={(e) => setPostInput(e.target.value)}
+                          ></textarea>
+                          <div className="pc-actions">
+                            <div className="pc-tools">
+                              <ImageIcon size={20} />
+                              <Smile size={20} />
+                              <span className="text-[10px] font-bold text-[#C2507A] opacity-60 ml-2">
+                                아티스트 공식 포스트 작성 중
+                              </span>
+                            </div>
+                            <button 
+                              className="pc-submit"
+                              style={{ background: 'linear-gradient(135deg, #C2507A, #7F77DD)' }}
+                              onClick={handlePostSubmit}
+                              disabled={!postInput.trim()}
+                            >
+                              게시
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="space-y-6">
+                      {currentArtistPosts.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-sub)', fontWeight: 600 }}>게시물이 없습니다. 첫 게시물을 작성해보세요!</div>
+                      ) : (
+                        currentArtistPosts.map(post => (
+                          <motion.div 
+                            key={post.id} 
+                            initial={post.isNew ? { opacity: 0, y: 20 } : false}
+                            animate={post.isNew ? { opacity: 1, y: 0 } : false}
+                            className={`feed-post ${post.isOfficial ? 'artist-post' : ''}`} 
+                            style={post.isOfficial ? { background: 'rgba(194, 80, 122, 0.03)', border: '1px solid rgba(194, 80, 122, 0.15)' } : {}}
+                          >
+                            <div className="fp-header">
+                              <div className={`fp-avatar ${post.isOfficial ? 'artist-badge' : ''}`} style={post.isOfficial ? { background: selectedArtist.bg } : {}}></div>
+                              <div className="fp-meta">
+                                <div className="fp-author">
+                                  {post.author} 
+                                  {post.isOfficial && (
+                                    <span className="fp-badge artist" style={{ background: 'var(--point-rose)' }}>
+                                      <CheckCircle2 size={10} fill="currentColor" /> Official
+                                    </span>
+                                  )}
+                                  {!post.isOfficial && <span className="fp-badge">팬</span>}
+                                </div>
+                                <div className="fp-time">{post.time}</div>
+                              </div>
+                              <MoreHorizontal size={20} color="var(--text-sub)" />
+                            </div>
+                            <div className="fp-content">{post.content}</div>
+                            {post.hasImage && (
+                              <div className="fp-image" style={{ background: selectedArtist.bg, backgroundImage: 'linear-gradient(rgba(0,0,0,0.1), rgba(0,0,0,0.1))', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <ImageIcon size={48} color="white" opacity={0.5} />
+                              </div>
+                            )}
+                            <div className="fp-footer">
+                              <div className="fp-action"><Heart size={18} /> {post.likes}</div>
+                              <div className="fp-action"><MessageSquare size={18} /> {post.comments}</div>
+                              <div className="fp-action"><Share2 size={18} /> {post.role === 'ARTIST' ? 'Share' : '공유'}</div>
+                            </div>
+
+                            {/* Comment Section */}
+                            <div className="fp-comments">
+                              {commentsMap[post.id]?.map((comment: any) => (
+                                <div key={comment.id} className="fp-comment-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                  <div>
+                                    <span className="fp-comment-author">{comment.author}</span>
+                                    <span className="fp-comment-content">{comment.content}</span>
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', color: comment.isLiked ? '#C2507A' : '#888' }} onClick={() => {
+                                     setCommentsMap(prev => ({
+                                       ...prev,
+                                       [post.id]: prev[post.id].map(c => c.id === comment.id ? { ...c, isLiked: !c.isLiked, likes: (c.likes || 0) + (c.isLiked ? -1 : 1) } : c)
+                                     }));
+                                  }}>
+                                    <Heart size={12} fill={comment.isLiked ? "currentColor" : "none"} />
+                                    <span style={{ fontSize: '10px', fontWeight: 700 }}>{comment.likes || 0}</span>
+                                  </div>
+                                </div>
+                              ))}
+                              
+                              <div className="fp-comment-input-area">
+                                <input 
+                                  type="text" 
+                                  className="fp-comment-input" 
+                                  placeholder="댓글을 입력하세요..." 
+                                  value={commentInputs[post.id] || ''}
+                                  onChange={(e) => setCommentInputs(prev => ({ ...prev, [post.id]: e.target.value }))}
+                                  onKeyDown={(e) => e.key === 'Enter' && handleCommentSubmit(post.id)}
+                                />
+                                <button 
+                                  className="fp-comment-submit"
+                                  onClick={() => handleCommentSubmit(post.id)}
+                                  disabled={!(commentInputs[post.id]?.trim())}
+                                >
+                                  게시
+                                </button>
+                              </div>
+                            </div>
+                          </motion.div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* ARTIST TAB */}
+                {boardTab === 'ARTIST' && (
+                  <div className="reveal">
+                    {currentOfficialPosts.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-sub)', fontWeight: 600 }}>아티스트의 게시물이 없습니다.</div>
+                    ) : (
+                      currentOfficialPosts.map(post => (
+                        <div 
+                          key={post.id} 
+                          className="feed-post artist-post" 
+                          style={{ background: 'rgba(194, 80, 122, 0.03)', border: '1px solid rgba(194, 80, 122, 0.15)' }}
+                        >
+                          <div className="fp-header">
+                            <div className="fp-avatar artist-badge" style={{ background: selectedArtist.bg }}></div>
+                            <div className="fp-meta">
+                              <div className="fp-author">
+                                {post.author} 
+                                <span className="fp-badge artist" style={{ background: 'var(--point-rose)' }}>
+                                  <CheckCircle2 size={10} fill="currentColor" /> Official
+                                </span>
+                              </div>
+                              <div className="fp-time">{post.time}</div>
+                            </div>
+                            <MoreHorizontal size={20} color="var(--text-sub)" />
+                          </div>
+                          <div className="fp-content">{post.content}</div>
+                          {post.hasImage && (
+                            <div className="fp-image" style={{ background: selectedArtist.bg, backgroundImage: 'linear-gradient(rgba(0,0,0,0.1), rgba(0,0,0,0.1))', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <ImageIcon size={48} color="white" opacity={0.5} />
+                            </div>
+                          )}
+                          <div className="fp-footer">
+                            <div className="fp-action"><Heart size={18} /> {post.likes}</div>
+                            <div className="fp-action"><MessageSquare size={18} /> {post.comments}</div>
+                            <div className="fp-action"><Share2 size={18} /> {post.role === 'ARTIST' ? 'Share' : '공유'}</div>
+                          </div>
+
+                          {/* Comment Section */}
+                          <div className="fp-comments">
+                            {commentsMap[post.id]?.map((comment: any) => (
+                              <div key={comment.id} className="fp-comment-item">
+                                <span className="fp-comment-author">{comment.author}</span>
+                                <span className="fp-comment-content">{comment.content}</span>
+                              </div>
+                            ))}
+                            
+                            <div className="fp-comment-input-area">
+                              <input 
+                                type="text" 
+                                className="fp-comment-input" 
+                                placeholder="댓글을 입력하세요..." 
+                                value={commentInputs[post.id] || ''}
+                                onChange={(e) => setCommentInputs(prev => ({ ...prev, [post.id]: e.target.value }))}
+                                onKeyDown={(e) => e.key === 'Enter' && handleCommentSubmit(post.id)}
+                              />
+                              <button 
+                                className="fp-comment-submit"
+                                onClick={() => handleCommentSubmit(post.id)}
+                                disabled={!(commentInputs[post.id]?.trim())}
+                              >
+                                게시
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+
+                {/* VOTE TAB */}
+                {boardTab === 'VOTE' && (
+                  <div className="reveal">
+                    <div style={{ marginBottom: '32px' }}>
+                      <h2 style={{ fontSize: '24px', fontWeight: 800, marginBottom: '8px' }}>굿즈 투표</h2>
+                      <p style={{ color: 'var(--text-sub)', fontSize: '15px' }}>아티스트에게 제작을 제안할 신규 굿즈 디자인을 선택해주세요!</p>
+                    </div>
+                    
+                    <div className="vote-grid">
+                      {goodsVotes.map(item => (
+                        <div key={item.id} className="vote-card">
+                          <div className="vote-img" style={{ background: item.color }}>
+                            <img src={item.img} alt={item.title} />
+                          </div>
+                          <div className="vote-body">
+                            <div className="vote-info">
+                              <div className="vote-category">{item.category}</div>
+                              <div className="vote-title">{item.title}</div>
+                              <div className="vote-count">
+                                <ThumbsUp size={14} /> {item.votes.toLocaleString()} 투표됨
+                              </div>
+                            </div>
+                            <button 
+                              className={`vote-btn ${hasVoted.includes(item.id) ? 'disabled' : 'active'}`}
+                              disabled={hasVoted.includes(item.id)}
+                              onClick={() => {
+                                setGoodsVotes(prev => prev.map(v => v.id === item.id ? { ...v, votes: v.votes + 1 } : v));
+                                setHasVoted(prev => [...prev, item.id]);
+                              }}
+                            >
+                              {hasVoted.includes(item.id) ? '투표 완료' : '투표하기'}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* MEDIA TAB */}
+                {boardTab === 'MEDIA' && (
+                  <div className="media-grid reveal">
+                    {[
+                      { id: 1, title: `${selectedArtist.name} - 'ECHO' Official M/V`, views: '12M', time: '2 days ago', duration: '3:45' },
+                      { id: 2, title: `[BEHIND] ${selectedArtist.name} Jacket Shooting`, views: '1.2M', time: '1 week ago', duration: '12:20' },
+                      { id: 3, title: `${selectedArtist.name} Dance Practice (Fixed Cam)`, views: '4.5M', time: '2 weeks ago', duration: '3:50' },
+                      { id: 4, title: `[VLOG] Weekend with ${selectedArtist.name}`, views: '2M', time: '1 month ago', duration: '18:15' },
+                      { id: 5, title: `${selectedArtist.name} - 'ECHO' Comeback Stage`, views: '5M', time: '1 month ago', duration: '4:10' },
+                      { id: 6, title: `[LIVE] Surprise Birthday Party 🎂`, views: '8M', time: '2 months ago', duration: '45:00' },
+                    ].map((video) => (
+                      <div key={video.id} className="media-card">
+                        <div className="media-item" style={{ background: `hsl(${video.id * 50}, 40%, 80%)`, backgroundImage: 'linear-gradient(rgba(0,0,0,0.1), rgba(0,0,0,0.1))' }}>
+                          <span style={{ position: 'absolute', bottom: '8px', right: '8px', background: 'rgba(0,0,0,0.8)', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: '700' }}>{video.duration}</span>
+                          <div className="mi-overlay">
+                            <Play size={48} fill="currentColor" color="white" />
+                          </div>
+                        </div>
+                        <div>
+                          <div className="mi-title">{video.title}</div>
+                          <div className="mi-meta">
+                            <span className="yt-badge"><Youtube size={12} fill="currentColor" /> YouTube</span>
+                            <span>{video.views} 조회수 • {video.time}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* NOTICE TAB */}
+                {boardTab === 'NOTICE' && (
+                  <div className="reveal">
+                    <div className="notice-list">
+                      {notices.map((notice) => (
+                          <div 
+                            key={notice.id} 
+                            className="notice-item" 
+                            onClick={() => setSelectedNotice(notice)}
+                            style={{ 
+                              padding: '12px 16px',
+                              borderLeft: `3px solid ${notice.type === 'TICKET' ? '#C2507A' : notice.type === 'EVENT' ? 'var(--point-rose)' : 'var(--point-violet)'}` 
+                            }}
+                          >
+                            <div style={{ flex: 1 }}>
+                              <div className="ni-tag" style={{ color: notice.type === 'TICKET' ? '#C2507A' : notice.type === 'EVENT' ? 'var(--point-rose)' : 'var(--point-violet)', marginBottom: '2px', fontSize: '10px' }}>
+                                {notice.tag}
+                              </div>
+                              <div className="ni-title" style={{ fontSize: '13px', marginBottom: '1px', fontWeight: 'bold' }}>{notice.title}</div>
+                              <div className="ni-date" style={{ fontSize: '11px', opacity: 0.7 }}>{notice.date}</div>
+                            </div>
+                            <ChevronRight size={16} color="var(--text-sub)" />
+                          </div>
+                      ))}
+                    </div>
+
+                    <div className="pagination">
+                      <div className="page-btn"><ChevronLeft size={16} /></div>
+                      <div className="page-btn active">1</div>
+                      <div className="page-btn">2</div>
+                      <div className="page-btn">3</div>
+                      <div className="page-btn">4</div>
+                      <div className="page-btn">5</div>
+                      <div className="page-btn"><ChevronRight size={16} /></div>
+                    </div>
+                  </div>
+                )}
+
+                {/* SCHEDULE TAB */}
+                {boardTab === 'SCHEDULE' && (
+                  <div className="schedule-list reveal">
+                    {/* Simplified grouped display for demo */}
+                    <div className="schedule-month">2026.05</div>
+                    {schedules.filter(s => s.month === '2026.05').map(s => (
+                      <div key={s.id} className="schedule-item" onClick={() => { setSelectedSchedule(s); setShowScheduleModal(true); }}>
+                        <div className="si-date">{s.date}</div>
+                        <div className="si-info">
+                          <div className="si-time">
+                            {s.category === 'VIDEO' && <Video size={14} />}
+                            {s.category === 'RADIO' && <Radio size={14} />}
+                            {s.category === 'RELEASE' && <span style={{color: 'var(--point-rose)', fontWeight: 800}}>발매</span>}
+                            {s.category === 'LIVE' && <Calendar size={14} />}
+                            {s.time}
+                          </div>
+                          <div className="si-title">{s.title}</div>
+                        </div>
+                      </div>
+                    ))}
+
+                    <div className="schedule-month">2026.06</div>
+                    {schedules.filter(s => s.month === '2026.06').map(s => (
+                      <div key={s.id} className="schedule-item" onClick={() => { setSelectedSchedule(s); setShowScheduleModal(true); }}>
+                        <div className="si-date">{s.date}</div>
+                        <div className="si-info">
+                          <div className="si-time">
+                            {s.category === 'VIDEO' && <Video size={14} />}
+                            {s.category === 'RADIO' && <Radio size={14} />}
+                            {s.category === 'RELEASE' && <span style={{color: 'var(--point-rose)', fontWeight: 800}}>발매</span>}
+                            {s.category === 'LIVE' && <Calendar size={14} />}
+                            {s.time}
+                          </div>
+                          <div className="si-title">{s.title}</div>
+                        </div>
+                        {s.noticeId && <div className="text-[10px] font-bold bg-[#F7F3EE] px-2 py-1 rounded text-[#C2507A] border border-[#C2507A]">공지연동</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {['FEED', 'ARTIST', 'MEDIA'].includes(boardTab) && (
+                <div className="ab-sidebar reveal delay-400">
+                <div className="widget">
+                  <div className="w-header">
+                    <Pin size={18} fill="currentColor" />
+                    공지사항
+                  </div>
+                  <div className="w-item">
+                    <div className="w-item-content">
+                      <div className="w-item-title">[공지] {selectedArtist.name} 공식 팬클럽 멤버십 키트 배송 지연 안내</div>
+                      <div className="w-item-date">2026.05.14</div>
+                    </div>
+                  </div>
+                  <div className="w-item">
+                    <div className="w-item-content">
+                      <div className="w-item-title">[이벤트] Echo 특별판 포토북 출시 기념 팬사인회</div>
+                      <div className="w-item-date">2026.05.10</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="widget">
+                  <div className="w-header">
+                    인기 태그
+                  </div>
+                  <div>
+                    <span className="tag-pill">#{selectedArtist.name}_컴백</span>
+                    <span className="tag-pill">#에코포토북</span>
+                    <span className="tag-pill">#해피팬클럽데이지</span>
+                    <span className="tag-pill">#스트리밍이벤트</span>
+                  </div>
+                </div>
+              </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* --- HOME PAGE --- */}
+        {!selectedArtist && activeTab === 'HOME' && (
+          <div className="page-content reveal wrapper">
+            <section className="hero" style={{ paddingTop: 0, minHeight: 'auto', marginBottom: 60 }}>
+              <div className="hero-date reveal">UPCOMING DROP // 06.01 KST</div>
+              <h1 className="reveal delay-100" style={{ fontSize: '64px', fontWeight: 800, letterSpacing: '-2px', lineHeight: 1.1, marginBottom: 32, textAlign:'center' }}>
+                Limited Editions.<br/>Exclusive Artist Merch.
+              </h1>
+              
+              <div className="reveal delay-200" style={{ width: '100%', height: '400px', borderRadius: '24px', background: 'linear-gradient(135deg, #C8BEB6, #A89890)', position: 'relative', overflow: 'hidden', boxShadow: '0 24px 48px rgba(0,0,0,0.08)' }}>
+                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(26,26,26,0.5) 0%, transparent 50%)' }}></div>
+                <div style={{ position: 'absolute', bottom: '40px', left: '40px', textAlign: 'left', color: 'white' }}>
+                  <span style={{ background: 'white', color: 'var(--text-main)', padding: '6px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: 800, letterSpacing: '2px', display: 'inline-block', marginBottom: '16px' }}>STARLIGHT STUDIO</span>
+                  <h2 style={{fontSize: '32px', fontWeight: 800, letterSpacing: '-1px'}}>Echo 특별판 포토북</h2>
+                </div>
+              </div>
+            </section>
+
+            {/* Countdown Divider */}
+            <div className="countdown-divider reveal">
+              <div className="cd-info">
+                <div className="label" style={{ fontSize: '12px', fontWeight: 800, letterSpacing: '4px', opacity: 0.9, marginBottom: 12 }}>공식 드롭 오픈까지</div>
+                <div className="cd-timer" style={{ 
+                  fontFamily: '"JetBrains Mono", monospace', 
+                  fontSize: '56px', 
+                  fontWeight: 900, 
+                  letterSpacing: '2px', 
+                  lineHeight: 1,
+                  color: 'white',
+                  filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.2))'
+                }}>
+                  01 <span style={{ color: 'rgba(255, 255, 255, 0.4)', fontSize: '24px', verticalAlign: 'middle' }}>:</span> 22 <span style={{ color: 'rgba(255, 255, 255, 0.4)', fontSize: '24px', verticalAlign: 'middle' }}>:</span> 47 <span style={{ color: 'rgba(255, 255, 255, 0.4)', fontSize: '24px', verticalAlign: 'middle' }}>:</span> 13
+                </div>
+              </div>
+              <div className="cd-action">
+                <button style={{ background: 'white', color: 'var(--point-rose)', border: 'none', padding: '16px 32px', borderRadius: '12px', fontSize: '14px', fontWeight: 800, cursor: 'pointer', transition: 'transform 0.25s', boxShadow: '0 8px 16px rgba(0,0,0,0.1)' }}>알림 받기</button>
+              </div>
+            </div>
+
+            {/* My Artist Section */}
+            <section className="community-bar reveal">
+              <div className="section-header" style={{ marginBottom: 20 }}>
+                <div className="s-title-group">
+                  <h2 style={{ fontSize: '18px' }}>마이 아티스트</h2>
+                  <p style={{ fontSize: '13px' }}>즐겨찾기한 아티스트로 빠르게 이동</p>
+                </div>
+              </div>
+              <div className="community-scroll">
+                <button className="c-add-btn" onClick={() => setShowArtistSearch(true)}>
+                  <Plus size={24} />
+                </button>
+                
+                {favoriteArtists.map((artist, idx) => (
+                  <div key={idx} className="c-artist-item" onClick={() => { setSelectedArtist(artist); setBoardTab('FEED'); }}>
+                    <div style={{ position: 'relative' }}>
+                      <div className="c-artist-avatar" style={{ background: artist.bg }}></div>
+                    </div>
+                    <span>{artist.name}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* Trending Drops Grid */}
+            <section className="section" style={{ paddingTop: 0 }}>
+              <div className="section-header reveal">
+                <div className="s-title-group">
+                  <h2>인기 드롭</h2>
+                  <p>지금 가장 핫한 익스클루시브 아이템들을 만나보세요.</p>
+                </div>
+                <div className="view-all" onClick={() => setActiveTab('STORE')} style={{ fontSize: '13px', fontWeight: 700, color: 'var(--point-rose)', cursor: 'pointer' }}>전체 보기 →</div>
+              </div>
+
+              <div className="grid-3">
+                <div className="card reveal delay-100">
+                  <div className="c-img" style={{background:'linear-gradient(135deg, #E8E0D8, #D5CCC2)'}}>
+                    <span className="c-tag">Starlight</span>
+                    <span className="c-status">40 LEFT</span>
+                  </div>
+                  <div className="c-body">
+                    <h3>Echo 특별판<br/>3D 아트 포토북</h3>
+                    <div style={{display:'flex', justifyContent:'space-between', fontSize:'12px', fontWeight:'700', marginBottom:'8px'}}>
+                      <span style={{color:'var(--text-sub)'}}>진행률</span>
+                      <span>80%</span>
+                    </div>
+                    <div style={{height:'6px', background:'rgba(237, 232, 226, 0.8)', borderRadius:'3px', overflow:'hidden', marginBottom:'12px'}}>
+                      <div style={{height:'100%', borderRadius:'3px', width:'80%', background:'linear-gradient(90deg, var(--point-rose), var(--point-violet))'}}></div>
+                    </div>
+                    <div className="c-footer">
+                      <span className="c-price">₩49,000</span>
+                      <button className="c-btn">구매하기</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="card reveal delay-200">
+                  <div className="c-img" style={{background:'linear-gradient(135deg, #DDD8F0, #D0CAEC)'}}>
+                    <span className="c-tag">Luna Girls</span>
+                    <span className="c-status" style={{background:'var(--point-violet)'}}>275 LEFT</span>
+                  </div>
+                  <div className="c-body">
+                    <h3>Luna Girls 1주년 기념<br/>베스트 포토카드 세트</h3>
+                    <div style={{display:'flex', justifyContent:'space-between', fontSize:'12px', fontWeight:'700', marginBottom:'8px'}}>
+                      <span style={{color:'var(--text-sub)'}}>진행률</span>
+                      <span>45%</span>
+                    </div>
+                    <div style={{height:'6px', background:'rgba(237, 232, 226, 0.8)', borderRadius:'3px', overflow:'hidden', marginBottom:'12px'}}>
+                      <div style={{height:'100%', borderRadius:'3px', width:'45%', background:'var(--point-violet)'}}></div>
+                    </div>
+                    <div className="c-footer">
+                      <span className="c-price" style={{color:'var(--point-violet)'}}>₩29,000</span>
+                      <button className="c-btn">구매하기</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="card sold-out reveal delay-300">
+                  <div className="c-img" style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', background:'#1A1A1A'}}>
+                    <span style={{color:'var(--point-rose)', fontWeight:900, fontSize:'28px', letterSpacing:'2px'}}>SOLD OUT</span>
+                    <span style={{color:'white', opacity:0.6, fontSize:'12px', marginTop:'8px', fontWeight:600}}>Sold in 23s</span>
+                  </div>
+                  <div className="c-body" style={{opacity:0.6}}>
+                    <h3>Starlight Studio 1주년 콘서트<br/>멤버십 얼리버드 티켓</h3>
+                    <div style={{display:'flex', justifyContent:'space-between', fontSize:'12px', fontWeight:'700', marginBottom:'8px'}}>
+                      <span style={{color:'var(--text-sub)'}}>진행률</span>
+                      <span>100%</span>
+                    </div>
+                    <div style={{height:'6px', background:'rgba(237, 232, 226, 0.8)', borderRadius:'3px', overflow:'hidden', marginBottom:'12px'}}>
+                      <div style={{height:'100%', borderRadius:'3px', width:'100%', background:'#555'}}></div>
+                    </div>
+                    <div className="c-footer">
+                      <span className="c-price" style={{color:'#888'}}>₩0</span>
+                      <button className="c-btn" style={{background:'#E0E0E0', color:'#888', cursor:'not-allowed'}}>품절</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* My Artists' Drops Grid */}
+            <section className="section" style={{ paddingTop: '60px' }}>
+              <div className="section-header reveal">
+                <div className="s-title-group">
+                  <h2>마이 아티스트 추천</h2>
+                  <p>즐겨찾기한 아티스트의 특별한 굿즈를 확인하세요.</p>
+                </div>
+                <div className="view-all" onClick={() => setActiveTab('STORE')} style={{ fontSize: '13px', fontWeight: 700, color: 'var(--point-rose)', cursor: 'pointer' }}>전체 보기 →</div>
+              </div>
+
+              <div className="grid-3">
+                <div className="card reveal delay-100">
+                  <div className="c-img" style={{background:'linear-gradient(135deg, #E8E0D8, #D5CCC2)'}}>
+                    <span className="c-tag">Starlight</span>
+                    <span className="c-status">NEW</span>
+                  </div>
+                  <div className="c-body">
+                    <h3>Starlight 2주년 기념<br/>쿠션 필로우</h3>
+                    <div className="c-footer">
+                      <span className="c-price">₩32,000</span>
+                      <button className="c-btn">구매하기</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="card reveal delay-200">
+                  <div className="c-img" style={{background:'linear-gradient(135deg, #fccb90, #d57eeb)'}}>
+                    <span className="c-tag">ROSE</span>
+                    <span className="c-status" style={{background:'var(--point-violet)'}}>120 LEFT</span>
+                  </div>
+                  <div className="c-body">
+                    <h3>ROSE 1st Solo Album<br/>Limited Vinyl</h3>
+                    <div className="c-footer">
+                      <span className="c-price" style={{color:'var(--point-violet)'}}>₩45,000</span>
+                      <button className="c-btn">구매하기</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        )}
+
+        {/* --- ARTISTS PAGE --- */}
+        {!selectedArtist && activeTab === 'ARTISTS' && (
+          <div className="page-content reveal wrapper">
+            <div className="section-header">
+              <div className="s-title-group">
+                <h1 style={{fontSize: '36px', fontWeight: 800, letterSpacing: '-1px', marginBottom: 12}}>아티스트 & 크리에이터</h1>
+                <p style={{fontSize: '16px', color: 'var(--text-sub)'}}>좋아하는 버추얼 그룹과 아이돌을 찾아보고 팔로우하세요.</p>
+              </div>
+            </div>
+
+            <div className="filter-bar reveal delay-100">
+              <div className="fb-tabs">
+                <span className="f-tab active">전체</span>
+                <span className="f-tab">버추얼 아이돌</span>
+                <span className="f-tab">K-팝</span>
+                <span className="f-tab">인디 크리에이터</span>
+              </div>
+              <div>
+                <button style={{background:'var(--bg-white)', border:'1px solid var(--border)', padding:'8px 16px', borderRadius:'12px', fontSize:'12px', fontWeight:700, display:'flex', alignItems:'center', gap:8, cursor:'pointer'}}>
+                  <Filter size={14} /> 필터
+                </button>
+              </div>
+            </div>
+
+            <div className="grid-4">
+              {[
+                { name: 'Starlight', type: '버추얼 아이돌 그룹', followers: '1.2M', bg: 'linear-gradient(135deg, #FF9A9E, #FECFEF)' },
+                { name: 'Luna Girls', type: 'K-Pop 걸그룹', followers: '850K', bg: 'linear-gradient(135deg, #a18cd1, #fbc2eb)' },
+                { name: 'Syndicate', type: '힙합 크루', followers: '420K', bg: 'linear-gradient(135deg, #84fab0, #8fd3f4)' },
+                { name: 'ROSE', type: '솔로 아티스트', followers: '2.1M', bg: 'linear-gradient(135deg, #fccb90, #d57eeb)' },
+                { name: 'Aether', type: '버추얼 스트리머', followers: '95K', bg: 'linear-gradient(135deg, #e0c3fc, #8ec5fc)' },
+                { name: 'Neon City', type: '인디 밴드', followers: '12K', bg: 'linear-gradient(135deg, #43e97b, #38f9d7)' },
+                { name: 'Crimson', type: '록 그룹', followers: '34K', bg: 'linear-gradient(135deg, #fa709a, #fee140)' },
+                { name: 'V-Makers', type: '크리에이터 콜렉티브', followers: '890K', bg: 'linear-gradient(135deg, #fdfbfb, #ebedee)' }
+              ].map((artist, idx) => (
+                <div className={`artist-card reveal delay-${(idx % 4) * 100}`} key={idx} onClick={() => { setSelectedArtist(artist); setBoardTab('FEED'); }}>
+                  <div className="ac-avatar" style={{ background: artist.bg }}></div>
+                  <div className="ac-name">{artist.name}</div>
+                  <div className="ac-desc">{artist.type}<br/>{artist.followers} 팔로워</div>
+                  <button className="ac-btn">+ 팔로우</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* --- STORE PAGE --- */}
+        {!selectedArtist && activeTab === 'STORE' && (
+          <div className="page-content reveal wrapper">
+            {selectedProduct ? (
+              
+              <div className="store-detail" style={{ maxWidth: '1000px', margin: '0 auto' }}>
+                <button className="c-btn" style={{ background: 'var(--bg-white)', border: '1px solid var(--border)', marginBottom: '32px' }} onClick={() => setSelectedProduct(null)}>
+                  <ChevronLeft size={16} /> 스토어로 돌아가기
+                </button>
+                <div style={{ display: 'flex', gap: '48px', alignItems: 'flex-start', marginBottom: '64px' }}>
+                  {/* Left: Images */}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ background: `linear-gradient(135deg, hsl(${selectedProduct.id * 40}, 30%, 85%), #fff)`, borderRadius: '16px', height: '480px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
+                      <ImageIcon size={64} color="rgba(0,0,0,0.1)" />
+                    </div>
+                    <div style={{ display: 'flex', gap: '12px' }}>
+                      {[0,1,2,3,4].map(idx => (
+                        <div key={idx} onClick={() => setProductMainImg(idx)} style={{ width: '80px', height: '80px', borderRadius: '8px', cursor: 'pointer', background: `hsl(${selectedProduct.id * 40}, 30%, ${85 - idx*5}%)`, border: productMainImg === idx ? '2px solid #C2507A' : 'none' }}></div>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Right: Info */}
+                  <div style={{ width: '420px', flexShrink: 0 }}>
+                    <div style={{ fontSize: '12px', fontWeight: 800, color: '#C2507A', letterSpacing: '2px', marginBottom: '8px' }}>별빛스튜디오</div>
+                    <h1 style={{ fontSize: '32px', fontWeight: 800, letterSpacing: '-1px', marginBottom: '16px', lineHeight: 1.2 }}>{selectedProduct.title}</h1>
+                    <div style={{ fontSize: '28px', fontWeight: 800, color: '#C2507A', marginBottom: '24px' }}>₩{selectedProduct.price.toLocaleString()}</div>
+                    
+                    <hr style={{ borderTop: '1px solid var(--border)', borderBottom: 'none', margin: '24px 0' }} />
+                    
+                    {/* Options */}
+                    <div style={{ position: 'relative', marginBottom: '24px' }}>
+                      <div onClick={() => setShowOptionDropdown(!showOptionDropdown)} style={{ border: '1px solid var(--border)', padding: '16px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', cursor: 'pointer', fontWeight: 600 }}>
+                        <span>{productOption}</span>
+                        <span>▼</span>
+                      </div>
+                      {showOptionDropdown && (
+                        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1px solid var(--border)', borderRadius: '8px', marginTop: '4px', zIndex: 10 }}>
+                          {['버전 A', '버전 B', '버전 C'].map(opt => (
+                            <div key={opt} onClick={() => { setProductOption(opt); setShowOptionDropdown(false); }} style={{ padding: '16px', cursor: 'pointer', borderBottom: '1px solid var(--border)' }}>{opt}</div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <hr style={{ borderTop: '1px solid var(--border)', borderBottom: 'none', margin: '24px 0' }} />
+                    
+                    {/* Quantity & Stock */}
+                    {selectedProduct.status !== 'SOLD_OUT' && selectedProduct.status !== 'OPEN_TODAY' && selectedProduct.status !== 'OPEN_TOMORROW' && selectedProduct.status !== 'OPEN_WEEK' ? (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
+                          <button onClick={() => setProductQty(Math.max(1, productQty - 1))} style={{ padding: '12px 16px', background: 'var(--bg-cream)', fontWeight: 800 }}>-</button>
+                          <span style={{ padding: '0 24px', fontWeight: 800 }}>{productQty}</span>
+                          <button onClick={() => setProductQty(Math.min(selectedProduct.stock, productQty + 1))} style={{ padding: '12px 16px', background: 'var(--bg-cream)', fontWeight: 800 }}>+</button>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-sub)', marginBottom: '4px' }}>{selectedProduct.stock}개 남음</div>
+                          <div style={{ width: '100px', height: '6px', background: 'var(--bg-cream)', borderRadius: '3px', overflow: 'hidden' }}>
+                            <div style={{ width: `${(selectedProduct.stock / selectedProduct.maxStock) * 100}%`, height: '100%', background: 'linear-gradient(90deg, #C2507A, #7F77DD)' }}></div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ marginBottom: '24px', fontSize: '18px', fontWeight: 800, color: '#E11D48' }}>
+                         {selectedProduct.status === 'SOLD_OUT' ? '현재 품절된 상품입니다.' : '오픈 예정인 상품입니다!'}
+                      </div>
+                    )}
+
+                    <hr style={{ borderTop: '1px solid var(--border)', borderBottom: 'none', margin: '24px 0' }} />
+
+                <div style={{ display: 'flex', gap: '12px', marginBottom: '32px' }}>
+                  {selectedProduct.status === 'SOLD_OUT' || selectedProduct.status === 'OPEN_TODAY' || selectedProduct.status === 'OPEN_TOMORROW' || selectedProduct.status === 'OPEN_WEEK' ? (
+                    <button 
+                      onClick={() => {
+                        const msg = selectedProduct.status === 'SOLD_OUT' ? '재입고 알림이 설정되었습니다.' : '드롭 알림이 설정되었습니다.';
+                        setNotifications([...notifications, { id: Date.now(), title: '알림 신청', content: `${selectedProduct.title} 상품의 ${msg}`, time: '방금 전', isRead: false }]);
+                        alert(msg);
+                      }}
+                      style={{ flex: 1, padding: '16px', borderRadius: '12px', background: '#111', color: 'white', fontWeight: 800, textAlign: 'center', cursor: 'pointer' }}
+                    >
+                      {selectedProduct.status === 'SOLD_OUT' ? '재입고 알림 신청하기' : '드롭 알림 신청하기'}
+                    </button>
+                  ) : (
+                    <>
+                      <button onClick={() => { 
+                        setNotifications([...notifications, { id: Date.now(), title: '장바구니 추가', content: `${selectedProduct.title} 상품이 장바구니에 담겼습니다.`, time: '방금 전', isRead: false }]);
+                        setShowCart(true); 
+                      }} style={{ flex: 1, padding: '16px', borderRadius: '12px', border: '1px solid #C2507A', color: '#C2507A', fontWeight: 800, textAlign: 'center', cursor: 'pointer' }}>장바구니 담기</button>
+                      <button onClick={() => { setCheckoutData({ type: 'product', title: selectedProduct.title, price: selectedProduct.price, qty: productQty, option: productOption }); setActiveTab('CHECKOUT'); }} style={{ flex: 1, padding: '16px', borderRadius: '12px', background: 'linear-gradient(135deg, #C2507A, #7F77DD)', color: 'white', fontWeight: 800, textAlign: 'center', cursor: 'pointer' }}>바로 구매하기</button>
+                    </>
+                  )}
+                </div>
+
+                    <div style={{ fontSize: '13px', lineHeight: 1.8, color: 'var(--text-sub)', background: 'var(--bg-cream)', padding: '16px', borderRadius: '8px' }}>
+                      <div>📦 일반배송 3,000원 · 3~5일 소요</div>
+                      <div>🔄 7일 이내 교환/반품 가능</div>
+                      <div>✅ 정품 보증</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bottom Tabs */}
+                <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '48px' }}>
+                  {[{ id: 'DETAIL', label: '상품설명' }, { id: 'DELIVERY', label: '배송/교환' }, { id: 'REVIEW', label: '구매후기(24)' }].map(tab => (
+                    <button key={tab.id} onClick={() => setProductTab(tab.id)} style={{ flex: 1, padding: '24px 0', fontWeight: 800, fontSize: '16px', color: productTab === tab.id ? 'var(--text-main)' : 'var(--text-sub)', borderBottom: productTab === tab.id ? '2px solid var(--text-main)' : 'none', transition: 'all 0.2s' }}>
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+
+                {productTab === 'DETAIL' && (
+                  <div>
+                    <div style={{ width: '100%', height: '600px', background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ccc', borderRadius: '16px', marginBottom: '48px' }}>
+                      [상품 상세 이미지 영역]
+                    </div>
+                    <h3 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '24px' }}>상품 스펙</h3>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '48px', fontSize: '14px' }}>
+                      <tbody>
+                        {[
+                          { k: '상품명', v: '한정 포토북 3D에디션' },
+                          { k: '구성', v: '포토북 1권 + 포토카드 3장' },
+                          { k: '크기', v: 'A4 (210 × 297mm)' },
+                          { k: '페이지', v: '200P' },
+                          { k: '제조사', v: 'FANDROPS x 별빛스튜디오' },
+                        ].map((row, i) => (
+                          <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
+                            <td style={{ padding: '16px', background: 'var(--bg-cream)', width: '200px', fontWeight: 700 }}>{row.k}</td>
+                            <td style={{ padding: '16px' }}>{row.v}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <p style={{ fontSize: '12px', color: 'var(--text-sub)', lineHeight: 1.6 }}>* 본 상품 이미지는 이해를 돕기 위한 예시 컷으로 실제 상품과 다를 수 있습니다.</p>
+                  </div>
+                )}
+                {productTab === 'DELIVERY' && (
+                  <div style={{ fontSize: '15px', lineHeight: 1.8 }}>
+                    <h3 style={{ fontWeight: 800, marginBottom: '16px' }}>배송 정보</h3>
+                    <ul style={{ listStyle: 'disc', paddingLeft: '24px', marginBottom: '32px' }}>
+                      <li>배송 방법: 택배배송</li>
+                      <li>배송 지역: 전국 (일부 지역 제외)</li>
+                      <li>배송 비용: 3,000원 (도서산간 지역 추가 비용 발생)</li>
+                      <li>배송 기간: 결제 완료 후 3~5 영업일 이내</li>
+                    </ul>
+                    <h3 style={{ fontWeight: 800, marginBottom: '16px' }}>교환/반품 안내</h3>
+                    <ul style={{ listStyle: 'disc', paddingLeft: '24px' }}>
+                      <li>상품 수령 후 7일 이내에 교환/반품이 가능합니다.</li>
+                      <li>단순 변심으로 인한 교환/반품 시 배송비는 고객 부담입니다.</li>
+                      <li>상품이 훼손되거나 사용 흔적이 있는 경우 교환/반품이 불가합니다.</li>
+                    </ul>
+                  </div>
+                )}
+                {productTab === 'REVIEW' && (
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '48px', padding: '32px', background: 'var(--bg-cream)', borderRadius: '16px' }}>
+                      <div style={{ fontSize: '48px', fontWeight: 800 }}>4.2</div>
+                      <div>
+                        <div style={{ color: '#F59E0B', fontSize: '24px', letterSpacing: '4px', marginBottom: '8px' }}>★★★★☆</div>
+                        <div style={{ fontSize: '14px', color: 'var(--text-sub)' }}>총 24개의 리뷰가 있습니다.</div>
+                      </div>
+                    </div>
+                    {[1,2,3].map(item => (
+                      <div key={item} style={{ padding: '24px 0', borderBottom: '1px solid var(--border)' }}>
+                        <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
+                          <div style={{ width: '40px', height: '40px', borderRadius: '20px', background: '#ccc' }}></div>
+                          <div>
+                            <div style={{ fontWeight: 700, fontSize: '14px' }}>FanUser{item}</div>
+                            <div style={{ fontSize: '12px', color: 'var(--text-sub)' }}>2025-09-1{item} | 버전 A 구매</div>
+                          </div>
+                        </div>
+                        <div style={{ color: '#F59E0B', fontSize: '14px', letterSpacing: '2px', marginBottom: '12px' }}>★★★★★</div>
+                        <p style={{ fontSize: '14px', lineHeight: 1.6 }}>너무 예뻐요! 배송도 빠르고 포장도 꼼꼼하게 잘 되어 왔습니다. 특전 포카도 최애가 나와서 너무 행복해요 ㅠㅠ</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              
+              <>
+
+<div style={{ padding: '0', maxWidth: 'none', marginTop: '-40px' }}>
+  <div style={{ padding: '20px 0 0 0' }}>
+    <div style={{ position: 'relative', borderRadius: '20px', overflow: 'hidden', height: '200px', marginBottom: '20px', boxShadow: '0 16px 40px rgba(0,0,0,0.08)' }}>
+      {STORE_HERO_SLIDES.map((slide, i) => (
+        <div
+          key={slide.k}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: slide.grad,
+            opacity: storeBannerIdx === i ? 1 : 0,
+            transition: 'opacity 0.55s ease',
+            pointerEvents: storeBannerIdx === i ? 'auto' : 'none',
+          }}
+        >
+          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(26,26,26,0.48) 0%, transparent 58%)' }} />
+          <div style={{ position: 'absolute', bottom: '24px', left: '60px', right: '80px', color: 'white' }}>
+            <span style={{ display: 'inline-block', background: 'rgba(255,255,255,0.95)', color: '#111', padding: '5px 10px', borderRadius: '8px', fontSize: '10px', fontWeight: 800, letterSpacing: '1.5px' }}>{slide.tag}</span>
+            <h2 style={{ fontSize: '22px', fontWeight: 800, marginTop: '10px', letterSpacing: '-0.5px', lineHeight: 1.25 }}>{slide.title}</h2>
+            <p style={{ fontSize: '13px', opacity: 0.92, marginTop: '6px', fontWeight: 500 }}>{slide.line}</p>
+          </div>
+        </div>
+      ))}
+      <div style={{ position: 'absolute', bottom: '12px', left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: '6px', zIndex: 2 }}>
+        {STORE_HERO_SLIDES.map((_, i) => (
+          <button
+            key={i}
+            type="button"
+            aria-label={`배너 ${i + 1}`}
+            onClick={() => setStoreBannerIdx(i)}
+            style={{
+              width: storeBannerIdx === i ? 22 : 7,
+              height: 7,
+              borderRadius: 4,
+              border: 'none',
+              background: storeBannerIdx === i ? 'white' : 'rgba(255,255,255,0.45)',
+              cursor: 'pointer',
+              padding: 0,
+              transition: 'all 0.25s ease',
+            }}
+          />
+        ))}
+      </div>
+      <button
+        type="button"
+        aria-label="이전 배너"
+        onClick={() => setStoreBannerIdx((idx) => (idx - 1 + STORE_HERO_SLIDES.length) % STORE_HERO_SLIDES.length)}
+        style={{
+          position: 'absolute',
+          left: 12,
+          top: '50%',
+          transform: 'translateY(-50%)',
+          zIndex: 2,
+          width: 32,
+          height: 32,
+          borderRadius: '50%',
+          border: 'none',
+          background: 'rgba(255,255,255,0.7)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          color: '#111',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+        }}
+      >
+        <ChevronLeft size={16} />
+      </button>
+      <button
+        type="button"
+        aria-label="다음 배너"
+        onClick={() => setStoreBannerIdx((idx) => (idx + 1) % STORE_HERO_SLIDES.length)}
+        style={{
+          position: 'absolute',
+          right: 12,
+          top: '50%',
+          transform: 'translateY(-50%)',
+          zIndex: 2,
+          width: 32,
+          height: 32,
+          borderRadius: '50%',
+          border: 'none',
+          background: 'rgba(255,255,255,0.7)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          color: '#111',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+        }}
+      >
+        <ChevronRight size={16} />
+      </button>
+    </div>
+    {(() => {
+      const searchLower = storeSearch.toLowerCase();
+      const list = DUMMY_STORE_ITEMS.filter((item) => {
+        if (storeSearch && !item.title.toLowerCase().includes(searchLower) && !item.artist.toLowerCase().includes(searchLower)) return false;
+        if (storeArtist !== 'ALL' && item.artistId !== storeArtist) return false;
+        if (storeCategory !== '전체' && item.category !== storeCategory) return false;
+        return true;
+      });
+      return null; // Removed Popular items section as requested
+    })()}
+  </div>
+  <div style={{ padding: '8px 0 0 0' }}>
+    <div style={{ background: 'white', border: '1px solid #E5E5E5', borderRadius: '16px', padding: '24px', marginBottom: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+         <h3 style={{ fontSize: '18px', fontWeight: '800', color: '#111', margin: 0 }}>마이 아티스트</h3>
+         <button 
+           onClick={() => setShowArtistSearch(true)}
+           style={{ background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', color: '#888', fontSize: '13px', fontWeight: 600 }}
+         >
+           <Search size={14} />
+           아티스트 검색
+         </button>
+       </div>
+       <div style={{ display: 'flex', gap: '20px', overflowX: 'auto', paddingBottom: '40px', marginTop: '-15px', alignItems: 'flex-start', paddingTop: '20px' }} className="hide-scrollbar">
+          {/* ALL option */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', cursor: 'pointer', minWidth: '72px' }} onClick={() => setStoreArtist('ALL')}>
+             <div style={{ width: '64px', height: '64px', borderRadius: '50%', border: (storeArtist === 'ALL') ? '2px solid #111' : '1px solid #E5E5E5', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#FAFAFA', transition: 'all 0.2s' }}>
+                <span style={{ fontSize: '15px', fontWeight: 800 }}>ALL</span>
+             </div>
+             <span style={{ fontSize: '13px', color: '#111', fontWeight: 600 }}>전체</span>
+          </div>
+
+          {favoriteArtists.map(a => (
+                        <div key={a.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', cursor: 'pointer', minWidth: '72px' }} onClick={() => {
+                          if (activeTab === 'STORE') setStoreArtist(a.id);
+                        }}>
+                           <div style={{ position: 'relative' }}>
+                             <div style={{ width: '64px', height: '64px', borderRadius: '50%', border: (storeArtist === a.id) ? '2px solid #111' : '1px solid #E5E5E5', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#FAFAFA', whiteSpace: 'nowrap', transition: 'all 0.2s', fontWeight: 800, fontSize: '14px' }}>
+                                {a.name.substring(0,3)}
+                             </div>
+                           </div>
+                           <span style={{ fontSize: '13px', color: '#111', fontWeight: 600, whiteSpace: 'nowrap' }}>{a.name}</span>
+                        </div>
+          ))}
+
+          {/* ADD MORE button at the end */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', cursor: 'pointer', minWidth: '72px' }} onClick={() => setShowArtistSearch(true)}>
+             <div style={{ width: '64px', height: '64px', borderRadius: '50%', border: '1px dashed #DDD', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#FAFAFA' }}>
+                <Plus size={24} color="#888" />
+             </div>
+             <span style={{ fontSize: '13px', color: '#888', fontWeight: 600 }}>조회</span>
+          </div>
+       </div>
+    </div>
+  </div>
+  <div style={{ padding: '16px 0 32px 0' }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', gap: '20px', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        {STORE_CATEGORIES.map(c => (
+          <button key={c} onClick={() => { setStoreCategory(c); setStorePage(1); }} style={{ padding: '6px 16px', borderRadius: '20px', cursor: 'pointer', transition: 'all 0.2s', fontSize: '13px', fontWeight: 600, background: storeCategory === c ? '#111' : 'transparent', color: storeCategory === c ? 'white' : '#888', border: storeCategory === c ? '1px solid #111' : '1px solid #EDE8E2' }}>{c}</button>
+        ))}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1, minWidth: '300px', justifyContent: 'flex-end' }}>
+        <div style={{ position: 'relative', flex: 1, maxWidth: '240px' }}>
+          <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#888' }} />
+          <input 
+            type="text" 
+            placeholder="상품 검색" 
+            value={storeSearch}
+            onChange={(e) => { setStoreSearch(e.target.value); setStorePage(1); }}
+            style={{ width: '100%', padding: '8px 12px 8px 36px', borderRadius: '20px', border: '1px solid #EDE8E2', fontSize: '13px', outline: 'none' }} 
+          />
+        </div>
+        <div style={{ position: 'relative' }}>
+          <button onClick={() => setIsStoreSortDropdownOpen(!isStoreSortDropdownOpen)} style={{ background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', fontSize: '13px', fontWeight: 700, color: '#111' }}>
+            {storeSort} <span style={{ fontSize: '10px' }}>▼</span>
+          </button>
+          {isStoreSortDropdownOpen && (
+            <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, background: 'white', border: '1px solid #EDE8E2', borderRadius: '8px', zIndex: 100, width: '140px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+              {SORT_OPTIONS.map(s => (
+                <div key={s} onClick={() => { setStoreSort(s); setIsStoreSortDropdownOpen(false); setStorePage(1); }} style={{ padding: '12px 16px', fontSize: '13px', cursor: 'pointer', color: storeSort === s ? '#111' : '#888', fontWeight: storeSort === s ? 700 : 500 }}>{s}</div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+    {(storeArtist !== 'ALL' || storeCategory !== '전체') && (
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '24px' }}>
+        {storeArtist !== 'ALL' && (
+          <span style={{ background: '#F7F3EE', border: '1px solid #EDE8E2', borderRadius: '20px', padding: '4px 12px', fontSize: '12px', color: '#111', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+            {ALL_ARTISTS.find(a => a.id === storeArtist)?.name} <X size={12} cursor="pointer" onClick={() => setStoreArtist('ALL')} />
+          </span>
+        )}
+        {storeCategory !== '전체' && (
+          <span style={{ background: '#F7F3EE', border: '1px solid #EDE8E2', borderRadius: '20px', padding: '4px 12px', fontSize: '12px', color: '#111', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+            {storeCategory} <X size={12} cursor="pointer" onClick={() => setStoreCategory('전체')} />
+          </span>
+        )}
+        <span onClick={() => { setStoreArtist('ALL'); setStoreCategory('전체'); }} style={{ fontSize: '12px', color: '#888', cursor: 'pointer', marginLeft: '8px', fontWeight: 600, borderBottom: '1px solid #888' }}>전체 초기화</span>
+      </div>
+    )}
+    {(() => {
+      const searchLower = storeSearch.toLowerCase();
+      let filteredItems = DUMMY_STORE_ITEMS.filter((item) => {
+        if (storeArtist !== 'ALL' && item.artistId !== storeArtist) return false;
+        if (storeCategory !== '전체' && item.category !== storeCategory) return false;
+        if (storeSearch && !item.title.toLowerCase().includes(searchLower) && !item.artist.toLowerCase().includes(searchLower)) return false;
+        return true;
+      });
+      filteredItems = getSortedItems(filteredItems, storeSort);
+      
+      const dropItems = filteredItems.filter(isScheduledDropItem);
+      const retailItems = filteredItems.filter((i) => i.status === 'ON_SALE' || i.status === 'SOLD_OUT');
+
+      const pagedItems = filteredItems.slice(0, storePage * itemsPerPage);
+      const hasMore = pagedItems.length < filteredItems.length;
+
+      const renderGridCard = (item: (typeof DUMMY_STORE_ITEMS)[number]) => {
+        const isSoldOut = item.status === 'SOLD_OUT';
+        const progress = isSoldOut ? 100 : (item.stock / item.maxStock) * 100;
+        const isHotDeal = Boolean(item.openDate && item.openDate > now && !isSoldOut);
+        return (
+          <div
+            key={item.id}
+            className="card reveal"
+            style={{
+              opacity: isSoldOut ? 0.6 : 1,
+              cursor: 'pointer'
+            }}
+            onClick={() => {
+              setSelectedProduct(item);
+            }}
+          >
+            <div style={{ position: 'relative', height: '220px', background: 'var(--bg-cream)' }}>
+              <div style={{ position: 'absolute', top: 12, left: 12, background: 'rgba(255,255,255,0.9)', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 800 }}>{item.artist}</div>
+              {100 - progress > 0 && !isSoldOut && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 12,
+                    right: 12,
+                    background: 100 - progress <= 30 ? '#E11D48' : '#10B981',
+                    color: 'white',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    fontWeight: 800,
+                  }}
+                >
+                  {item.stock}개 남음
+                </div>
+              )}
+              {isSoldOut && (
+                <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span style={{ color: 'white', fontSize: '20px', fontWeight: 900, letterSpacing: '2px' }}>품 절</span>
+                </div>
+              )}
+              {isHotDeal && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    bottom: 12,
+                    left: 12,
+                    right: 12,
+                    maxWidth: 'calc(100% - 24px)',
+                    background: 'rgba(0,0,0,0.65)',
+                    backdropFilter: 'blur(4px)',
+                    color: 'white',
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'flex-start',
+                    gap: 2,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.2)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); setNotifications([...notifications, { id: Date.now(), title: '드롭 알림 설정', content: `${item.title} 드롭 알림이 설정되었습니다.`, time: '방금 전', isRead: false }]); alert('알림이 설정되었습니다!'); }}>
+                      <Bell size={18} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <span style={{ fontSize: '10px', fontWeight: 800, letterSpacing: '1px', opacity: 0.8 }}>오픈 예정</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: 'white', animation: 'pulse 1.5s infinite' }}></div>
+                        <span style={{ fontSize: '14px', fontWeight: 800, fontFamily: '"JetBrains Mono", ui-monospace, monospace', letterSpacing: '0.5px' }}>{formatTimeLeft(item.openDate)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div style={{ padding: '20px' }}>
+              <div style={{ fontSize: '10px', color: '#888', fontWeight: 700, marginBottom: '4px' }}>{item.category}</div>
+              <h3 style={{ fontSize: '14px', fontWeight: 800, marginBottom: '16px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.title}</h3>
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{ height: '4px', background: '#F0F0F0', borderRadius: '2px', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${progress}%`, background: isSoldOut ? '#ccc' : 'linear-gradient(90deg, #C2507A, #7F77DD)' }}></div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <div style={{ fontSize: '18px', fontWeight: 800, color: '#111', flex: 1 }}>₩{item.price.toLocaleString()}</div>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                    { !isSoldOut && !isHotDeal && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setNotifications([...notifications, { id: Date.now(), title: '장바구니 추가', content: `${item.title} 상품이 장바구니에 담겼습니다.`, time: '방금 전', isRead: false }]);
+                          setShowCart(true);
+                        }}
+                        style={{
+                          background: 'white',
+                          color: '#111',
+                          border: '1px solid #EDE8E2',
+                          padding: '8px',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                        title="장바구니 담기"
+                      >
+                        <ShoppingBag size={16} />
+                      </button>
+                    )}
+                    {(isSoldOut || isHotDeal) && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const msg = isSoldOut ? '재입고 알림이 설정되었습니다.' : '드롭 알림이 설정되었습니다.';
+                          setNotifications([...notifications, { id: Date.now(), title: '알림 신청', content: `${item.title} 상품의 ${msg}`, time: '방금 전', isRead: false }]);
+                          alert(msg);
+                        }}
+                        style={{
+                          background: 'white',
+                          color: '#C2507A',
+                          border: '1px solid #EDE8E2',
+                          padding: '8px',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                        title="알림 받기"
+                      >
+                        <Bell size={16} />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                    disabled={isHotDeal || isSoldOut}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!isHotDeal && !isSoldOut) {
+                        setCheckoutData({ type: 'product', title: item.title, price: item.price, qty: 1, option: 'Version A' });
+                        setActiveTab('CHECKOUT');
+                      }
+                    }}
+                    style={{
+                      background: isHotDeal || isSoldOut ? '#ccc' : '#111',
+                      color: 'white',
+                      border: 'none',
+                      padding: '8px 16px',
+                      borderRadius: '8px',
+                      fontWeight: 700,
+                      cursor: isHotDeal || isSoldOut ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    구매
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '48px' }}>
+          {filteredItems.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '64px', color: '#888', fontWeight: 600, background: 'white', borderRadius: '20px', border: '1px solid #EDE8E2' }}>조건에 맞는 상품이 없습니다.</div>
+          ) : (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
+                <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#111', margin: 0 }}>전체 상품</h3>
+                <span style={{ fontSize: '13px', color: '#888', fontWeight: 600 }}>{filteredItems.length} items</span>
+                <div style={{ flex: 1, minWidth: '48px', height: '1px', background: '#EDE8E2' }} />
+              </div>
+              
+              <div className="grid-3" style={{ gap: '24px' }}>
+                {pagedItems.map((item) => renderGridCard(item))}
+              </div>
+
+              {hasMore && (
+                <div style={{ marginTop: '40px', textAlign: 'center' }}>
+                   <button 
+                     onClick={() => setStorePage(p => p + 1)}
+                     style={{ padding: '12px 32px', borderRadius: '24px', border: '1px solid #EDE8E2', background: 'white', color: '#111', fontSize: '14px', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s' }}
+                     onMouseOver={(e) => e.currentTarget.style.background = '#FAFAFA'}
+                     onMouseOut={(e) => e.currentTarget.style.background = 'white'}
+                   >
+                     더 보기
+                   </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    })()}
+  </div>
+</div>
+              </>
+
+            )}
+          </div>
+        )}
+
+
+      </div>
+      
+
+
+      
+        {/* --- CHECKOUT PAGE --- */}
+        {activeTab === 'CHECKOUT' && checkoutData && (
+          <div className="page-content reveal" style={{ maxWidth: '1200px', margin: '0 auto', paddingTop: '80px' }}>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', marginBottom: '40px' }}>
+              <h1 style={{ fontSize: '28px', fontWeight: 800, margin: 0 }}>주문서 작성</h1>
+              <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: '24px', fontSize: '15px', fontWeight: 700, color: 'var(--text-sub)' }}>
+                <span>01 장바구니</span>
+                <span style={{ color: 'var(--border)' }}>&gt;</span>
+                <span style={{ color: 'transparent', background: 'linear-gradient(135deg, #C2507A, #7F77DD)', WebkitBackgroundClip: 'text', backgroundClip: 'text', fontWeight: 900, borderBottom: '2px solid #C2507A', paddingBottom: '4px' }}>02 주문/결제</span>
+                <span style={{ color: 'var(--border)' }}>&gt;</span>
+                <span>03 주문완료</span>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '48px', alignItems: 'flex-start' }}>
+              {/* Left Form Area */}
+              <div style={{ flex: 1 }}>
+                
+                {/* Section 1 */}
+                <section style={{ marginBottom: '48px' }}>
+                  <h3 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '16px', borderBottom: '2px solid #111', paddingBottom: '12px' }}>주문 상품 확인</h3>
+                  <div style={{ display: 'flex', gap: '16px', padding: '16px', border: '1px solid var(--border)', borderRadius: '12px' }}>
+                    <div style={{ width: '80px', height: '80px', background: '#e5e5e5', borderRadius: '8px' }}></div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 800, fontSize: '16px', marginBottom: '8px' }}>{checkoutData.title}</div>
+                      <div style={{ fontSize: '13px', color: 'var(--text-sub)', marginBottom: '4px' }}>옵션: {checkoutData.option}</div>
+                      <div style={{ fontSize: '13px', color: 'var(--text-sub)' }}>수량: {checkoutData.qty}개</div>
+                    </div>
+                    <div style={{ fontWeight: 800, fontSize: '18px' }}>₩{(checkoutData.price * checkoutData.qty).toLocaleString()}</div>
+                  </div>
+                </section>
+
+                {/* Section 2: Address */}
+                <section style={{ marginBottom: '48px' }}>
+                  <h3 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '16px', borderBottom: '2px solid #111', paddingBottom: '12px' }}>배송지 입력</h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px' }}>받는 분 *</label>
+                      <input value={checkoutForm.name} onChange={e=>setCheckoutForm({...checkoutForm, name: e.target.value})} type="text" style={{ width: '100%', padding: '12px', border: '1px solid var(--border)', borderRadius: '8px' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px' }}>연락처 *</label>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <input value={checkoutForm.phone1} onChange={e=>setCheckoutForm({...checkoutForm, phone1: e.target.value})} type="text" style={{ flex: 1, padding: '12px', border: '1px solid var(--border)', borderRadius: '8px' }} />
+                        <span style={{ padding: '12px 0' }}>-</span>
+                        <input value={checkoutForm.phone2} onChange={e=>setCheckoutForm({...checkoutForm, phone2: e.target.value})} type="text" style={{ flex: 1, padding: '12px', border: '1px solid var(--border)', borderRadius: '8px' }} />
+                        <span style={{ padding: '12px 0' }}>-</span>
+                        <input value={checkoutForm.phone3} onChange={e=>setCheckoutForm({...checkoutForm, phone3: e.target.value})} type="text" style={{ flex: 1, padding: '12px', border: '1px solid var(--border)', borderRadius: '8px' }} />
+                      </div>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px' }}>주소 *</label>
+                      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                        <input value={checkoutForm.zipcode} readOnly type="text" placeholder="우편번호" style={{ width: '150px', padding: '12px', border: '1px solid var(--border)', borderRadius: '8px', background: '#f5f5f5' }} />
+                        <button onClick={() => setCheckoutForm({...checkoutForm, zipcode: '12345 서울시 강남구 테헤란로 123'})} style={{ padding: '0 24px', background: 'var(--text-main)', color: 'white', borderRadius: '8px', fontWeight: 700, fontSize: '13px' }}>우편번호 검색 🔍</button>
+                      </div>
+                      <input type="text" placeholder="도로명 주소 자동 입력" value={checkoutForm.zipcode.length > 5 ? checkoutForm.zipcode.substring(6) : ''} readOnly style={{ width: '100%', padding: '12px', border: '1px solid var(--border)', borderRadius: '8px', marginBottom: '8px', background: '#f5f5f5' }} />
+                      <input type="text" placeholder="상세 주소 입력" style={{ width: '100%', padding: '12px', border: '1px solid var(--border)', borderRadius: '8px' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px' }}>배송 요청사항</label>
+                      <select style={{ width: '100%', padding: '12px', border: '1px solid var(--border)', borderRadius: '8px', appearance: 'none', background: 'url("data:image/svg+xml;utf8,<svg viewBox=\'0 0 140 140\' width=\'12\' height=\'12\' xmlns=\'http://www.w3.org/2000/svg\'><path d=\'M30 40 L70 90 L110 40\' stroke=\'black\' stroke-width=\'10\' fill=\'none\'/></svg>") no-repeat right 16px center' }}>
+                        <option>부재시 문앞에 놓아주세요</option>
+                        <option>경비실에 맡겨주세요</option>
+                        <option>배송 전 연락주세요</option>
+                        <option>직접 입력</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
+                        <input type="checkbox" checked={checkoutForm.defaultAddr} onChange={e=>setCheckoutForm({...checkoutForm, defaultAddr: e.target.checked})} style={{ width: '18px', height: '18px' }} />
+                        기본 배송지로 저장
+                      </label>
+                    </div>
+                  </div>
+                </section>
+
+                {/* Section 3: Payment */}
+                <section style={{ marginBottom: '48px' }}>
+                  <h3 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '16px', borderBottom: '2px solid #111', paddingBottom: '12px' }}>결제 수단</h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', border: '1px solid var(--border)', borderRadius: '8px', cursor: 'pointer' }}>
+                      <input type="radio" checked={payMethod === 'toss'} onChange={() => setPayMethod('toss')} name="pay" style={{ width: '18px', height: '18px' }} />
+                      <span style={{ fontWeight: 700 }}>● 토스페이먼츠 (파란 로고)</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', border: '1px solid var(--border)', borderRadius: '8px', cursor: 'pointer' }}>
+                      <input type="radio" checked={payMethod === 'kakao'} onChange={() => setPayMethod('kakao')} name="pay" style={{ width: '18px', height: '18px' }} />
+                      <span style={{ fontWeight: 700 }}>○ 카카오페이 (노란 로고)</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', border: '1px solid var(--border)', borderRadius: '8px', cursor: 'pointer' }}>
+                      <input type="radio" checked={payMethod === 'card'} onChange={() => setPayMethod('card')} name="pay" style={{ width: '18px', height: '18px' }} />
+                      <span style={{ fontWeight: 700 }}>○ 신용/체크카드</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', border: '1px solid var(--border)', borderRadius: '8px', cursor: 'pointer' }}>
+                      <input type="radio" checked={payMethod === 'bank'} onChange={() => setPayMethod('bank')} name="pay" style={{ width: '18px', height: '18px' }} />
+                      <span style={{ fontWeight: 700 }}>○ 무통장 입금</span>
+                    </label>
+                  </div>
+                </section>
+
+                {/* Section 4: Coupons */}
+                <section style={{ marginBottom: '48px' }}>
+                  <h3 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '16px', borderBottom: '2px solid #111', paddingBottom: '12px' }}>할인 혜택</h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <span style={{ width: '80px', fontSize: '14px', fontWeight: 700 }}>쿠폰</span>
+                      <select style={{ flex: 1, padding: '12px', border: '1px solid var(--border)', borderRadius: '8px', appearance: 'none', background: 'url("data:image/svg+xml;utf8,<svg viewBox=\'0 0 140 140\' width=\'12\' height=\'12\' xmlns=\'http://www.w3.org/2000/svg\'><path d=\'M30 40 L70 90 L110 40\' stroke=\'black\' stroke-width=\'10\' fill=\'none\'/></svg>") no-repeat right 16px center' }}>
+                        <option>쿠폰을 선택하세요</option>
+                      </select>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <span style={{ width: '80px', fontSize: '14px', fontWeight: 700 }}>포인트</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '12px', color: 'var(--text-sub)', marginBottom: '8px' }}>보유 12,450P</div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <input type="text" placeholder="0" style={{ flex: 1, padding: '12px', border: '1px solid var(--border)', borderRadius: '8px', textAlign: 'right' }} />
+                          <button style={{ padding: '0 24px', background: 'var(--text-main)', color: 'white', borderRadius: '8px', fontWeight: 700, fontSize: '13px' }}>전액 사용</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                {/* Section 5: Toss */}
+                <section style={{ marginBottom: '48px' }}>
+                  <div style={{ padding: '24px', background: 'var(--bg-cream)', borderRadius: '12px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 800, fontSize: '16px', marginBottom: '16px', cursor: 'pointer' }}>
+                      <input type="checkbox" style={{ width: '20px', height: '20px' }} />
+                      전체 동의
+                    </label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingLeft: '12px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', cursor: 'pointer' }}>
+                        <input type="checkbox" style={{ width: '16px', height: '16px' }} />
+                        주문 내용 확인 및 결제 동의 (필수)
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', cursor: 'pointer' }}>
+                        <input type="checkbox" style={{ width: '16px', height: '16px' }} />
+                        개인정보 제3자 제공 동의 (필수)
+                      </label>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              {/* Right Summary */}
+              <div style={{ width: '380px', position: 'sticky', top: '120px', background: 'white', border: '1px solid var(--border)', borderRadius: '16px', padding: '32px' }}>
+                <h3 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '24px' }}>주문 요약</h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: 600, marginBottom: '24px' }}>
+                   <span>{checkoutData.title}</span>
+                   <span>{checkoutData.qty}개</span>
+                   <span>₩{(checkoutData.price * checkoutData.qty).toLocaleString()}</span>
+                </div>
+                <hr style={{ borderTop: '1px solid var(--border)', borderBottom: 'none', margin: '24px 0' }} />
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '14px', fontWeight: 600, color: 'var(--text-sub)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>상품 금액</span>
+                    <span>₩{(checkoutData.price * checkoutData.qty).toLocaleString()}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>배송비</span>
+                    <span>₩3,000</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>쿠폰 할인</span>
+                    <span>-₩0</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>포인트 사용</span>
+                    <span>-₩0</span>
+                  </div>
+                </div>
+
+                <hr style={{ borderTop: '1px solid var(--border)', borderBottom: 'none', margin: '24px 0' }} />
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '20px', fontWeight: 800, color: '#C2507A', marginBottom: '32px' }}>
+                  <span>최종 결제 금액</span>
+                  <span>₩{(checkoutData.price * checkoutData.qty + 3000).toLocaleString()}</span>
+                </div>
+
+                <button 
+                  onClick={() => {
+                     if (!checkoutForm.name || !checkoutForm.phone1 || !checkoutForm.zipcode) {
+                       alert('필수 정보를 모두 입력해주세요.');
+                       return;
+                     }
+                     // Spinner simulator
+                     const btn = document.getElementById('checkout-btn');
+                     if (btn) btn.innerHTML = '결제 처리 중... ⏳';
+                     setTimeout(() => {
+                       alert('결제가 완료되었습니다!');
+                       setActiveTab('HOME');
+                     }, 1500);
+                  }}
+                  id="checkout-btn"
+                  style={{ width: '100%', padding: '20px', borderRadius: '12px', background: 'linear-gradient(135deg, #C2507A, #7F77DD)', color: 'white', fontWeight: 800, fontSize: '18px', textAlign: 'center', transition: 'all 0.2s' }}>
+                  ₩{(checkoutData.price * checkoutData.qty + 3000).toLocaleString()} 결제하기
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+
+        {/* --- MY PAGE --- */}
+      {!selectedArtist && activeTab === 'MY PAGE' && (
+        <div className="page-content reveal wrapper">
+          <div className="board-header" style={{height: '240px', marginBottom: '40px', padding: '40px 60px'}}>
+            <div className="bh-bg-color" style={{ background: '#1A1A1A' }}></div>
+            <div className="bh-content">
+              <div className="bh-avatar" style={{ background: 'linear-gradient(135deg, #E8E0D8, #D0C6BE)', width: '120px', height: '120px' }}></div>
+              <div className="bh-info">
+                <div className="bh-name" style={{ fontSize: '40px' }}>Dreamer99</div>
+                <div className="bh-stats" style={{ fontSize: '16px', opacity: 1, color: '#DDD' }}>
+                  <span style={{ color: 'var(--point-rose)', fontWeight: 800 }}>VIP 멤버</span> · 2024년 가입
+                </div>
+              </div>
+              <button className="c-btn" onClick={() => setShowEditProfile(true)} style={{background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)'}}>프로필 수정</button>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '40px' }}>
+            <div className="mp-sidebar reveal delay-100">
+              <div style={{ marginBottom: '32px' }}>
+                <div className={`mp-nav-item ${myPageTab === 'OVERVIEW' ? 'active' : ''}`} onClick={() => setMyPageTab('OVERVIEW')}><User size={18} /> 전체 개요</div>
+                <div className={`mp-nav-item ${myPageTab === 'ORDERS' ? 'active' : ''}`} onClick={() => setMyPageTab('ORDERS')}><ShoppingBag size={18} /> 주문 내역</div>
+                <div className={`mp-nav-item ${myPageTab === 'TICKETS' ? 'active' : ''}`} onClick={() => setMyPageTab('TICKETS')}><Ticket size={18} /> 나의 티켓</div>
+                <div className={`mp-nav-item ${myPageTab === 'COLLECTION' ? 'active' : ''}`} onClick={() => setMyPageTab('COLLECTION')}><ImageIcon size={18} /> 나의 컬렉션</div>
+                <div className={`mp-nav-item ${myPageTab === 'SETTINGS' ? 'active' : ''}`} onClick={() => setMyPageTab('SETTINGS')}><Settings size={18} /> 설정</div>
+                <div className="mp-nav-item" style={{ color: '#FF4444', marginTop: '20px' }} onClick={() => onLogout()}><LogOut size={18} /> 로그아웃</div>
+              </div>
+              
+              <div style={{ background: 'var(--bg-cream)', borderRadius: '16px', padding: '24px' }}>
+                <h4 style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-sub)', marginBottom: '16px', letterSpacing: '1px' }}>계정 정보</h4>
+                <div className="mp-stat">
+                  <span style={{ fontSize: '14px', fontWeight: 600 }}>포인트</span>
+                  <span style={{ fontSize: '16px', fontWeight: 800, color: 'var(--point-rose)' }}>12,450 P</span>
+                </div>
+                <div className="mp-stat">
+                  <span style={{ fontSize: '14px', fontWeight: 600 }}>쿠폰</span>
+                  <span style={{ fontSize: '16px', fontWeight: 800 }}>3</span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ flex: 1 }}>
+              {myPageTab === 'OVERVIEW' && (
+                <div className="reveal">
+                  <h3 style={{fontSize: '24px', fontWeight: 800, marginBottom: '24px'}}>전체 개요</h3>
+                  <div className="card" style={{padding: '32px'}}>
+                    <p style={{ color: 'var(--text-sub)', fontSize: '15px' }}>최근 활동 내역이 없습니다.</p>
+                  </div>
+                </div>
+              )}
+
+              {myPageTab === 'ORDERS' && (
+                <div className="reveal">
+                  <h3 style={{fontSize: '24px', fontWeight: 800, marginBottom: '24px'}}>주문 내역</h3>
+                  <div className="card" style={{padding: '32px'}}>
+                    <p style={{ color: 'var(--text-sub)', fontSize: '15px' }}>주문 내역이 없습니다.</p>
+                  </div>
+                </div>
+              )}
+
+              {myPageTab === 'TICKETS' && (
+                <div className="reveal">
+                  <h3 style={{fontSize: '24px', fontWeight: 800, marginBottom: '24px'}}>나의 티켓</h3>
+                  <div className="card" style={{padding: '32px'}}>
+                    <p style={{ color: 'var(--text-sub)', fontSize: '15px' }}>보유한 티켓이 없습니다.</p>
+                  </div>
+                </div>
+              )}
+
+              {myPageTab === 'COLLECTION' && (
+                <div className="reveal">
+                  <h3 style={{fontSize: '24px', fontWeight: 800, marginBottom: '24px'}}>나의 컬렉션</h3>
+                  {collectedCards.length > 0 ? (
+                    <div className="grid-3">
+                      {collectedCards.map(card => (
+                        <div key={card.id} className="card" style={{ height: 'fit-content' }}>
+                          <div className="c-img" style={{ height: '300px' }}>
+                            <img src={card.img} alt={card.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            <div className="c-tag">DIGITAL PC</div>
+                          </div>
+                          <div className="c-body" style={{ padding: '20px' }}>
+                            <div style={{ fontSize: '12px', fontWeight: 800, color: 'var(--point-rose)', marginBottom: '4px' }}>{card.artistName}</div>
+                            <h3 style={{ fontSize: '16px', fontWeight: 800, marginBottom: '12px' }}>{card.title}</h3>
+                            <div style={{ fontSize: '12px', color: 'var(--text-sub)', fontWeight: 600 }}>획득일: {card.date}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="card" style={{padding: '48px', textAlign: 'center'}}>
+                      <Gift size={48} color="var(--border)" style={{ marginBottom: '16px' }} />
+                      <p style={{ color: 'var(--text-sub)', fontSize: '15px' }}>아직 수집한 아이템이 없습니다. 아티스트 출석 이벤트에 참여해보세요!</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {myPageTab === 'SETTINGS' && (
+                <div className="reveal">
+                  <h3 style={{fontSize: '24px', fontWeight: 800, marginBottom: '24px'}}>설정</h3>
+                  <div className="card" style={{padding: '32px'}}>
+                    <h4 style={{ fontSize: '16px', fontWeight: 800, marginBottom: '24px' }}>알림 설정</h4>
+                    
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', paddingBottom: '24px', borderBottom: '1px solid var(--border)' }}>
+                      <div>
+                        <div style={{ fontSize: '15px', fontWeight: 700, marginBottom: '4px' }}>모든 알림 수신 동의</div>
+                        <div style={{ fontSize: '13px', color: 'var(--text-sub)' }}>비활성화 시 모든 푸시 알림이 중단됩니다</div>
+                      </div>
+                      
+                      <label style={{ position: 'relative', display: 'inline-block', width: '44px', height: '24px', opacity: isNotifUpdating ? 0.5 : 1, cursor: isNotifUpdating ? 'not-allowed' : 'pointer' }}>
+                        <input 
+                          type="checkbox" 
+                          style={{ opacity: 0, width: 0, height: 0 }} 
+                          checked={isAllowNotification}
+                          disabled={isNotifUpdating}
+                          onChange={(e) => {
+                             const newVal = e.target.checked;
+                             setIsNotifUpdating(true);
+                             setTimeout(() => {
+                               setIsAllowNotification(newVal);
+                               setIsNotifUpdating(false);
+                               alert('알림 설정이 변경되었습니다');
+                             }, 800);
+                          }}
+                        />
+                        <span style={{
+                          position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0,
+                          backgroundColor: isAllowNotification ? 'var(--primary)' : '#e5e7eb',
+                          transition: '.4s', borderRadius: '34px'
+                        }}>
+                          <span style={{
+                            position: 'absolute', content: '""', height: '18px', width: '18px', left: '3px', bottom: '3px',
+                            backgroundColor: 'white', transition: '.4s', borderRadius: '50%',
+                            transform: isAllowNotification ? 'translateX(20px)' : 'translateX(0)'
+                          }}></span>
+                        </span>
+                      </label>
+                    </div>
+
+                    <h4 style={{ fontSize: '16px', fontWeight: 800, marginBottom: '24px', marginTop: '24px' }}>보안</h4>
+                    <p style={{ color: 'var(--text-sub)', fontSize: '14px' }}>계정 보안 설정을 관리하세요.</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {/* --- ATTENDANCE MODAL --- */}
+      <AnimatePresence>
+        {showAttendance && (
+          <motion.div 
+            className="modal-overlay" 
+            style={{ zIndex: 2000 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div 
+              className="modal-content"
+              style={{ maxWidth: '480px', padding: '40px', position: 'relative' }}
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+            >
+              <button 
+                onClick={() => setShowAttendance(false)}
+                style={{ 
+                  position: 'absolute', top: '20px', right: '20px', 
+                  background: 'var(--bg-cream)', border: 'none', borderRadius: '50%', 
+                  width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', color: 'var(--text-main)', zIndex: 10
+                }}
+              >
+                <X size={18} />
+              </button>
+              {attendanceStep !== 'REWARD' ? (
+                <>
+                  <div style={{ textAlign: 'center', marginBottom: '8px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--point-rose)', letterSpacing: '2px', marginBottom: '8px' }}>ATTENDANCE EVENT</div>
+                    <h2 style={{ fontSize: '28px', fontWeight: 900, letterSpacing: '-0.5px' }}>데일리 출석 완료!</h2>
+                    <p style={{ color: 'var(--text-sub)', fontSize: '15px' }}>7일간의 꾸준한 팬심을 증명하셨네요!</p>
+                  </div>
+
+                  <div className="attendance-grid">
+                    {[1, 2, 3, 4, 5, 6].map(day => (
+                      <div key={day} className="day-cell active">
+                        <span className="day-num">{day}일차</span>
+                        <CheckCircle2 size={24} className="stamp-icon" />
+                      </div>
+                    ))}
+                    
+                    <div className="day-cell active final-day">
+                      <span className="day-num">7일차</span>
+                      <motion.div
+                        initial={{ scale: 3, opacity: 0, rotate: -20 }}
+                        animate={{ scale: 1, opacity: 1, rotate: -5 }}
+                        transition={{ 
+                          type: 'spring', 
+                          damping: 25, 
+                          stiffness: 70, 
+                          delay: 0.1 
+                        }}
+                        onAnimationComplete={() => {
+                          setTimeout(() => setAttendanceStep('REWARD'), 20);
+                        }}
+                      >
+                        <CheckCircle2 size={32} className="stamp-icon" style={{ filter: 'drop-shadow(0 4px 8px rgba(194, 80, 122, 0.4))' }} />
+                      </motion.div>
+                    </div>
+                  </div>
+
+                  <div style={{ padding: '16px', background: 'var(--bg-cream)', borderRadius: '12px', textAlign: 'center', fontSize: '14px', fontWeight: 600, color: 'var(--text-sub)' }}>
+                    7일 완성 시 <span style={{ color: 'var(--text-main)', fontWeight: 800 }}>미공개 디지털 포토카드</span> 제공
+                  </div>
+                </>
+              ) : (
+                <div className="reward-reveal">
+                  <motion.div
+                    initial={{ scale: 0.9, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ duration: 0.4 }}
+                  >
+                    <div style={{ marginBottom: '24px' }}>
+                      <div style={{ 
+                        display: 'inline-flex', padding: '8px 16px', background: 'var(--point-rose)', color: 'white', 
+                        borderRadius: '20px', fontSize: '12px', fontWeight: 800, marginBottom: '16px' 
+                      }}>
+                        REWARD UNLOCKED
+                      </div>
+                      <h2 style={{ fontSize: '24px', fontWeight: 900, marginBottom: '8px' }}>미공개 포토카드 획득!</h2>
+                      <p style={{ color: 'var(--text-sub)', fontSize: '14px' }}>내 보관함에서 언제든 확인할 수 있습니다!</p>
+                    </div>
+
+                    <motion.div 
+                      className="photocard-preview"
+                      initial={{ filter: "blur(30px)", x: 0, rotate: 0 }}
+                      animate={{ 
+                        filter: ["blur(30px)", "blur(30px)", "blur(0px)"],
+                        x: [0, -30, 30, -30, 30, -30, 30, -30, 30, -30, 30, -30, 30, -30, 30, -30, 30, 0, 0, 0],
+                        rotate: [0, -6, 6, -6, 6, -6, 6, -6, 6, -6, 6, -6, 6, -6, 6, -6, 6, 0, 0, 0],
+                      }}
+                      transition={{ 
+                        filter: { duration: 2.2, times: [0, 0.85, 1], ease: "easeOut" },
+                        x: { 
+                          duration: 2.2, 
+                          times: [0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.95, 1],
+                          ease: "linear"
+                        },
+                        rotate: { 
+                          duration: 2.2, 
+                          times: [0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.95, 1],
+                          ease: "linear"
+                        }
+                      }}
+                    >
+                      <img src="https://images.unsplash.com/photo-1493225255756-d9584f8606e9?auto=format&fit=crop&q=80&w=600" alt="Special Photocard" />
+                      <div className="shine"></div>
+                      <div style={{ position: 'absolute', bottom: '16px', left: '16px', color: 'white', textShadow: '0 2px 4px rgba(0,0,0,0.5)', textAlign: 'left' }}>
+                        <div style={{ fontSize: '10px', fontWeight: 800, opacity: 0.8 }}>EXCLUSIVE DROP</div>
+                        <div style={{ fontSize: '16px', fontWeight: 900 }}>Starlight: Behind</div>
+                      </div>
+                    </motion.div>
+
+                    <button 
+                      className="btn-primary" 
+                      style={{ background: 'var(--point-rose)' }}
+                      onClick={() => {
+                        const newCard = {
+                          id: Date.now(),
+                          artistName: selectedArtist?.name || 'Starlight',
+                          title: 'Starlight: Behind',
+                          img: 'https://images.unsplash.com/photo-1493225255756-d9584f8606e9?auto=format&fit=crop&q=80&w=600',
+                          date: new Date().toLocaleDateString()
+                        };
+                        setCollectedCards(prev => [...prev, newCard]);
+                        setShowAttendance(false);
+                        setActiveTab('MY PAGE');
+                        setMyPageTab('COLLECTION');
+                        setSelectedArtist(null);
+                      }}
+                    >
+                      보관함으로 가기
+                    </button>
+                  </motion.div>
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Subtle Footer Placeholder */}
+      
+        <div style={{ position: 'fixed', bottom: '24px', left: '24px', zIndex: 100 }}>
+          <button style={{ 
+            background: 'white', 
+            border: '1px solid var(--border)', 
+            padding: '8px 16px', 
+            borderRadius: '20px', 
+            fontSize: '12px', 
+            fontWeight: 800, 
+            cursor: 'pointer',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}>
+            KOR | ENG
+          </button>
+        </div>
+
+      {/* Schedule Detail Modal */}
+      {showScheduleModal && selectedSchedule && (
+        <div className="modal-overlay" onClick={() => setShowScheduleModal(false)}>
+          <div 
+            className="modal-content-custom" 
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="modal-header-accent">
+               <div className="modal-header-bg" />
+               <div style={{ position: 'relative', zIndex: 1, width: '100%' }}>
+                 <div style={{ fontSize: '10px', fontWeight: 900, color: '#7F77DD', letterSpacing: '3px', textTransform: 'uppercase', marginBottom: '12px' }}>
+                   Official Schedule
+                 </div>
+                 <h3 style={{ fontSize: '20px', fontWeight: 900, color: 'white', lineHeight: 1.2, margin: '0 0 12px 0', padding: '0 20px' }}>
+                   {selectedSchedule.title}
+                 </h3>
+                 <div style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 12px', background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(10px)', borderRadius: '20px', fontSize: '9px', fontWeight: 900, color: 'rgba(255,255,255,0.8)', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                   {selectedSchedule.category} EVENT
+                 </div>
+               </div>
+               <div 
+                 style={{ position: 'absolute', right: '20px', top: '20px', cursor: 'pointer', color: 'rgba(255,255,255,0.4)', transition: 'color 0.2s' }} 
+                 onClick={() => setShowScheduleModal(false)}
+                 onMouseEnter={e => e.currentTarget.style.color = 'white'}
+                 onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.4)'}
+               >
+                 <X size={18} />
+               </div>
+            </div>
+
+            <div className="modal-body-custom">
+              <div className="schedule-grid-50">
+                <div className="schedule-info-box">
+                  <span style={{ fontSize: '9px', fontWeight: 900, color: '#A0958C', textTransform: 'uppercase', letterSpacing: '-0.5px' }}>Event Date</span>
+                  <div style={{ fontWeight: 900, color: '#111', fontSize: '14px' }}>{selectedSchedule.month}.{selectedSchedule.date}</div>
+                </div>
+                <div className="schedule-info-box">
+                  <span style={{ fontSize: '9px', fontWeight: 900, color: '#A0958C', textTransform: 'uppercase', letterSpacing: '-0.5px' }}>Time (KST)</span>
+                  <div style={{ fontWeight: 900, color: '#111', fontSize: '14px' }}>{selectedSchedule.time}</div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {selectedSchedule.noticeId ? (
+                  <button 
+                    style={{ 
+                      width: '100%', 
+                      padding: '16px', 
+                      borderRadius: '12px', 
+                      fontSize: '14px', 
+                      fontWeight: 900, 
+                      color: 'white', 
+                      background: '#C2507A', 
+                      border: 'none', 
+                      cursor: 'pointer', 
+                      boxShadow: '0 10px 20px -5px rgba(194, 80, 122, 0.3)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px'
+                    }}
+                    onClick={() => {
+                      const linkedNotice = notices.find(n => n.id === selectedSchedule.noticeId);
+                      if (linkedNotice) {
+                        setSelectedNotice(linkedNotice);
+                        setShowScheduleModal(false);
+                      }
+                    }}
+                  >
+                    <Bell size={16} /> 공지사항 보러가기
+                  </button>
+                ) : (
+                  <button 
+                    style={{ 
+                      width: '100%', 
+                      padding: '16px', 
+                      borderRadius: '12px', 
+                      fontSize: '14px', 
+                      fontWeight: 900, 
+                      color: '#B0AAA4', 
+                      background: '#E0D8D0', 
+                      border: 'none', 
+                      cursor: 'not-allowed',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px'
+                    }}
+                    disabled
+                  >
+                    <Bell size={16} /> 상세 공지사항이 없습니다
+                  </button>
+                )}
+                <button 
+                  style={{ 
+                    width: '100%', 
+                    padding: '16px', 
+                    borderRadius: '12px', 
+                    fontSize: '14px', 
+                    fontWeight: 900, 
+                    color: '#888', 
+                    background: 'transparent', 
+                    border: 'none', 
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => setShowScheduleModal(false)}
+                >
+                  닫기
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Notice Detail Page Overlay */}
+      {selectedNotice && (
+        <div className="notice-full-overlay">
+          <div className="notice-detail-container">
+            <header className="notice-detail-header">
+              <button 
+                onClick={() => setSelectedNotice(null)}
+                style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '8px', 
+                  fontSize: '11px', 
+                  fontWeight: 900, 
+                  color: '#111', 
+                  background: 'none', 
+                  border: 'none', 
+                  cursor: 'pointer', 
+                  textTransform: 'uppercase', 
+                  letterSpacing: '1px' 
+                }}
+              >
+                <ChevronLeft size={16} /> Close notice
+              </button>
+              <div style={{ fontSize: '10px', fontWeight: 900, color: '#C2507A', letterSpacing: '4px', textTransform: 'uppercase' }}>Official Notice</div>
+              <div style={{ width: '40px' }} />
+            </header>
+
+            <main className="notice-detail-main">
+              <div style={{ maxWidth: '640px', margin: '0 auto' }}>
+                <div style={{ marginBottom: '48px', textAlign: 'center' }}>
+                  <div style={{ display: 'inline-block', padding: '4px 16px', background: '#111', borderRadius: '20px', fontSize: '10px', fontWeight: 900, color: 'white', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '24px' }}>
+                    {selectedNotice.tag}
+                  </div>
+                  <h2 style={{ fontSize: '32px', fontWeight: 900, color: '#111', lineHeight: 1.2, margin: '0 0 32px 0' }}>
+                    {selectedNotice.title}
+                  </h2>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px', fontSize: '11px', fontWeight: 700, color: '#A0958C', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                    <span>Starlight Agency</span>
+                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'rgba(194, 80, 122, 0.2)' }} />
+                    <span>{selectedNotice.date}</span>
+                  </div>
+                </div>
+
+                <div style={{ fontSize: '16px', color: '#444', lineHeight: 1.8, fontWeight: 500, paddingTop: '48px', borderTop: '1px solid #EDE8E2' }}>
+                  <p style={{ marginBottom: '32px' }}>안녕하세요, 별빛스튜디오(Starlight Agency)입니다.</p>
+                  
+                  <div style={{ padding: '32px', background: '#F7F3EE', borderRadius: '24px', border: '1px solid #EDE8E2', marginBottom: '48px' }}>
+                    <p style={{ fontWeight: 900, color: '#111', fontSize: '18px', marginBottom: '16px' }}>안내 말씀</p>
+                    <p style={{ color: '#666', lineHeight: 1.6 }}>
+                      "{selectedNotice.title}"와 관련하여 팬 여러분께 안내 말씀 드립니다. 
+                      아티스트를 아껴주시는 팬 여러분께 진심으로 감사드리며, 상세 일정 및 참여 방법은 추후 공식 채널을 통해 다시 한 번 안내해 드릴 예정입니다.
+                    </p>
+                  </div>
+
+                  <p style={{ marginBottom: '32px', fontWeight: 600 }}>
+                    팬 여러분의 많은 관심과 응원 부탁드립니다.
+                  </p>
+                  
+                  <div style={{ marginTop: '64px', paddingTop: '32px', borderTop: '1px dashed #EDE8E2' }}>
+                    <p style={{ fontWeight: 900, color: '#111' }}>감사합니다.</p>
+                  </div>
+                  
+                  {selectedNotice.type === 'TICKET' && (
+                    <div style={{ 
+                      marginTop: '64px', 
+                      padding: '40px', 
+                      background: '#111', 
+                      borderRadius: '40px', 
+                      color: 'white', 
+                      boxShadow: '0 20px 40px rgba(0,0,0,0.1)', 
+                      position: 'relative', 
+                      overflow: 'hidden' 
+                    }}>
+                      <div style={{ position: 'absolute', top: 0, right: 0, width: '120px', height: '120px', background: '#C2507A', opacity: 0.15, filter: 'blur(60px)' }} />
+                      <div style={{ position: 'relative', zIndex: 1 }}>
+                        <h4 style={{ fontWeight: 900, color: 'white', fontSize: '20px', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <Ticket size={24} color="#C2507A" /> 티켓 예매 정보 안내
+                        </h4>
+                        <div style={{ marginBottom: '40px', fontSize: '14px', fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '8px', marginBottom: '16px' }}>
+                             <span>선예매 일정</span>
+                             <span style={{ fontWeight: 900, color: 'white' }}>2026.06.10 20:00 KST</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '8px' }}>
+                             <span>일반 예매</span>
+                             <span style={{ fontWeight: 900, color: 'white' }}>2026.06.12 20:00 KST</span>
+                          </div>
+                        </div>
+                        <button style={{ width: '100%', padding: '20px', borderRadius: '16px', background: 'linear-gradient(to right, #C2507A, #7F77DD)', color: 'white', fontWeight: 900, fontSize: '14px', border: 'none', cursor: 'pointer', boxShadow: '0 10px 20px rgba(194, 80, 122, 0.4)' }}>
+                          예매 사이트 바로가기
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div style={{ height: '120px' }} />
+                </div>
+              </div>
+            </main>
+          </div>
+        </div>
+      )}
+
+      <footer style={{marginTop: 100, padding: '60px 40px', background: 'var(--bg-white)', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <div style={{ maxWidth: '1200px', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+          <div style={{ fontSize: '20px', fontWeight: 900, letterSpacing: '2px', marginBottom: '16px' }}>FANDROPS<span style={{ color: '#C2507A' }}>.</span></div>
+          <div style={{ fontSize: '12px', color: 'var(--text-sub)', marginBottom: '32px' }}>© 2026 FANDROPS. All rights reserved.</div>
+          
+          <div style={{ display: 'flex', gap: '24px', fontSize: '13px', fontWeight: 600, color: 'var(--text-sub)', marginBottom: '40px' }}>
+            <span style={{ cursor: 'pointer' }}>서비스 이용약관</span>
+            <span style={{ cursor: 'pointer', color: 'var(--text-main)' }}>개인정보처리방침</span>
+            <span style={{ cursor: 'pointer' }}>고객센터</span>
+            <span style={{ cursor: 'pointer' }}>공지사항</span>
+          </div>
+
+          <hr style={{ width: '100%', borderTop: '1px solid var(--border)', borderBottom: 'none', margin: '0 0 32px 0' }} />
+
+          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-sub)', marginBottom: '16px' }}>비즈니스 문의</div>
+          <button onClick={onApply} style={{ background: '#111', color: 'white', padding: '12px 24px', borderRadius: '8px', fontSize: '13px', fontWeight: 800, marginBottom: '16px' }}>
+            파트너 입점 신청 →
+          </button>
+          <div style={{ fontSize: '12px', color: 'var(--text-sub)' }}>기획사/아티스트 전용 플랫폼입니다</div>
+        </div>
+      </footer>
+
+    </div>
+  );
+}

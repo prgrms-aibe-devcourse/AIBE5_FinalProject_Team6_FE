@@ -3,7 +3,6 @@ import { render, screen } from '@testing-library/react'
 import App from '../App'
 
 beforeAll(() => {
-  // sandbox mode: fetch 실패 → role='FAN' 자동 설정
   vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
   vi.stubGlobal('EventSource', vi.fn().mockImplementation(() => ({
     onmessage: null,
@@ -12,14 +11,14 @@ beforeAll(() => {
   })))
 })
 
-describe('App (sandbox)', () => {
+describe('App', () => {
   it('FANDROPS 헤더가 렌더링된다', () => {
     render(<App />)
     expect(screen.getByText('FANDROPS')).toBeInTheDocument()
   })
 
-  it('인기 드롭 섹션이 존재한다', async () => {
+  it('로그인 페이지가 렌더링된다', () => {
     render(<App />)
-    expect(await screen.findByText('인기 드롭')).toBeInTheDocument()
+    expect(screen.getByText('카카오로 1초 로그인')).toBeInTheDocument()
   })
 })

@@ -51,9 +51,10 @@ app.post('/api/ai/chat', async (req, res) => {
 
     const reply = response.text || 'No response generated.';
     res.json({ reply });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Gemini API Error:', error);
-    res.status(500).json({ error: error.message || 'Failed to communicate with Gemini API.' });
+    const message = error instanceof Error ? error.message : 'Failed to communicate with Gemini API.'
+    res.status(500).json({ error: message });
   }
 });
 

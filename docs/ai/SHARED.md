@@ -45,8 +45,7 @@
 |---|---|---|
 | ① 타입 오류 | `any` 없이 타입이 명시되어 있는가? | `npx tsc --noEmit` 오류 0건 |
 | ② Props 타입 | 신규 컴포넌트에 Props 인터페이스가 선언되어 있는가? | 컴포넌트 파일 상단 확인 |
-| ③ API 분기 | `isSandbox` 분기 — sandbox/real 모드 양쪽 구현되어 있는가? | 조건 분기 확인 |
-| ④ 환경변수 | 신규 env 변수가 `.env.example`에 추가되었는가? | `.env.example` 확인 |
+| ③ 환경변수 | 신규 env 변수가 `.env.example`에 추가되었는가? | `.env.example` 확인 |
 
 ---
 

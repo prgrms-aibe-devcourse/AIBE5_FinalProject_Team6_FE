@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import FanApp from './apps/FanApp';
 import DevSwitcher from './components/DevSwitcher';
 import AgencyApp from './apps/AgencyApp';
@@ -65,6 +65,13 @@ export default function App() {
   const [role, setRole] = useState<Role>(null);
   const [showApplication, setShowApplication] = useState(false);
   const [agencyApplications, setAgencyApplications] = useState<AgencyApplication[]>(INITIAL_APPLICATIONS);
+
+  // Sandbox mode: backend 미연결 시 FAN 데모 뷰 자동 진입 (테스트/오프라인 환경)
+  useEffect(() => {
+    fetch('/api/v1/health').catch(() => {
+      setRole(prev => prev ?? 'FAN');
+    });
+  }, []);
 
   const handleLogout = () => {
     setRole(null);

@@ -1,28 +1,28 @@
 import React, { useState } from 'react';
+import { login, setToken } from '../api/auth';
 import type { Role } from '../App';
 
-export default function LoginPage({ onLogin, onApply }: { onLogin: (role: Role) => void, onApply: () => void }) {
+export default function LoginPage({ onLogin, onApply }: { onLogin: (role: Role) => void; onApply: () => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [showB2BForm, setShowB2BForm] = useState(false);
 
-  const handleLogin = (e?: React.FormEvent) => {
+  const handleLogin = async (e?: React.FormEvent) => {
     e?.preventDefault();
     setError('');
-    
-    if (password !== '1234') {
-      setError('이메일 또는 비밀번호가 올바르지 않습니다');
-      return;
-    }
 
-    if (email === 'fan@fandrops.com') {
-      onLogin('FAN');
-    } else if (email === 'artist@fandrops.com') {
-      onLogin('ARTIST');
-    } else if (email === 'admin@fandrops.com') {
-      onLogin('ADMIN');
-    } else {
+    try {
+      const token = await login(email, password);
+      setToken(token);
+      if (email.includes('admin')) {
+        onLogin('ADMIN');
+      } else if (email.includes('artist')) {
+        onLogin('ARTIST');
+      } else {
+        onLogin('FAN');
+      }
+    } catch {
       setError('이메일 또는 비밀번호가 올바르지 않습니다');
     }
   };
@@ -37,7 +37,7 @@ export default function LoginPage({ onLogin, onApply }: { onLogin: (role: Role) 
         {/* Background elements */}
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#C2507A] rounded-full blur-[150px] opacity-10 pointer-events-none"></div>
         <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-[#7F77DD] rounded-full blur-[150px] opacity-10 pointer-events-none"></div>
-        
+
         <div className="w-full max-w-md bg-white rounded-3xl p-8 md:p-12 shadow-sm border border-[#EDE8E2] relative z-10 mx-auto">
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold tracking-[2px] font-mono mb-2">FANDROPS</h1>
@@ -45,13 +45,13 @@ export default function LoginPage({ onLogin, onApply }: { onLogin: (role: Role) 
           </div>
 
           <div className="space-y-4 mb-8">
-            <button 
+            <button
                 onClick={handleSocialLogin}
                 className="w-full flex items-center justify-center gap-3 bg-[#FEE500] text-[#191919] font-bold py-4 rounded-2xl transition-all hover:opacity-90 active:scale-[0.98] shadow-sm"
             >
               <span className="text-lg">카카오로 1초 로그인</span>
             </button>
-            <button 
+            <button
                 onClick={handleSocialLogin}
                 className="w-full flex items-center justify-center gap-3 bg-white border border-[#E5E5E5] text-[#111] font-bold py-4 rounded-2xl transition-all hover:bg-gray-50 active:scale-[0.98] shadow-sm"
             >
@@ -67,8 +67,8 @@ export default function LoginPage({ onLogin, onApply }: { onLogin: (role: Role) 
 
           {!showB2BForm ? (
             <div className="text-center">
-              <button 
-                onClick={() => setShowB2BForm(true)} 
+              <button
+                onClick={() => setShowB2BForm(true)}
                 className="text-xs text-[#888] font-medium hover:text-[#111] underline underline-offset-4"
               >
                 기획사/아티스트 전용 로그인
@@ -81,29 +81,29 @@ export default function LoginPage({ onLogin, onApply }: { onLogin: (role: Role) 
                 <div className="text-xs text-[#888] font-medium uppercase tracking-wider">Agency Login</div>
                 <div className="flex-1 h-[1px] bg-[#E5E5E5]"></div>
               </div>
-              <input 
-                type="text" 
-                placeholder="이메일" 
+              <input
+                type="text"
+                placeholder="이메일"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full bg-[#F7F3EE] border border-[#EDE8E2] text-[#111] px-4 py-3.5 rounded-xl focus:border-[#C2507A] focus:outline-none transition-colors"
               />
-              <input 
-                type="password" 
-                placeholder="비밀번호" 
+              <input
+                type="password"
+                placeholder="비밀번호"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full bg-[#F7F3EE] border border-[#EDE8E2] text-[#111] px-4 py-3.5 rounded-xl focus:border-[#C2507A] focus:outline-none transition-colors"
               />
               {error && <p className="text-[#C2507A] text-sm text-center font-medium mt-2">{error}</p>}
-              <button 
+              <button
                 type="submit"
                 className="w-full py-4 mt-2 rounded-xl font-bold text-white transition-opacity hover:opacity-90 shadow-md active:scale-[0.98]"
                 style={{ background: '#111' }}
               >
                 로그인
               </button>
-              <button 
+              <button
                 type="button"
                 onClick={() => setShowB2BForm(false)}
                 className="w-full text-xs text-[#888] mt-4 hover:text-[#111]"
@@ -121,7 +121,7 @@ export default function LoginPage({ onLogin, onApply }: { onLogin: (role: Role) 
 
           <div className="mt-12 pt-8 border-t border-[#EDE8E2] text-center">
             <p className="text-sm text-[#888] mb-2 font-medium">기획사/아티스트이신가요?</p>
-            <button 
+            <button
               onClick={onApply}
               className="text-[#C2507A] font-bold hover:underline"
             >

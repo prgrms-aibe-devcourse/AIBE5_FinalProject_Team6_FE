@@ -208,8 +208,11 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
   // 대기열 PROCESSING 전이 시 accessTicket을 checkoutData에 담아 결제 화면으로 이동
   useEffect(() => {
     if (queueState.phase === 'PROCESSING' && queueState.accessTicket && checkoutData) {
-      setCheckoutData({ ...checkoutData, accessTicket: queueState.accessTicket });
-      setActiveTab('CHECKOUT');
+      const ticket = queueState.accessTicket;
+      setTimeout(() => {
+        setCheckoutData(prev => prev ? { ...prev, accessTicket: ticket } : prev);
+        setActiveTab('CHECKOUT');
+      }, 0);
     }
   }, [queueState.phase, queueState.accessTicket]); // eslint-disable-line react-hooks/exhaustive-deps
 

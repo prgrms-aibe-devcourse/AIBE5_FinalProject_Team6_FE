@@ -52,22 +52,26 @@ export function useCheckout(setActiveTab: (tab: string) => void) {
 
     if (paymentKey && orderId && amount) {
       window.history.replaceState({}, '', window.location.pathname)
-      setPaymentStatus('processing')
-      setActiveTab('CHECKOUT')
-      confirmPayment(paymentKey, orderId, Number(amount))
-        .then(() => {
-          setPaymentStatus('success')
-          setActiveTab('ORDER_COMPLETE')
-        })
-        .catch(() => {
-          setPaymentStatus('failed')
-          setPaymentError('결제 확인 중 오류가 발생했습니다. 고객센터에 문의해 주세요.')
-          setActiveTab('CHECKOUT')
-        })
+      setTimeout(() => {
+        setPaymentStatus('processing')
+        setActiveTab('CHECKOUT')
+        confirmPayment(paymentKey, orderId, Number(amount))
+          .then(() => {
+            setPaymentStatus('success')
+            setActiveTab('ORDER_COMPLETE')
+          })
+          .catch(() => {
+            setPaymentStatus('failed')
+            setPaymentError('결제 확인 중 오류가 발생했습니다. 고객센터에 문의해 주세요.')
+            setActiveTab('CHECKOUT')
+          })
+      }, 0)
     } else if (code && code !== 'PAY_PROCESS_CANCELED' && code !== 'USER_CANCEL') {
       window.history.replaceState({}, '', window.location.pathname)
-      setPaymentStatus('failed')
-      setPaymentError(message || '결제가 실패하였습니다.')
+      setTimeout(() => {
+        setPaymentStatus('failed')
+        setPaymentError(message || '결제가 실패하였습니다.')
+      }, 0)
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 

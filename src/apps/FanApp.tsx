@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Plus, Search, Calendar, Heart, Share2, Filter, Image as ImageIcon, Smile, MoreHorizontal, MessageSquare, Video, Radio, Bell, Pin, Play, Youtube, ChevronLeft, ChevronRight, X, User, ShoppingBag, LogOut, Ticket, Settings, ThumbsUp, CheckCircle2, Gift } from 'lucide-react';
-import { confirmPayment } from '../api/payments';
-import { createOrder } from '../api/orders';
+import { useCheckout } from '../hooks/useCheckout';
+import { useQueue } from '../hooks/useQueue';
 
 
 // --- NEW MOCK DATA ---
@@ -195,35 +195,15 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
 
   const [showArtistSearch, setShowArtistSearch] = useState(false);
   
-  // 토스 결제 콜백 처리 (successUrl / failUrl 리다이렉트)
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const paymentKey = params.get('paymentKey');
-    const orderId = params.get('orderId');
-    const amount = params.get('amount');
-    const code = params.get('code');
-    const message = params.get('message');
+  const {
+    checkoutData, setCheckoutData,
+    checkoutForm, setCheckoutForm,
+    payMethod, setPayMethod,
+    paymentStatus, paymentError,
+    handlePay, resetCheckout,
+  } = useCheckout(setActiveTab);
 
-    if (paymentKey && orderId && amount) {
-      window.history.replaceState({}, '', window.location.pathname);
-      setPaymentStatus('processing');
-      setActiveTab('CHECKOUT');
-      confirmPayment(paymentKey, orderId, Number(amount))
-        .then(() => {
-          setPaymentStatus('success');
-          setActiveTab('ORDER_COMPLETE');
-        })
-        .catch(() => {
-          setPaymentStatus('failed');
-          setPaymentError('결제 확인 중 오류가 발생했습니다. 고객센터에 문의해 주세요.');
-          setActiveTab('CHECKOUT');
-        });
-    } else if (code && code !== 'PAY_PROCESS_CANCELED' && code !== 'USER_CANCEL') {
-      window.history.replaceState({}, '', window.location.pathname);
-      setPaymentStatus('failed');
-      setPaymentError(message || '결제가 실패하였습니다.');
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const { queueActive, setQueueActive, queuePosition } = useQueue();
 
   // Auto-select artist board if role is ARTIST
   useEffect(() => {
@@ -241,12 +221,9 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
   const [showCart, setShowCart] = useState(false);
   const [showNotifications] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
-  
+
   const [myPageTab, setMyPageTab] = useState('OVERVIEW');
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
-  const [queueActive, setQueueActive] = useState(false);
-  const [queuePosition, setQueuePosition] = useState(247);
-  const [, setSeatMapUnlocked] = useState(false);
 
   // New Filter & Sort States
   const [storeArtist, setStoreArtist] = useState('ALL');
@@ -279,12 +256,6 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
   const [productOption, setProductOption] = useState('Version A');
   const [showOptionDropdown, setShowOptionDropdown] = useState(false);
   const [productTab, setProductTab] = useState('DETAIL'); // DETAIL | DELIVERY | REVIEW
-
-  const [checkoutData, setCheckoutData] = useState<any>(null);
-  const [checkoutForm, setCheckoutForm] = useState({ name: '', phone1: '010', phone2: '', phone3: '', zipcode: '', req: '부재시 문앞에 놓아주세요', defaultAddr: false });
-  const [payMethod, setPayMethod] = useState('toss');
-  const [paymentStatus, setPaymentStatus] = useState<'idle' | 'processing' | 'success' | 'failed'>('idle');
-  const [paymentError, setPaymentError] = useState('');
 
   // Rank Game State (Removed as per user request)
   
@@ -405,22 +376,6 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
     };
   }, [activeTab, selectedArtist, boardTab, myPageTab, storeArtist, storePage, storeSearch]);
 
-  // Queue countdown effect
-  useEffect(() => {
-    if (queueActive && queuePosition > 0) {
-      const timer = setTimeout(() => {
-        setQueuePosition(p => p > 0 ? p - 1 : 0);
-      }, 50); // fast for demo
-      return () => clearTimeout(timer);
-    }
-    if (queueActive && queuePosition === 0) {
-      const finishTimer = setTimeout(() => {
-        setQueueActive(false);
-        setSeatMapUnlocked(true);
-      }, 500);
-      return () => clearTimeout(finishTimer);
-    }
-  }, [queueActive, queuePosition]);
 
   if (role === 'ARTIST' && !isArtistAuthorized) {
     return (
@@ -2002,7 +1957,7 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
                         setNotifications([...notifications, { id: Date.now(), title: '장바구니 추가', content: `${selectedProduct.title} 상품이 장바구니에 담겼습니다.`, time: '방금 전', isRead: false }]);
                         setShowCart(true); 
                       }} style={{ flex: 1, padding: '16px', borderRadius: '12px', border: '1px solid #C2507A', color: '#C2507A', fontWeight: 800, textAlign: 'center', cursor: 'pointer' }}>장바구니 담기</button>
-                      <button onClick={() => { setCheckoutData({ type: 'product', title: selectedProduct.title, price: selectedProduct.price, qty: productQty, option: productOption }); setActiveTab('CHECKOUT'); }} style={{ flex: 1, padding: '16px', borderRadius: '12px', background: 'linear-gradient(135deg, #C2507A, #7F77DD)', color: 'white', fontWeight: 800, textAlign: 'center', cursor: 'pointer' }}>바로 구매하기</button>
+                      <button onClick={() => { setCheckoutData({ type: 'product', title: selectedProduct.title, price: selectedProduct.price, qty: productQty, option: productOption, productId: selectedProduct.numericId ?? null }); setActiveTab('CHECKOUT'); }} style={{ flex: 1, padding: '16px', borderRadius: '12px', background: 'linear-gradient(135deg, #C2507A, #7F77DD)', color: 'white', fontWeight: 800, textAlign: 'center', cursor: 'pointer' }}>바로 구매하기</button>
                     </>
                   )}
                 </div>
@@ -2689,44 +2644,7 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
                   </div>
                 )}
                 <button
-                  onClick={async () => {
-                    if (!checkoutForm.name || !checkoutForm.phone2 || !checkoutForm.zipcode) {
-                      alert('필수 정보를 모두 입력해주세요.');
-                      return;
-                    }
-                    if (!checkoutData?.productId) {
-                      alert('상품 정보를 확인할 수 없습니다.');
-                      return;
-                    }
-                    const btn = document.getElementById('checkout-btn');
-                    if (btn) btn.innerHTML = '주문 생성 중... ⏳';
-                    try {
-                      const order = await createOrder(
-                        [{ productId: checkoutData.productId, quantity: checkoutData.qty }],
-                        null,
-                      );
-                      const totalAmount = checkoutData.price * checkoutData.qty + 3000;
-                      const { loadTossPayments } = await import('@tosspayments/sdk');
-                      const tossPayments = await loadTossPayments(
-                        import.meta.env.VITE_TOSS_CLIENT_KEY || 'test_ck_placeholder',
-                      );
-                      await tossPayments.requestPayment('카드', {
-                        amount: totalAmount,
-                        orderId: order.orderPaymentKey,
-                        orderName: checkoutData.title,
-                        customerName: checkoutForm.name,
-                        successUrl: window.location.origin,
-                        failUrl: window.location.origin,
-                      });
-                    } catch (err: unknown) {
-                      const tossErr = err as { code?: string; message?: string };
-                      if (btn) btn.innerHTML = `₩${((checkoutData?.price ?? 0) * (checkoutData?.qty ?? 1) + 3000).toLocaleString()} 결제하기`;
-                      if (tossErr?.code !== 'PAY_PROCESS_CANCELED' && tossErr?.code !== 'USER_CANCEL') {
-                        setPaymentStatus('failed');
-                        setPaymentError(tossErr?.message || '결제 처리 중 오류가 발생했습니다.');
-                      }
-                    }
-                  }}
+                  onClick={handlePay}
                   id="checkout-btn"
                   style={{ width: '100%', padding: '20px', borderRadius: '12px', background: 'linear-gradient(135deg, #C2507A, #7F77DD)', color: 'white', fontWeight: 800, fontSize: '18px', textAlign: 'center', transition: 'all 0.2s' }}>
                   ₩{(checkoutData.price * checkoutData.qty + 3000).toLocaleString()} 결제하기
@@ -2752,11 +2670,11 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
               </p>
               <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
                 <button
-                  onClick={() => { setActiveTab('MY PAGE'); setMyPageTab('ORDERS'); setCheckoutData(null); setPaymentStatus('idle'); setPaymentError(''); }}
+                  onClick={() => { setActiveTab('MY PAGE'); setMyPageTab('ORDERS'); resetCheckout(); }}
                   style={{ padding: '16px 32px', background: '#111', color: 'white', borderRadius: '12px', fontSize: '15px', fontWeight: 800, cursor: 'pointer', border: 'none' }}
                 >주문 내역 보기</button>
                 <button
-                  onClick={() => { setActiveTab('HOME'); setCheckoutData(null); setPaymentStatus('idle'); setPaymentError(''); }}
+                  onClick={() => { setActiveTab('HOME'); resetCheckout(); }}
                   style={{ padding: '16px 32px', background: 'var(--bg-white)', color: '#111', borderRadius: '12px', fontSize: '15px', fontWeight: 800, cursor: 'pointer', border: '1px solid var(--border)' }}
                 >홈으로</button>
               </div>

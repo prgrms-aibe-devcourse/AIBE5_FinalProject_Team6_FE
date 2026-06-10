@@ -9,6 +9,7 @@ export interface CheckoutData {
   qty: number
   option: string
   productId: number | null
+  accessTicket?: string | null
 }
 
 export interface CheckoutForm {
@@ -84,7 +85,7 @@ export function useCheckout(setActiveTab: (tab: string) => void) {
     try {
       const order = await createOrder(
         [{ productId: checkoutData.productId, quantity: checkoutData.qty }],
-        null,
+        checkoutData.accessTicket ?? null,
       )
       const totalAmount = checkoutData.price * checkoutData.qty + 3000
       const { loadTossPayments } = await import('@tosspayments/sdk')

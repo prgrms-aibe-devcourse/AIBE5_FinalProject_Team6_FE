@@ -203,7 +203,15 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
     handlePay, resetCheckout,
   } = useCheckout(setActiveTab);
 
-  const { queueActive, setQueueActive, queuePosition } = useQueue();
+  const { queueState, startQueue, resetQueue } = useQueue();
+
+  // 대기열 PROCESSING 전이 시 accessTicket을 checkoutData에 담아 결제 화면으로 이동
+  useEffect(() => {
+    if (queueState.phase === 'PROCESSING' && queueState.accessTicket && checkoutData) {
+      setCheckoutData({ ...checkoutData, accessTicket: queueState.accessTicket });
+      setActiveTab('CHECKOUT');
+    }
+  }, [queueState.phase, queueState.accessTicket]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-select artist board if role is ARTIST
   useEffect(() => {
@@ -1075,7 +1083,7 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
                 <span>Total</span>
                 <span>₩67,000</span>
               </div>
-              <button className="btn-primary" onClick={() => { setShowCart(false); setCheckoutData({ title: '여러 상품 (장바구니)', price: 61000, qty: 1, option: '다중 선택', productId: 1 }); setActiveTab('CHECKOUT'); }}>주문하기</button>
+              <button className="btn-primary" onClick={() => { setShowCart(false); setCheckoutData({ title: '여러 상품 (장바구니)', price: 61000, qty: 1, option: '다중 선택', productId: 1, accessTicket: null }); startQueue(1); setActiveTab('QUEUE_WAIT'); }}>주문하기</button>
             </div>
           </div>
         </div>
@@ -1957,7 +1965,7 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
                         setNotifications([...notifications, { id: Date.now(), title: '장바구니 추가', content: `${selectedProduct.title} 상품이 장바구니에 담겼습니다.`, time: '방금 전', isRead: false }]);
                         setShowCart(true); 
                       }} style={{ flex: 1, padding: '16px', borderRadius: '12px', border: '1px solid #C2507A', color: '#C2507A', fontWeight: 800, textAlign: 'center', cursor: 'pointer' }}>장바구니 담기</button>
-                      <button onClick={() => { setCheckoutData({ type: 'product', title: selectedProduct.title, price: selectedProduct.price, qty: productQty, option: productOption, productId: selectedProduct.numericId ?? null }); setActiveTab('CHECKOUT'); }} style={{ flex: 1, padding: '16px', borderRadius: '12px', background: 'linear-gradient(135deg, #C2507A, #7F77DD)', color: 'white', fontWeight: 800, textAlign: 'center', cursor: 'pointer' }}>바로 구매하기</button>
+                      <button onClick={() => { setCheckoutData({ type: 'product', title: selectedProduct.title, price: selectedProduct.price, qty: productQty, option: productOption, productId: selectedProduct.numericId ?? null, accessTicket: null }); startQueue(selectedProduct.numericId ?? 1); setActiveTab('QUEUE_WAIT'); }} style={{ flex: 1, padding: '16px', borderRadius: '12px', background: 'linear-gradient(135deg, #C2507A, #7F77DD)', color: 'white', fontWeight: 800, textAlign: 'center', cursor: 'pointer' }}>바로 구매하기</button>
                     </>
                   )}
                 </div>
@@ -2389,8 +2397,9 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
                     onClick={(e) => {
                       e.stopPropagation();
                       if (!isHotDeal && !isSoldOut) {
-                        setCheckoutData({ type: 'product', title: item.title, price: item.price, qty: 1, option: 'Version A', productId: item.numericId ?? null });
-                        setActiveTab('CHECKOUT');
+                        setCheckoutData({ type: 'product', title: item.title, price: item.price, qty: 1, option: 'Version A', productId: item.numericId ?? null, accessTicket: null });
+                        startQueue(item.numericId ?? 1);
+                        setActiveTab('QUEUE_WAIT');
                       }
                     }}
                     style={{
@@ -2459,6 +2468,39 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
 
 
       
+        {/* --- QUEUE WAIT --- */}
+        {activeTab === 'QUEUE_WAIT' && (
+          <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-cream)' }}>
+            <div style={{ textAlign: 'center', padding: '60px 40px', maxWidth: '440px', width: '100%' }}>
+              {queueState.phase === 'EXPIRED' ? (
+                <>
+                  <div style={{ fontSize: '48px', marginBottom: '24px' }}>⚠️</div>
+                  <h2 style={{ fontSize: '24px', fontWeight: 900, marginBottom: '12px' }}>대기열이 만료되었습니다</h2>
+                  <p style={{ color: 'var(--text-sub)', marginBottom: '32px' }}>다시 시도해 주세요.</p>
+                  <button onClick={() => { resetQueue(); setActiveTab('STORE'); setCheckoutData(null); }} style={{ padding: '14px 32px', background: '#111', color: 'white', borderRadius: '12px', fontWeight: 800, cursor: 'pointer', border: 'none' }}>스토어로 돌아가기</button>
+                </>
+              ) : (
+                <>
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ repeat: Infinity, duration: 1.2, ease: 'linear' }}
+                    style={{ width: '64px', height: '64px', border: '6px solid #EDE8E2', borderTopColor: '#C2507A', borderRadius: '50%', margin: '0 auto 32px' }}
+                  />
+                  <h2 style={{ fontSize: '24px', fontWeight: 900, marginBottom: '12px' }}>대기열 입장 중</h2>
+                  {queueState.position > 0 && (
+                    <p style={{ fontSize: '32px', fontWeight: 900, color: 'var(--point-rose)', marginBottom: '8px' }}>{queueState.position}번째</p>
+                  )}
+                  {queueState.estimatedWaitSec > 0 && (
+                    <p style={{ color: 'var(--text-sub)', marginBottom: '24px' }}>예상 대기 {Math.ceil(queueState.estimatedWaitSec / 60)}분</p>
+                  )}
+                  <p style={{ fontSize: '13px', color: 'var(--text-sub)' }}>순서가 되면 자동으로 결제 화면으로 이동합니다.</p>
+                  <button onClick={() => { resetQueue(); setActiveTab('STORE'); setCheckoutData(null); }} style={{ marginTop: '32px', padding: '12px 24px', background: 'none', color: 'var(--text-sub)', border: '1px solid var(--border)', borderRadius: '12px', fontWeight: 700, cursor: 'pointer' }}>취소하기</button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* --- CHECKOUT PAGE --- */}
         {activeTab === 'CHECKOUT' && checkoutData && (
           <div className="page-content reveal" style={{ maxWidth: '1200px', margin: '0 auto', paddingTop: '80px' }}>

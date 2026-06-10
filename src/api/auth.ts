@@ -27,6 +27,27 @@ export function getAuthHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
+/** JWT payload의 sub claim을 fanId로 추출. 서명 검증 없이 Base64 디코딩만 수행한다. */
+function extractFanIdFromJwt(token: string): string | null {
+  try {
+    const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    const payload = JSON.parse(atob(b64)) as { sub?: unknown }
+    return payload.sub != null ? String(payload.sub) : null
+  } catch {
+    return null
+  }
+}
+
+/** X-Fan-Id 헤더 값. JWT sub claim → 없으면 localStorage 'fd_fan_id' → 없으면 '1'(로컬 폴백). */
+export function getFanIdHeader(): string {
+  const token = getToken()
+  if (token) {
+    const id = extractFanIdFromJwt(token)
+    if (id) return id
+  }
+  return localStorage.getItem('fd_fan_id') ?? '1'
+}
+
 export async function login(email: string, password: string): Promise<AuthToken> {
   const res = await fetch(`${BASE}/login`, {
     method: 'POST',

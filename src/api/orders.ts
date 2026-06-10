@@ -1,4 +1,4 @@
-import { getAuthHeaders } from './auth'
+import { getAuthHeaders, getFanIdHeader } from './auth'
 
 const BASE = '/api/v1/orders'
 
@@ -19,7 +19,7 @@ export async function createOrder(
 ): Promise<CreateOrderResponse> {
   const res = await fetch(BASE, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Fan-Id': '1', ...getAuthHeaders() },
+    headers: { 'Content-Type': 'application/json', 'X-Fan-Id': getFanIdHeader(), ...getAuthHeaders() },
     body: JSON.stringify({ accessTicket, items }),
   })
   if (!res.ok) throw new Error(`createOrder failed: ${res.status}`)

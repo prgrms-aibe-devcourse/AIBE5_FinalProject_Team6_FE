@@ -1,4 +1,4 @@
-import { getAuthHeaders } from './auth'
+import { getAuthHeaders, getFanIdHeader } from './auth'
 
 const BASE = '/api/v1/queue'
 
@@ -25,7 +25,7 @@ export interface QueueStreamEvent {
 }
 
 function queueHeaders(): Record<string, string> {
-  return { ...getAuthHeaders(), 'X-Fan-Id': '1' }
+  return { ...getAuthHeaders(), 'X-Fan-Id': getFanIdHeader() }
 }
 
 export async function joinQueue(productId: number): Promise<QueueJoinResponse> {

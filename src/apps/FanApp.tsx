@@ -1086,7 +1086,7 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
                 <span>Total</span>
                 <span>₩67,000</span>
               </div>
-              <button className="btn-primary" onClick={() => { setShowCart(false); setCheckoutData({ title: '여러 상품 (장바구니)', price: 61000, qty: 1, option: '다중 선택', productId: 1, accessTicket: null }); startQueue(1); setActiveTab('QUEUE_WAIT'); }}>주문하기</button>
+              <button className="btn-primary" onClick={() => { setShowCart(false); setCheckoutData({ title: '여러 상품 (장바구니)', price: 61000, qty: 1, option: '다중 선택', productId: 1, accessTicket: null }); setActiveTab('CHECKOUT'); }}>주문하기</button>
             </div>
           </div>
         </div>

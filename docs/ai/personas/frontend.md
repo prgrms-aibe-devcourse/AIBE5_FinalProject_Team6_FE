@@ -57,6 +57,44 @@ npx tsc --noEmit
 
 ---
 
+## 결제 SDK — Toss Payments v1
+
+### 패키지
+```
+@tosspayments/sdk   (v1 — NOT v2)
+```
+
+### 표준 플로우
+```
+createOrder (POST /api/v1/orders)
+  └─ 응답: { orderId, orderPaymentKey, status: RESERVED }
+  └─ loadTossPayments(import.meta.env.VITE_TOSS_CLIENT_KEY)
+      └─ tossPayments.requestPayment('카드', {
+           amount, orderId, orderName,
+           successUrl: window.location.origin + '?...',
+           failUrl:    window.location.origin + '?...'
+         })
+  └─ Toss 결제창 → redirect (paymentKey, orderId, amount 쿼리)
+  └─ confirmPayment (POST /api/v1/payments/toss/confirm)
+       body: { tossPaymentKey, orderId, amount }
+```
+
+### 환경변수
+| 변수 | 설명 |
+| --- | --- |
+| `VITE_TOSS_CLIENT_KEY` | Toss 클라이언트 키 (`.env` + `.env.example` 동기화 필수) |
+
+### 금지 패턴
+- v2 API (`tossPayments.payment({ customerKey })`) — **절대 사용 금지**
+- FE에서 webhook 엔드포인트 직접 호출 — **절대 사용 금지** (webhook은 PG→서버 전용)
+- `orderPaymentKey`와 `tossPaymentKey` 필드명 혼용
+
+### role 복원 (Toss redirect 후)
+Toss 리다이렉트 시 React state가 초기화됨 → `localStorage('fd_role')`로 복원.  
+`App.tsx` 초기화 로직에서 `?paymentKey` 파라미터 감지 시 localStorage에서 role을 읽는다.
+
+---
+
 ## BE API 연동 규칙
 
 - **Base URL**: Vite proxy → `/api/v1/*` → `http://localhost:8080`

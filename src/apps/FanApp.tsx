@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Plus, Search, Calendar, Heart, Share2, Filter, Image as ImageIcon, Smile, MoreHorizontal, MessageSquare, Video, Radio, Bell, Pin, Play, Youtube, ChevronLeft, ChevronRight, X, User, ShoppingBag, LogOut, Ticket, Settings, ThumbsUp, CheckCircle2, Gift } from 'lucide-react';
+import { useCheckout } from '../hooks/useCheckout';
+import { useQueue } from '../hooks/useQueue';
 
 
 // --- NEW MOCK DATA ---
@@ -17,14 +19,14 @@ const STORE_CATEGORIES = ['전체', '포토카드', '굿즈', '앨범', '의류'
 const SORT_OPTIONS = ['마감임박순', '최신등록순', '낮은가격순', '높은가격순', '인기순'];
 
 const DUMMY_STORE_ITEMS = [
-    { id: 'S1', artistId: 'starlight', artist: '별빛스튜디오', category: '포토카드', title: '한정 포토북 3D 에디션', price: 49000, stock: 40, maxStock: 200, status: 'OPEN_TODAY', openDate: new Date(new Date().setHours(20, 0, 0, 0)), createdAt: new Date('2025-05-10'), sales: 1540 },
-    { id: 'S2', artistId: 'moonlight', artist: '문라이트', category: '굿즈', title: '1주년 기념 아크릴 스탠드', price: 29000, stock: 275, maxStock: 500, status: 'ON_SALE', createdAt: new Date('2025-05-01'), sales: 2100 },
-    { id: 'S3', artistId: 'neonbuzz', artist: '네온버즈', category: '앨범', title: '데뷔 앨범 한정반', price: 35000, stock: 0, maxStock: 100, status: 'SOLD_OUT', createdAt: new Date('2025-04-15'), sales: 5000 },
-    { id: 'S4', artistId: 'starlight', artist: '별빛스튜디오', category: '굿즈', title: '공식 후드 티셔츠', price: 65000, stock: 120, maxStock: 171, status: 'ON_SALE', createdAt: new Date('2025-05-05'), sales: 850 },
-    { id: 'S5', artistId: 'moonlight', artist: '문라이트', category: '포토카드', title: '여름 한정 포토카드 SET', price: 22000, stock: 15, maxStock: 214, status: 'OPEN_TOMORROW', openDate: new Date(new Date().setDate(new Date().getDate() + 1)), createdAt: new Date('2025-05-12'), sales: 120 },
-    { id: 'S6', artistId: 'starlight', artist: '별빛스튜디오', category: '앨범', title: '2nd 미니앨범 ECHO', price: 18000, stock: 200, maxStock: 500, status: 'ON_SALE', createdAt: new Date('2025-05-02'), sales: 3000 },
-    { id: 'S7', artistId: 'prism', artist: '프리즘', category: '키링', title: '홀로그램 아크릴 키링', price: 12000, stock: 50, maxStock: 166, status: 'OPEN_WEEK', openDate: new Date(new Date().setDate(new Date().getDate() + 3)), createdAt: new Date('2025-05-14'), sales: 50 },
-    { id: 'S8', artistId: 'neonbuzz', artist: '네온버즈', category: '굿즈', title: '형광 응원봉', price: 45000, stock: 300, maxStock: 375, status: 'ON_SALE', createdAt: new Date('2025-05-10'), sales: 700 }
+    { id: 'S1', numericId: 1, artistId: 'starlight', artist: '별빛스튜디오', category: '포토카드', title: '한정 포토북 3D 에디션', price: 49000, stock: 40, maxStock: 200, status: 'OPEN_TODAY', openDate: new Date(new Date().setHours(20, 0, 0, 0)), createdAt: new Date('2025-05-10'), sales: 1540 },
+    { id: 'S2', numericId: 2, artistId: 'moonlight', artist: '문라이트', category: '굿즈', title: '1주년 기념 아크릴 스탠드', price: 29000, stock: 275, maxStock: 500, status: 'ON_SALE', createdAt: new Date('2025-05-01'), sales: 2100 },
+    { id: 'S3', numericId: 3, artistId: 'neonbuzz', artist: '네온버즈', category: '앨범', title: '데뷔 앨범 한정반', price: 35000, stock: 0, maxStock: 100, status: 'SOLD_OUT', createdAt: new Date('2025-04-15'), sales: 5000 },
+    { id: 'S4', numericId: 4, artistId: 'starlight', artist: '별빛스튜디오', category: '굿즈', title: '공식 후드 티셔츠', price: 65000, stock: 120, maxStock: 171, status: 'ON_SALE', createdAt: new Date('2025-05-05'), sales: 850 },
+    { id: 'S5', numericId: 5, artistId: 'moonlight', artist: '문라이트', category: '포토카드', title: '여름 한정 포토카드 SET', price: 22000, stock: 15, maxStock: 214, status: 'OPEN_TOMORROW', openDate: new Date(new Date().setDate(new Date().getDate() + 1)), createdAt: new Date('2025-05-12'), sales: 120 },
+    { id: 'S6', numericId: 6, artistId: 'starlight', artist: '별빛스튜디오', category: '앨범', title: '2nd 미니앨범 ECHO', price: 18000, stock: 200, maxStock: 500, status: 'ON_SALE', createdAt: new Date('2025-05-02'), sales: 3000 },
+    { id: 'S7', numericId: 7, artistId: 'prism', artist: '프리즘', category: '키링', title: '홀로그램 아크릴 키링', price: 12000, stock: 50, maxStock: 166, status: 'OPEN_WEEK', openDate: new Date(new Date().setDate(new Date().getDate() + 3)), createdAt: new Date('2025-05-14'), sales: 50 },
+    { id: 'S8', numericId: 8, artistId: 'neonbuzz', artist: '네온버즈', category: '굿즈', title: '형광 응원봉', price: 45000, stock: 300, maxStock: 375, status: 'ON_SALE', createdAt: new Date('2025-05-10'), sales: 700 }
 ];
 
 function formatTimeLeft(targetDate: Date | null | undefined): string {
@@ -193,6 +195,27 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
 
   const [showArtistSearch, setShowArtistSearch] = useState(false);
   
+  const {
+    checkoutData, setCheckoutData,
+    checkoutForm, setCheckoutForm,
+    payMethod, setPayMethod,
+    paymentStatus, paymentError,
+    handlePay, resetCheckout,
+  } = useCheckout(setActiveTab);
+
+  const { queueState, startQueue, resetQueue } = useQueue();
+
+  // 대기열 PROCESSING 전이 시 accessTicket을 checkoutData에 담아 결제 화면으로 이동
+  useEffect(() => {
+    if (queueState.phase === 'PROCESSING' && queueState.accessTicket && checkoutData) {
+      const ticket = queueState.accessTicket;
+      setTimeout(() => {
+        setCheckoutData(prev => prev ? { ...prev, accessTicket: ticket } : prev);
+        setActiveTab('CHECKOUT');
+      }, 0);
+    }
+  }, [queueState.phase, queueState.accessTicket]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Auto-select artist board if role is ARTIST
   useEffect(() => {
     if (role === 'ARTIST' && !selectedArtist) {
@@ -209,12 +232,9 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
   const [showCart, setShowCart] = useState(false);
   const [showNotifications] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
-  
+
   const [myPageTab, setMyPageTab] = useState('OVERVIEW');
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
-  const [queueActive, setQueueActive] = useState(false);
-  const [queuePosition, setQueuePosition] = useState(247);
-  const [, setSeatMapUnlocked] = useState(false);
 
   // New Filter & Sort States
   const [storeArtist, setStoreArtist] = useState('ALL');
@@ -247,10 +267,6 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
   const [productOption, setProductOption] = useState('Version A');
   const [showOptionDropdown, setShowOptionDropdown] = useState(false);
   const [productTab, setProductTab] = useState('DETAIL'); // DETAIL | DELIVERY | REVIEW
-
-  const [checkoutData, setCheckoutData] = useState<any>(null);
-  const [checkoutForm, setCheckoutForm] = useState({ name: '', phone1: '010', phone2: '', phone3: '', zipcode: '', req: '부재시 문앞에 놓아주세요', defaultAddr: false });
-  const [payMethod, setPayMethod] = useState('toss');
 
   // Rank Game State (Removed as per user request)
   
@@ -371,22 +387,6 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
     };
   }, [activeTab, selectedArtist, boardTab, myPageTab, storeArtist, storePage, storeSearch]);
 
-  // Queue countdown effect
-  useEffect(() => {
-    if (queueActive && queuePosition > 0) {
-      const timer = setTimeout(() => {
-        setQueuePosition(p => p > 0 ? p - 1 : 0);
-      }, 50); // fast for demo
-      return () => clearTimeout(timer);
-    }
-    if (queueActive && queuePosition === 0) {
-      const finishTimer = setTimeout(() => {
-        setQueueActive(false);
-        setSeatMapUnlocked(true);
-      }, 500);
-      return () => clearTimeout(finishTimer);
-    }
-  }, [queueActive, queuePosition]);
 
   if (role === 'ARTIST' && !isArtistAuthorized) {
     return (
@@ -1086,7 +1086,7 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
                 <span>Total</span>
                 <span>₩67,000</span>
               </div>
-              <button className="btn-primary" onClick={() => { setShowCart(false); setCheckoutData({ title: '여러 상품 (장바구니)', price: 61000, qty: 1, option: '다중 선택' }); setActiveTab('CHECKOUT'); }}>주문하기</button>
+              <button className="btn-primary" onClick={() => { setShowCart(false); setCheckoutData({ title: '여러 상품 (장바구니)', price: 61000, qty: 1, option: '다중 선택', productId: 1, accessTicket: null }); setActiveTab('CHECKOUT'); }}>주문하기</button>
             </div>
           </div>
         </div>
@@ -1968,7 +1968,7 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
                         setNotifications([...notifications, { id: Date.now(), title: '장바구니 추가', content: `${selectedProduct.title} 상품이 장바구니에 담겼습니다.`, time: '방금 전', isRead: false }]);
                         setShowCart(true); 
                       }} style={{ flex: 1, padding: '16px', borderRadius: '12px', border: '1px solid #C2507A', color: '#C2507A', fontWeight: 800, textAlign: 'center', cursor: 'pointer' }}>장바구니 담기</button>
-                      <button onClick={() => { setCheckoutData({ type: 'product', title: selectedProduct.title, price: selectedProduct.price, qty: productQty, option: productOption }); setActiveTab('CHECKOUT'); }} style={{ flex: 1, padding: '16px', borderRadius: '12px', background: 'linear-gradient(135deg, #C2507A, #7F77DD)', color: 'white', fontWeight: 800, textAlign: 'center', cursor: 'pointer' }}>바로 구매하기</button>
+                      <button onClick={() => { setCheckoutData({ type: 'product', title: selectedProduct.title, price: selectedProduct.price, qty: productQty, option: productOption, productId: selectedProduct.numericId ?? null, accessTicket: null }); startQueue(selectedProduct.numericId ?? 1); setActiveTab('QUEUE_WAIT'); }} style={{ flex: 1, padding: '16px', borderRadius: '12px', background: 'linear-gradient(135deg, #C2507A, #7F77DD)', color: 'white', fontWeight: 800, textAlign: 'center', cursor: 'pointer' }}>바로 구매하기</button>
                     </>
                   )}
                 </div>
@@ -2400,8 +2400,9 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
                     onClick={(e) => {
                       e.stopPropagation();
                       if (!isHotDeal && !isSoldOut) {
-                        setCheckoutData({ type: 'product', title: item.title, price: item.price, qty: 1, option: 'Version A' });
-                        setActiveTab('CHECKOUT');
+                        setCheckoutData({ type: 'product', title: item.title, price: item.price, qty: 1, option: 'Version A', productId: item.numericId ?? null, accessTicket: null });
+                        startQueue(item.numericId ?? 1);
+                        setActiveTab('QUEUE_WAIT');
                       }
                     }}
                     style={{
@@ -2470,6 +2471,39 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
 
 
       
+        {/* --- QUEUE WAIT --- */}
+        {activeTab === 'QUEUE_WAIT' && (
+          <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-cream)' }}>
+            <div style={{ textAlign: 'center', padding: '60px 40px', maxWidth: '440px', width: '100%' }}>
+              {queueState.phase === 'EXPIRED' ? (
+                <>
+                  <div style={{ fontSize: '48px', marginBottom: '24px' }}>⚠️</div>
+                  <h2 style={{ fontSize: '24px', fontWeight: 900, marginBottom: '12px' }}>대기열이 만료되었습니다</h2>
+                  <p style={{ color: 'var(--text-sub)', marginBottom: '32px' }}>다시 시도해 주세요.</p>
+                  <button onClick={() => { resetQueue(); setActiveTab('STORE'); setCheckoutData(null); }} style={{ padding: '14px 32px', background: '#111', color: 'white', borderRadius: '12px', fontWeight: 800, cursor: 'pointer', border: 'none' }}>스토어로 돌아가기</button>
+                </>
+              ) : (
+                <>
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ repeat: Infinity, duration: 1.2, ease: 'linear' }}
+                    style={{ width: '64px', height: '64px', border: '6px solid #EDE8E2', borderTopColor: '#C2507A', borderRadius: '50%', margin: '0 auto 32px' }}
+                  />
+                  <h2 style={{ fontSize: '24px', fontWeight: 900, marginBottom: '12px' }}>대기열 입장 중</h2>
+                  {queueState.position > 0 && (
+                    <p style={{ fontSize: '32px', fontWeight: 900, color: 'var(--point-rose)', marginBottom: '8px' }}>{queueState.position}번째</p>
+                  )}
+                  {queueState.estimatedWaitSec > 0 && (
+                    <p style={{ color: 'var(--text-sub)', marginBottom: '24px' }}>예상 대기 {Math.ceil(queueState.estimatedWaitSec / 60)}분</p>
+                  )}
+                  <p style={{ fontSize: '13px', color: 'var(--text-sub)' }}>순서가 되면 자동으로 결제 화면으로 이동합니다.</p>
+                  <button onClick={() => { resetQueue(); setActiveTab('STORE'); setCheckoutData(null); }} style={{ marginTop: '32px', padding: '12px 24px', background: 'none', color: 'var(--text-sub)', border: '1px solid var(--border)', borderRadius: '12px', fontWeight: 700, cursor: 'pointer' }}>취소하기</button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* --- CHECKOUT PAGE --- */}
         {activeTab === 'CHECKOUT' && checkoutData && (
           <div className="page-content reveal" style={{ maxWidth: '1200px', margin: '0 auto', paddingTop: '80px' }}>
@@ -2649,20 +2683,13 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
                   <span>₩{(checkoutData.price * checkoutData.qty + 3000).toLocaleString()}</span>
                 </div>
 
-                <button 
-                  onClick={() => {
-                     if (!checkoutForm.name || !checkoutForm.phone1 || !checkoutForm.zipcode) {
-                       alert('필수 정보를 모두 입력해주세요.');
-                       return;
-                     }
-                     // Spinner simulator
-                     const btn = document.getElementById('checkout-btn');
-                     if (btn) btn.innerHTML = '결제 처리 중... ⏳';
-                     setTimeout(() => {
-                       alert('결제가 완료되었습니다!');
-                       setActiveTab('HOME');
-                     }, 1500);
-                  }}
+                {paymentStatus === 'failed' && paymentError && (
+                  <div style={{ marginBottom: '16px', padding: '12px 16px', background: '#FFF0F3', border: '1px solid #FFC1CC', borderRadius: '8px', color: '#C0392B', fontSize: '14px', fontWeight: 600 }}>
+                    {paymentError}
+                  </div>
+                )}
+                <button
+                  onClick={handlePay}
                   id="checkout-btn"
                   style={{ width: '100%', padding: '20px', borderRadius: '12px', background: 'linear-gradient(135deg, #C2507A, #7F77DD)', color: 'white', fontWeight: 800, fontSize: '18px', textAlign: 'center', transition: 'all 0.2s' }}>
                   ₩{(checkoutData.price * checkoutData.qty + 3000).toLocaleString()} 결제하기
@@ -2672,6 +2699,33 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
           </div>
         )}
 
+
+        {/* --- ORDER COMPLETE --- */}
+        {activeTab === 'ORDER_COMPLETE' && (
+          <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-cream)' }}>
+            <motion.div
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              style={{ textAlign: 'center', padding: '60px 40px', maxWidth: '480px', width: '100%' }}
+            >
+              <CheckCircle2 size={72} color="var(--point-rose)" style={{ marginBottom: '28px' }} />
+              <h2 style={{ fontSize: '30px', fontWeight: 900, marginBottom: '12px', letterSpacing: '-0.5px' }}>주문이 완료되었습니다!</h2>
+              <p style={{ fontSize: '15px', color: 'var(--text-sub)', fontWeight: 500, marginBottom: '48px', lineHeight: 1.6 }}>
+                결제가 정상적으로 처리되었습니다.<br />마이페이지에서 주문 내역을 확인하세요.
+              </p>
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                <button
+                  onClick={() => { setActiveTab('MY PAGE'); setMyPageTab('ORDERS'); resetCheckout(); }}
+                  style={{ padding: '16px 32px', background: '#111', color: 'white', borderRadius: '12px', fontSize: '15px', fontWeight: 800, cursor: 'pointer', border: 'none' }}
+                >주문 내역 보기</button>
+                <button
+                  onClick={() => { setActiveTab('HOME'); resetCheckout(); }}
+                  style={{ padding: '16px 32px', background: 'var(--bg-white)', color: '#111', borderRadius: '12px', fontSize: '15px', fontWeight: 800, cursor: 'pointer', border: '1px solid var(--border)' }}
+                >홈으로</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
 
         {/* --- MY PAGE --- */}
       {!selectedArtist && activeTab === 'MY PAGE' && (

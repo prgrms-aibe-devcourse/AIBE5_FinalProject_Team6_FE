@@ -162,7 +162,7 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
     handlePay, resetCheckout,
   } = useCheckout(setActiveTab);
 
-  const { queueState, startQueue, resetQueue } = useQueue();
+  const { queueState, resetQueue } = useQueue();
 
   // 대기열 PROCESSING 전이 시 accessTicket을 checkoutData에 담아 결제 화면으로 이동
   useEffect(() => {

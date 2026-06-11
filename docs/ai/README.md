@@ -24,6 +24,7 @@ PR/이슈 작업 시 추가:
 | [personas/frontend.md](personas/frontend.md) | FE 담당 범위·API 규칙·체크리스트 |
 | [workflows/auto-pr.md](workflows/auto-pr.md) | 이슈 생성 → 구현 → PR 자동화 |
 | [workflows/fe-checklist.md](workflows/fe-checklist.md) | TypeScript·컴포넌트·API·빌드 품질 체크 |
+| [be-integration.md](be-integration.md) | BE 연동 작업 계획 — Mock 제거 Phase 1~4 · 신규 API 목록 · 블로커 |
 
 ---
 

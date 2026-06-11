@@ -17,3 +17,4 @@
 | `server.ts` · `.env*` | `@docs/ai/SHARED.md` `@docs/ai/personas/frontend.md` |
 | PR/이슈 작성 | `@docs/ai/workflows/auto-pr.md` 추가 로드 |
 | 컴포넌트 분리·품질 점검 | `@docs/ai/workflows/fe-checklist.md` 추가 로드 |
+| **BE 연동 작업** (`src/api/**` · `src/types/**` · mock 제거 · Phase 1~4) | `@docs/ai/SHARED.md` `@docs/ai/personas/frontend.md` `@docs/ai/be-integration.md` + `@FANDROPS_BE/docs/api/api-contract.md` |

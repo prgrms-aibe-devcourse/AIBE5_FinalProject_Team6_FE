@@ -9,13 +9,14 @@ export interface PaymentConfirmResponse {
 
 export async function confirmPayment(
   tossPaymentKey: string,
-  orderId: string,
+  orderId: number,
+  orderPaymentKey: string,
   amount: number,
 ): Promise<PaymentConfirmResponse> {
   const res = await fetch(`${BASE}/confirm`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-    body: JSON.stringify({ tossPaymentKey, orderId, amount }),
+    body: JSON.stringify({ tossPaymentKey, orderId, orderPaymentKey, amount }),
   })
   if (!res.ok) throw new Error(`confirmPayment failed: ${res.status}`)
   const body = await res.json()

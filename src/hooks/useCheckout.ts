@@ -45,17 +45,20 @@ export function useCheckout(setActiveTab: (tab: string) => void) {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const paymentKey = params.get('paymentKey')
-    const orderId = params.get('orderId')
+    // Toss redirects with orderId = the orderPaymentKey string used at payment init
+    const tossOrderId = params.get('orderId')
     const amount = params.get('amount')
     const code = params.get('code')
     const message = params.get('message')
 
-    if (paymentKey && orderId && amount) {
+    if (paymentKey && tossOrderId && amount) {
       window.history.replaceState({}, '', window.location.pathname)
+      const storedOrderId = Number(localStorage.getItem('fd_pending_order_id'))
+      localStorage.removeItem('fd_pending_order_id')
       setTimeout(() => {
         setPaymentStatus('processing')
         setActiveTab('CHECKOUT')
-        confirmPayment(paymentKey, orderId, Number(amount))
+        confirmPayment(paymentKey, storedOrderId, tossOrderId, Number(amount))
           .then(() => {
             setPaymentStatus('success')
             setActiveTab('ORDER_COMPLETE')
@@ -91,6 +94,7 @@ export function useCheckout(setActiveTab: (tab: string) => void) {
         [{ productId: checkoutData.productId, quantity: checkoutData.qty }],
         checkoutData.accessTicket ?? null,
       )
+      localStorage.setItem('fd_pending_order_id', order.orderId)
       const totalAmount = checkoutData.price * checkoutData.qty + 3000
       const { loadTossPayments } = await import('@tosspayments/sdk')
       const tossPayments = await loadTossPayments(

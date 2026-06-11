@@ -5,7 +5,7 @@ const BASE = '/api/v1/products'
 
 export async function getProducts(
   type = 'regular',
-  cursor?: number,
+  cursor?: string,
   size = 20,
 ): Promise<ProductListResponse> {
   const params = new URLSearchParams({ type, size: String(size) })

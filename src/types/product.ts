@@ -9,7 +9,7 @@ export interface ProductResponse {
 }
 
 export interface ProductListResponse {
-  products: ProductResponse[]
-  nextCursor: number | null
-  hasNext: boolean
+  items: ProductResponse[]
+  nextCursor: string | null
+  hasMore: boolean
 }

@@ -204,7 +204,7 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
   const [isStoreSortDropdownOpen, setIsStoreSortDropdownOpen] = useState(false);
   const [storeBannerIdx, setStoreBannerIdx] = useState(0);
   const [storeItems, setStoreItems] = useState<ProductResponse[]>([]);
-  const [storeNextCursor, setStoreNextCursor] = useState<number | null>(null);
+  const [storeNextCursor, setStoreNextCursor] = useState<string | null>(null);
   const [storeHasMore, setStoreHasMore] = useState(false);
   const [storeLoading, setStoreLoading] = useState(true);
   const [banners, setBanners] = useState<BannerResponse[]>([]);
@@ -349,9 +349,9 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
   useEffect(() => {
     getProducts('regular')
       .then(res => {
-        setStoreItems(res.products);
+        setStoreItems(res.items ?? []);
         setStoreNextCursor(res.nextCursor ?? null);
-        setStoreHasMore(res.hasNext);
+        setStoreHasMore(res.hasMore ?? false);
       })
       .catch(console.error)
       .finally(() => setStoreLoading(false));
@@ -380,9 +380,9 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
     setStoreLoading(true);
     getProducts('regular', storeNextCursor)
       .then(res => {
-        setStoreItems(prev => [...prev, ...res.products]);
+        setStoreItems(prev => [...prev, ...(res.items ?? [])]);
         setStoreNextCursor(res.nextCursor ?? null);
-        setStoreHasMore(res.hasNext);
+        setStoreHasMore(res.hasMore ?? false);
       })
       .catch(console.error)
       .finally(() => setStoreLoading(false));

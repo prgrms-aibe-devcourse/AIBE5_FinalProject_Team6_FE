@@ -1989,8 +1989,7 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
                       <button
                         onClick={() => {
                           setCheckoutData({ type: 'product', title: selectedProduct.name, price: Number(selectedProduct.price), qty: productQty, option: productOption, productId: selectedProduct.id, accessTicket: null });
-                          startQueue(selectedProduct.id);
-                          setActiveTab('QUEUE_WAIT');
+                          setActiveTab('CHECKOUT');
                         }}
                         style={{ flex: 1, padding: '16px', borderRadius: '12px', background: 'linear-gradient(135deg, #C2507A, #7F77DD)', color: 'white', fontWeight: 800, textAlign: 'center', cursor: 'pointer' }}
                       >바로 구매하기</button>
@@ -2327,8 +2326,7 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
                       e.stopPropagation();
                       if (!isSoldOut) {
                         setCheckoutData({ type: 'product', title: item.name, price: Number(item.price), qty: 1, option: 'Version A', productId: item.id, accessTicket: null });
-                        startQueue(item.id);
-                        setActiveTab('QUEUE_WAIT');
+                        setActiveTab('CHECKOUT');
                       }
                     }}
                     style={{ background: isSoldOut ? '#ccc' : '#111', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 700, cursor: isSoldOut ? 'not-allowed' : 'pointer' }}

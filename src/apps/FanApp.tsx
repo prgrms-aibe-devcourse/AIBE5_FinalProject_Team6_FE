@@ -451,7 +451,15 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const isTabMounted = useRef(false);
   useEffect(() => {
     if (!isTabMounted.current) { isTabMounted.current = true; return; }
-    if (TRANSIENT_TABS.has(activeTab)) return;
+    if (TRANSIENT_TABS.has(activeTab)) {
+      // CHECKOUT/QUEUE_WAIT 진입 시 상품 URL을 history에 push
+      // → back 누르면 상품 상세로 복귀 (이전 history 항목 = 상품 URL)
+      if ((activeTab === 'CHECKOUT' || activeTab === 'QUEUE_WAIT') && selectedProduct) {
+        const params: Record<string, string> = { tab: 'store', productId: String(selectedProduct.id) };
+        setSearchParams(params, { replace: false });
+      }
+      return;
+    }
     const desiredUrlTab = TAB_TO_URL[activeTab] ?? 'home';
     if ((searchParams.get('tab') ?? 'home') === desiredUrlTab) return;
     const params: Record<string, string> = { tab: desiredUrlTab };

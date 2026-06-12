@@ -1,4 +1,5 @@
 import { getAuthHeaders, getFanIdHeader } from './auth'
+import { fetchWithAuth } from '../lib/fetchWithAuth'
 
 const BASE = '/api/v1/orders'
 
@@ -17,7 +18,7 @@ export async function createOrder(
   items: OrderItem[],
   accessTicket: string | null,
 ): Promise<CreateOrderResponse> {
-  const res = await fetch(BASE, {
+  const res = await fetchWithAuth(BASE, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Fan-Id': getFanIdHeader(), ...getAuthHeaders() },
     body: JSON.stringify({ accessTicket, items }),

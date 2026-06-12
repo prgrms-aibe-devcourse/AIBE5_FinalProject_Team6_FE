@@ -1,5 +1,6 @@
 import type { CartResponse } from '../types/cart'
 import { getAuthHeaders, getFanIdHeader } from './auth'
+import { fetchWithAuth } from '../lib/fetchWithAuth'
 
 const BASE = '/api/v1/cart'
 
@@ -8,14 +9,14 @@ function cartHeaders(extra?: Record<string, string>): Record<string, string> {
 }
 
 export async function getCart(): Promise<CartResponse> {
-  const res = await fetch(BASE, { headers: cartHeaders() })
+  const res = await fetchWithAuth(BASE, { headers: cartHeaders() })
   if (!res.ok) throw new Error(`getCart failed: ${res.status}`)
   const body = await res.json()
   return body.data as CartResponse
 }
 
 export async function addCartItem(productId: number, quantity: number): Promise<void> {
-  const res = await fetch(`${BASE}/items`, {
+  const res = await fetchWithAuth(`${BASE}/items`, {
     method: 'POST',
     headers: cartHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ productId, quantity }),
@@ -24,7 +25,7 @@ export async function addCartItem(productId: number, quantity: number): Promise<
 }
 
 export async function updateCartItem(cartItemId: number, quantity: number): Promise<void> {
-  const res = await fetch(`${BASE}/items/${cartItemId}`, {
+  const res = await fetchWithAuth(`${BASE}/items/${cartItemId}`, {
     method: 'PATCH',
     headers: cartHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ quantity }),
@@ -33,7 +34,7 @@ export async function updateCartItem(cartItemId: number, quantity: number): Prom
 }
 
 export async function removeCartItem(cartItemId: number): Promise<void> {
-  const res = await fetch(`${BASE}/items/${cartItemId}`, {
+  const res = await fetchWithAuth(`${BASE}/items/${cartItemId}`, {
     method: 'DELETE',
     headers: cartHeaders(),
   })

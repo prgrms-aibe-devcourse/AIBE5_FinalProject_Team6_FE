@@ -1,4 +1,5 @@
 import { getAuthHeaders, getFanIdHeader } from './auth'
+import { fetchWithAuth } from '../lib/fetchWithAuth'
 
 const BASE = '/api/v1/queue'
 
@@ -29,7 +30,7 @@ function queueHeaders(): Record<string, string> {
 }
 
 export async function joinQueue(productId: number): Promise<QueueJoinResponse> {
-  const res = await fetch(`${BASE}/join/${productId}`, {
+  const res = await fetchWithAuth(`${BASE}/join/${productId}`, {
     method: 'POST',
     headers: queueHeaders(),
   })
@@ -51,7 +52,7 @@ export function subscribeQueueStream(
 
   async function connect() {
     try {
-      const res = await fetch(`${BASE}/stream/${productId}`, {
+      const res = await fetchWithAuth(`${BASE}/stream/${productId}`, {
         headers: { Accept: 'text/event-stream', ...queueHeaders() },
         signal: controller.signal,
       })
@@ -83,7 +84,7 @@ export function subscribeQueueStream(
 }
 
 export async function getQueueStatus(productId: number): Promise<QueueStatusResponse> {
-  const res = await fetch(`${BASE}/status?productId=${productId}`, {
+  const res = await fetchWithAuth(`${BASE}/status?productId=${productId}`, {
     headers: queueHeaders(),
   })
   if (!res.ok) throw new Error(`getQueueStatus failed: ${res.status}`)
@@ -92,7 +93,7 @@ export async function getQueueStatus(productId: number): Promise<QueueStatusResp
 }
 
 export async function exitQueue(productId: number): Promise<void> {
-  const res = await fetch(`${BASE}/exit/${productId}`, {
+  const res = await fetchWithAuth(`${BASE}/exit/${productId}`, {
     method: 'DELETE',
     headers: queueHeaders(),
   })

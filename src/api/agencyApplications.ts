@@ -1,5 +1,6 @@
 import type { AgencyApplication, ApplicationStatus } from '../types/partnership'
 import { getAuthHeaders } from './auth'
+import { fetchWithAuth } from '../lib/fetchWithAuth'
 
 const B2B_BASE = '/api/v1/b2b'
 const ADMIN_BASE = '/api/v1/admin'
@@ -50,7 +51,7 @@ function mapApplication(be: BeApplicationResponse): AgencyApplication {
 }
 
 export async function applyAgency(req: ApplyAgencyRequest): Promise<AgencyApplication> {
-  const res = await fetch(`${B2B_BASE}/apply`, {
+  const res = await fetchWithAuth(`${B2B_BASE}/apply`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify(req),
@@ -65,7 +66,7 @@ export async function getAdminApplications(
 ): Promise<AgencyApplication[]> {
   const params = new URLSearchParams()
   if (status && status !== 'ALL') params.set('status', status)
-  const res = await fetch(`${ADMIN_BASE}/artist-applications?${params}`, {
+  const res = await fetchWithAuth(`${ADMIN_BASE}/artist-applications?${params}`, {
     headers: getAuthHeaders(),
   })
   if (!res.ok) throw new Error(`getAdminApplications failed: ${res.status}`)
@@ -78,7 +79,7 @@ export async function reviewApplication(
   status: 'APPROVED' | 'REJECTED',
   rejectReason?: string,
 ): Promise<void> {
-  const res = await fetch(`${ADMIN_BASE}/artist-applications/${id}`, {
+  const res = await fetchWithAuth(`${ADMIN_BASE}/artist-applications/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify({ status, rejectReason }),

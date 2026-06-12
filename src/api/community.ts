@@ -1,4 +1,5 @@
 import { getAuthHeaders, getFanIdHeader } from './auth'
+import { fetchWithAuth } from '../lib/fetchWithAuth'
 import type { FeedListResponse, JoinedArtistListResponse } from '../types/feed'
 
 export async function getFeeds(
@@ -8,7 +9,7 @@ export async function getFeeds(
 ): Promise<FeedListResponse> {
   const params = new URLSearchParams({ size: String(size) })
   if (cursor) params.set('cursor', cursor)
-  const res = await fetch(`/api/v1/artists/${artistId}/feeds?${params}`, {
+  const res = await fetchWithAuth(`/api/v1/artists/${artistId}/feeds?${params}`, {
     headers: { ...getAuthHeaders(), 'X-Fan-Id': getFanIdHeader() },
   })
   if (!res.ok) throw new Error(`getFeeds failed: ${res.status}`)
@@ -21,7 +22,7 @@ export async function createFeed(
   content: string,
   imageUrls: string[],
 ): Promise<{ feedId: number }> {
-  const res = await fetch(`/api/v1/artists/${artistId}/feeds`, {
+  const res = await fetchWithAuth(`/api/v1/artists/${artistId}/feeds`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -36,7 +37,7 @@ export async function createFeed(
 }
 
 export async function deleteFeed(artistId: number, feedId: number): Promise<void> {
-  const res = await fetch(`/api/v1/artists/${artistId}/feeds/${feedId}`, {
+  const res = await fetchWithAuth(`/api/v1/artists/${artistId}/feeds/${feedId}`, {
     method: 'DELETE',
     headers: { ...getAuthHeaders(), 'X-Artist-Member-Id': getFanIdHeader() },
   })
@@ -49,7 +50,7 @@ export async function createComment(
   content: string,
   parentId?: number,
 ): Promise<{ commentId: number }> {
-  const res = await fetch(`/api/v1/feeds/${feedId}/comments`, {
+  const res = await fetchWithAuth(`/api/v1/feeds/${feedId}/comments`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -65,7 +66,7 @@ export async function createComment(
 }
 
 export async function likeFeed(feedId: number, artistId: number): Promise<void> {
-  const res = await fetch(`/api/v1/feeds/${feedId}/likes`, {
+  const res = await fetchWithAuth(`/api/v1/feeds/${feedId}/likes`, {
     method: 'POST',
     headers: {
       ...getAuthHeaders(),
@@ -77,7 +78,7 @@ export async function likeFeed(feedId: number, artistId: number): Promise<void> 
 }
 
 export async function unlikeFeed(feedId: number): Promise<void> {
-  const res = await fetch(`/api/v1/feeds/${feedId}/likes`, {
+  const res = await fetchWithAuth(`/api/v1/feeds/${feedId}/likes`, {
     method: 'DELETE',
     headers: { ...getAuthHeaders(), 'X-Fan-Id': getFanIdHeader() },
   })
@@ -85,7 +86,7 @@ export async function unlikeFeed(feedId: number): Promise<void> {
 }
 
 export async function followArtist(artistId: number): Promise<void> {
-  const res = await fetch(`/api/v1/artists/${artistId}/follow`, {
+  const res = await fetchWithAuth(`/api/v1/artists/${artistId}/follow`, {
     method: 'POST',
     headers: { ...getAuthHeaders(), 'X-Fan-Id': getFanIdHeader() },
   })
@@ -93,7 +94,7 @@ export async function followArtist(artistId: number): Promise<void> {
 }
 
 export async function unfollowArtist(artistId: number): Promise<void> {
-  const res = await fetch(`/api/v1/artists/${artistId}/follow`, {
+  const res = await fetchWithAuth(`/api/v1/artists/${artistId}/follow`, {
     method: 'DELETE',
     headers: { ...getAuthHeaders(), 'X-Fan-Id': getFanIdHeader() },
   })
@@ -106,7 +107,7 @@ export async function getJoinedArtists(
 ): Promise<JoinedArtistListResponse> {
   const params = new URLSearchParams({ size: String(size) })
   if (cursor) params.set('cursor', cursor)
-  const res = await fetch(`/api/v1/fans/me/artists?${params}`, {
+  const res = await fetchWithAuth(`/api/v1/fans/me/artists?${params}`, {
     headers: { ...getAuthHeaders(), 'X-Fan-Id': getFanIdHeader() },
   })
   if (!res.ok) throw new Error(`getJoinedArtists failed: ${res.status}`)

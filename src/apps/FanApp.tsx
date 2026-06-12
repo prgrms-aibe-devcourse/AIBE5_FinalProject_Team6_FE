@@ -55,12 +55,12 @@ function formatTime(iso: string): string {
 
 const TAB_TO_URL: Record<string, string> = {
   'HOME': 'home', 'ARTISTS': 'artists', 'STORE': 'store',
-  'WORKSPACE': 'workspace', 'MY PAGE': 'my-page',
+  'WORKSPACE': 'workspace', 'MY PAGE': 'my-page', 'NOTIFICATIONS': 'notifications',
 };
 const TAB_FROM_URL: Record<string, string> = Object.fromEntries(
   Object.entries(TAB_TO_URL).map(([k, v]) => [v, k])
 );
-const TRANSIENT_TABS = new Set(['CHECKOUT', 'QUEUE_WAIT', 'ORDER_COMPLETE', 'NOTIFICATIONS']);
+const TRANSIENT_TABS = new Set(['CHECKOUT', 'QUEUE_WAIT', 'ORDER_COMPLETE']);
 
 export default function App({ role = 'FAN' }: { role?: string }) {
   const navigate = useNavigate();
@@ -415,12 +415,9 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       .catch(console.error);
   }, []);
 
-  // 코드에서 setSearchParams를 직접 호출할 때 URL→state 역방향 동기화를 막는 flag
-  const isUrlPushFromCode = useRef(false);
-
   // URL → state: 뒤로가기/앞으로가기 시 React 상태를 URL에 맞게 동기화
   useEffect(() => {
-    if (isUrlPushFromCode.current) { isUrlPushFromCode.current = false; return; }
+    if (searchParams.get('mode') === 'checkout') { setActiveTab('CHECKOUT'); return; }
     const urlTab = searchParams.get('tab');
     const tab = (urlTab && TAB_FROM_URL[urlTab]) ?? 'HOME';
     if (!TRANSIENT_TABS.has(tab)) setActiveTab(tab);
@@ -456,11 +453,8 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   useEffect(() => {
     if (!isTabMounted.current) { isTabMounted.current = true; return; }
     if (TRANSIENT_TABS.has(activeTab)) {
-      // CHECKOUT/QUEUE_WAIT 진입 시 상품 URL을 history에 push
-      // → back 누르면 상품 상세로 복귀 (이전 history 항목 = 상품 URL)
-      if ((activeTab === 'CHECKOUT' || activeTab === 'QUEUE_WAIT') && selectedProduct) {
-        isUrlPushFromCode.current = true;
-        setSearchParams({ tab: 'store', productId: String(selectedProduct.id) }, { replace: false });
+      if (activeTab === 'CHECKOUT' && selectedProduct) {
+        setSearchParams({ tab: 'store', productId: String(selectedProduct.id), mode: 'checkout' }, { replace: false });
       }
       return;
     }
@@ -521,6 +515,18 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     const found = storeItems.find(p => String(p.id) === productIdParam);
     if (found) setSelectedProduct(found);
   }, [storeItems]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 새로고침 시 mode=checkout이지만 checkoutData가 없으면 상품 상세로 복원
+  useEffect(() => {
+    if (activeTab === 'CHECKOUT' && !checkoutData) setActiveTab('STORE');
+  }, [activeTab, checkoutData]);
+
+  // CHECKOUT 탈출(인앱 취소) 시 mode=checkout 파라미터 제거
+  useEffect(() => {
+    if (activeTab !== 'CHECKOUT' && searchParams.get('mode') === 'checkout') {
+      setSearchParams(prev => { const p = new URLSearchParams(prev); p.delete('mode'); return p; }, { replace: true });
+    }
+  }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 선택한 아티스트 피드 로드
   useEffect(() => {

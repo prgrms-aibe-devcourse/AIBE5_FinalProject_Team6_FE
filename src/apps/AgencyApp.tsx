@@ -1,8 +1,24 @@
 import { useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LayoutDashboard, PenTool, Image, Calendar as CalendarIcon, Package, ShoppingCart, Users, UserCircle, LogOut, CheckCircle2, Activity, ArrowUpRight, ArrowDownRight, Clock, Plus, Upload, X } from 'lucide-react';
+import { logout } from '../api/auth';
+import { ROLE_KEY } from '../App';
 
-export default function AgencyApp({ onLogout }: { onLogout: () => void }) {
-  const [activeMenu, setActiveMenu] = useState('dashboard');
+export default function AgencyApp() {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeMenu, setActiveMenu] = useState(() => searchParams.get('menu') ?? 'dashboard');
+
+  const handleMenuChange = (menu: string) => {
+    setActiveMenu(menu);
+    setSearchParams({ menu }, { replace: false });
+  };
+
+  const handleLogout = () => {
+    logout();
+    localStorage.removeItem(ROLE_KEY);
+    navigate('/login', { replace: true });
+  };
   const [showEventModal, setShowEventModal] = useState(false);
   const [showProductModal, setShowProductModal] = useState(false);
   const [showNoticeModal, setShowNoticeModal] = useState(false);
@@ -157,7 +173,7 @@ export default function AgencyApp({ onLogout }: { onLogout: () => void }) {
                 <img src="https://images.unsplash.com/photo-1516280440502-6134b281f626?w=100&q=80" alt="Avatar" className="w-full h-full object-cover" />
              </div>
           </div>
-          <button onClick={onLogout} className="p-2 ml-4 hover:bg-[#F7F3EE] rounded-lg">
+          <button onClick={handleLogout} className="p-2 ml-4 hover:bg-[#F7F3EE] rounded-lg">
              <LogOut size={20} className="text-[#888]" />
           </button>
         </div>
@@ -170,7 +186,7 @@ export default function AgencyApp({ onLogout }: { onLogout: () => void }) {
              {navItems.map(item => (
                 <button
                   key={item.id}
-                  onClick={() => setActiveMenu(item.id)}
+                  onClick={() => handleMenuChange(item.id)}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
                     activeMenu === item.id 
                       ? 'bg-[#F7F3EE] text-[#C2507A] shadow-[inset_2px_0_0_#C2507A]' 
@@ -183,7 +199,7 @@ export default function AgencyApp({ onLogout }: { onLogout: () => void }) {
              ))}
           </div>
           <div className="px-4 mt-6 pt-6 border-t border-[#EDE8E2]">
-             <button onClick={onLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-[#888] hover:bg-black/5 hover:text-black transition-all">
+             <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-[#888] hover:bg-black/5 hover:text-black transition-all">
                 <LogOut className="w-5 h-5 shrink-0" />
                 로그아웃
              </button>

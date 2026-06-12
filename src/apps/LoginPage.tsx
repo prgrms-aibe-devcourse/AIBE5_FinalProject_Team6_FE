@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { login, setToken } from '../api/auth';
+import { ROLE_KEY } from '../App';
 import type { Role } from '../App';
 
-export default function LoginPage({ onLogin, onApply }: { onLogin: (role: Role) => void; onApply: () => void }) {
+export default function LoginPage() {
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -15,20 +18,19 @@ export default function LoginPage({ onLogin, onApply }: { onLogin: (role: Role) 
     try {
       const token = await login(email, password);
       setToken(token);
-      if (email.includes('admin')) {
-        onLogin('ADMIN');
-      } else if (email.includes('artist')) {
-        onLogin('ARTIST');
-      } else {
-        onLogin('FAN');
-      }
+      let role: Role = 'FAN';
+      if (email.includes('admin')) role = 'ADMIN';
+      else if (email.includes('artist')) role = 'ARTIST';
+      localStorage.setItem(ROLE_KEY, role);
+      navigate(role === 'ADMIN' ? '/admin' : role === 'ARTIST' ? '/artist' : '/fan', { replace: true });
     } catch {
       setError('이메일 또는 비밀번호가 올바르지 않습니다');
     }
   };
 
   const handleSocialLogin = () => {
-    onLogin('FAN');
+    localStorage.setItem(ROLE_KEY, 'FAN');
+    navigate('/fan', { replace: true });
   };
 
   return (
@@ -122,7 +124,7 @@ export default function LoginPage({ onLogin, onApply }: { onLogin: (role: Role) 
           <div className="mt-12 pt-8 border-t border-[#EDE8E2] text-center">
             <p className="text-sm text-[#888] mb-2 font-medium">기획사/아티스트이신가요?</p>
             <button
-              onClick={onApply}
+              onClick={() => navigate('/apply')}
               className="text-[#C2507A] font-bold hover:underline"
             >
               기획사 입점 신청 →

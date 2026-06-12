@@ -415,8 +415,12 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       .catch(console.error);
   }, []);
 
+  // 코드에서 setSearchParams를 직접 호출할 때 URL→state 역방향 동기화를 막는 flag
+  const isUrlPushFromCode = useRef(false);
+
   // URL → state: 뒤로가기/앞으로가기 시 React 상태를 URL에 맞게 동기화
   useEffect(() => {
+    if (isUrlPushFromCode.current) { isUrlPushFromCode.current = false; return; }
     const urlTab = searchParams.get('tab');
     const tab = (urlTab && TAB_FROM_URL[urlTab]) ?? 'HOME';
     if (!TRANSIENT_TABS.has(tab)) setActiveTab(tab);
@@ -455,8 +459,8 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       // CHECKOUT/QUEUE_WAIT 진입 시 상품 URL을 history에 push
       // → back 누르면 상품 상세로 복귀 (이전 history 항목 = 상품 URL)
       if ((activeTab === 'CHECKOUT' || activeTab === 'QUEUE_WAIT') && selectedProduct) {
-        const params: Record<string, string> = { tab: 'store', productId: String(selectedProduct.id) };
-        setSearchParams(params, { replace: false });
+        isUrlPushFromCode.current = true;
+        setSearchParams({ tab: 'store', productId: String(selectedProduct.id) }, { replace: false });
       }
       return;
     }

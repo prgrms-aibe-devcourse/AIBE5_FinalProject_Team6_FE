@@ -51,7 +51,6 @@ function formatTime(iso: string): string {
 }
 
 export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () => void, onApply: () => void, role?: any }) {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [favoriteArtists, setFavoriteArtists] = useState<{ id: number; name: string; bg: string }[]>([
     { id: 1, name: 'NOVA', bg: 'linear-gradient(135deg, #FF9A9E, #FECFEF)' },
     { id: 2, name: 'LUNA', bg: 'linear-gradient(135deg, #a1c4fd, #c2e9fb)' },
@@ -96,8 +95,6 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
   
   const [feeds, setFeeds] = useState<FeedResponse[]>([]);
   const [feedsLoading, setFeedsLoading] = useState(false);
-  const [feedsNextCursor, setFeedsNextCursor] = useState<string | null>(null);
-  const [feedsHasMore, setFeedsHasMore] = useState(false);
 
   const handlePostSubmit = async () => {
     if (!postInput.trim() || !selectedArtist) return;
@@ -107,8 +104,6 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
       await createFeed(selectedArtist.id, content, []);
       const updated = await getFeeds(selectedArtist.id);
       setFeeds(updated.items);
-      setFeedsNextCursor(updated.nextCursor);
-      setFeedsHasMore(updated.hasMore);
     } catch (e) {
       console.error(e);
     }
@@ -401,15 +396,17 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
   // 선택한 아티스트 피드 로드
   useEffect(() => {
     if (!selectedArtist) return;
-    setFeedsLoading(true);
-    getFeeds(selectedArtist.id)
-      .then(res => {
+    void (async () => {
+      setFeedsLoading(true);
+      try {
+        const res = await getFeeds(selectedArtist.id);
         setFeeds(res.items);
-        setFeedsNextCursor(res.nextCursor);
-        setFeedsHasMore(res.hasMore);
-      })
-      .catch(console.error)
-      .finally(() => setFeedsLoading(false));
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setFeedsLoading(false);
+      }
+    })();
   }, [selectedArtist?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleLoadMore = () => {

@@ -417,35 +417,37 @@ export default function App({ role = 'FAN' }: { role?: string }) {
 
   // URL → state: 뒤로가기/앞으로가기 시 React 상태를 URL에 맞게 동기화
   useEffect(() => {
-    if (searchParams.get('mode') === 'checkout') { void (async () => { setActiveTab('CHECKOUT'); })(); return; }
-    const urlTab = searchParams.get('tab');
-    const tab = (urlTab && TAB_FROM_URL[urlTab]) ?? 'HOME';
-    if (!TRANSIENT_TABS.has(tab)) setActiveTab(tab);
-    setBoardTab(searchParams.get('board')?.toUpperCase() ?? 'FEED');
-    setMyPageTab(searchParams.get('sub')?.toUpperCase() ?? 'OVERVIEW');
-    // 아티스트
-    const artistIdParam = searchParams.get('artistId');
-    if (!artistIdParam) { setSelectedArtist(null); }
-    else if (favoriteArtists.length > 0) {
-      const found = favoriteArtists.find(a => a.id === parseInt(artistIdParam));
-      if (found) setSelectedArtist(found);
-    }
-    // 스토어 필터 (STORE 탭일 때만 복원)
-    if (tab === 'STORE') {
-      setStoreArtist(searchParams.get('storeArtist') ?? 'ALL');
-      setStoreCategory(searchParams.get('category') ?? '전체');
-      setStoreSort(searchParams.get('sort') ?? '낮은가격순');
-      setStoreSearch(searchParams.get('q') ?? '');
-    }
-    // 상품 상세 (storeItems 로드 후 별도 복원)
-    if (!searchParams.get('productId')) setSelectedProduct(null);
-    // 공지 상세
-    const noticeIdParam = searchParams.get('noticeId');
-    if (!noticeIdParam) { setSelectedNotice(null); }
-    else {
-      const found = notices.find((n: any) => String(n.id) === noticeIdParam);
-      if (found) setSelectedNotice(found);
-    }
+    void (async () => {
+      if (searchParams.get('mode') === 'checkout') { setActiveTab('CHECKOUT'); return; }
+      const urlTab = searchParams.get('tab');
+      const tab = (urlTab && TAB_FROM_URL[urlTab]) ?? 'HOME';
+      if (!TRANSIENT_TABS.has(tab)) setActiveTab(tab);
+      setBoardTab(searchParams.get('board')?.toUpperCase() ?? 'FEED');
+      setMyPageTab(searchParams.get('sub')?.toUpperCase() ?? 'OVERVIEW');
+      // 아티스트
+      const artistIdParam = searchParams.get('artistId');
+      if (!artistIdParam) { setSelectedArtist(null); }
+      else if (favoriteArtists.length > 0) {
+        const found = favoriteArtists.find(a => a.id === parseInt(artistIdParam));
+        if (found) setSelectedArtist(found);
+      }
+      // 스토어 필터 (STORE 탭일 때만 복원)
+      if (tab === 'STORE') {
+        setStoreArtist(searchParams.get('storeArtist') ?? 'ALL');
+        setStoreCategory(searchParams.get('category') ?? '전체');
+        setStoreSort(searchParams.get('sort') ?? '낮은가격순');
+        setStoreSearch(searchParams.get('q') ?? '');
+      }
+      // 상품 상세 (storeItems 로드 후 별도 복원)
+      if (!searchParams.get('productId')) setSelectedProduct(null);
+      // 공지 상세
+      const noticeIdParam = searchParams.get('noticeId');
+      if (!noticeIdParam) { setSelectedNotice(null); }
+      else {
+        const found = notices.find((n: any) => String(n.id) === noticeIdParam);
+        if (found) setSelectedNotice(found);
+      }
+    })();
   }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // state → URL: 사용자 탭 클릭 시 history 항목 생성 (뒤로가기 지원)

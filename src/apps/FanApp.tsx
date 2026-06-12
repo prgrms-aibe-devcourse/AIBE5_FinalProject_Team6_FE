@@ -422,17 +422,32 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     if (!TRANSIENT_TABS.has(tab)) setActiveTab(tab);
     setBoardTab(searchParams.get('board')?.toUpperCase() ?? 'FEED');
     setMyPageTab(searchParams.get('sub')?.toUpperCase() ?? 'OVERVIEW');
+    // 아티스트
     const artistIdParam = searchParams.get('artistId');
-    if (!artistIdParam) {
-      setSelectedArtist(null);
-    } else if (favoriteArtists.length > 0) {
+    if (!artistIdParam) { setSelectedArtist(null); }
+    else if (favoriteArtists.length > 0) {
       const found = favoriteArtists.find(a => a.id === parseInt(artistIdParam));
       if (found) setSelectedArtist(found);
+    }
+    // 스토어 필터 (STORE 탭일 때만 복원)
+    if (tab === 'STORE') {
+      setStoreArtist(searchParams.get('storeArtist') ?? 'ALL');
+      setStoreCategory(searchParams.get('category') ?? '전체');
+      setStoreSort(searchParams.get('sort') ?? '낮은가격순');
+      setStoreSearch(searchParams.get('q') ?? '');
+    }
+    // 상품 상세 (storeItems 로드 후 별도 복원)
+    if (!searchParams.get('productId')) setSelectedProduct(null);
+    // 공지 상세
+    const noticeIdParam = searchParams.get('noticeId');
+    if (!noticeIdParam) { setSelectedNotice(null); }
+    else {
+      const found = notices.find((n: any) => String(n.id) === noticeIdParam);
+      if (found) setSelectedNotice(found);
     }
   }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // state → URL: 사용자 탭 클릭 시 history 항목 생성 (뒤로가기 지원)
-  // URL이 이미 현재 탭과 일치하면 skip — 뒤로가기에 의한 상태 변경 시 이중 push 방지
   const isTabMounted = useRef(false);
   useEffect(() => {
     if (!isTabMounted.current) { isTabMounted.current = true; return; }
@@ -444,6 +459,21 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     setSearchParams(params, { replace: false });
   }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // state → URL: 상품/공지 상세 진입 시 history 항목 생성
+  const isDetailMounted = useRef(false);
+  useEffect(() => {
+    if (!isDetailMounted.current) { isDetailMounted.current = true; return; }
+    if (!selectedProduct && !selectedNotice) return;
+    if (selectedProduct && searchParams.get('productId') === String(selectedProduct.id)) return;
+    if (selectedNotice && searchParams.get('noticeId') === String(selectedNotice.id)) return;
+    const params: Record<string, string> = { tab: TAB_TO_URL[activeTab] ?? 'home' };
+    if (selectedArtist) params.artistId = String(selectedArtist.id);
+    if (selectedArtist && boardTab !== 'FEED') params.board = boardTab.toLowerCase();
+    if (selectedProduct) params.productId = String(selectedProduct.id);
+    if (selectedNotice) params.noticeId = String(selectedNotice.id);
+    setSearchParams(params, { replace: false });
+  }, [selectedProduct?.id, selectedNotice?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // state → URL: 서브 상태 변경 시 replace (추가 history 항목 없음)
   useEffect(() => {
     if (TRANSIENT_TABS.has(activeTab)) return;
@@ -451,8 +481,16 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     if (selectedArtist) params.artistId = String(selectedArtist.id);
     if (selectedArtist && boardTab !== 'FEED') params.board = boardTab.toLowerCase();
     if (activeTab === 'MY PAGE' && myPageTab !== 'OVERVIEW') params.sub = myPageTab.toLowerCase();
+    if (selectedProduct) params.productId = String(selectedProduct.id);
+    if (selectedNotice) params.noticeId = String(selectedNotice.id);
+    if (activeTab === 'STORE') {
+      if (storeArtist !== 'ALL') params.storeArtist = storeArtist;
+      if (storeCategory !== '전체') params.category = storeCategory;
+      if (storeSort !== '낮은가격순') params.sort = storeSort;
+      if (storeSearch) params.q = storeSearch;
+    }
     setSearchParams(params, { replace: true });
-  }, [boardTab, myPageTab, selectedArtist?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [boardTab, myPageTab, selectedArtist?.id, storeArtist, storeCategory, storeSort, storeSearch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 새로고침 후 favoriteArtists 로드 완료 시 URL의 artistId 복원
   useEffect(() => {
@@ -460,11 +498,17 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     const artistIdParam = searchParams.get('artistId');
     if (!artistIdParam) return;
     const found = favoriteArtists.find(a => a.id === parseInt(artistIdParam));
-    if (found) {
-      setSelectedArtist(found);
-      setBoardTab(searchParams.get('board')?.toUpperCase() ?? 'FEED');
-    }
+    if (found) { setSelectedArtist(found); setBoardTab(searchParams.get('board')?.toUpperCase() ?? 'FEED'); }
   }, [favoriteArtists]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 새로고침 후 storeItems 로드 완료 시 URL의 productId 복원
+  useEffect(() => {
+    if (storeItems.length === 0 || selectedProduct) return;
+    const productIdParam = searchParams.get('productId');
+    if (!productIdParam) return;
+    const found = storeItems.find(p => String(p.id) === productIdParam);
+    if (found) setSelectedProduct(found);
+  }, [storeItems]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 선택한 아티스트 피드 로드
   useEffect(() => {

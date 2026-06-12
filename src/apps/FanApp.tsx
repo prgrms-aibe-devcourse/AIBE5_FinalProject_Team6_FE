@@ -415,18 +415,36 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       .catch(console.error);
   }, []);
 
-  // URL ← activeTab (탭 전환마다 history 항목 생성 → 뒤로가기 지원)
+  // URL → state: 뒤로가기/앞으로가기 시 React 상태를 URL에 맞게 동기화
+  useEffect(() => {
+    const urlTab = searchParams.get('tab');
+    const tab = (urlTab && TAB_FROM_URL[urlTab]) ?? 'HOME';
+    if (!TRANSIENT_TABS.has(tab)) setActiveTab(tab);
+    setBoardTab(searchParams.get('board')?.toUpperCase() ?? 'FEED');
+    setMyPageTab(searchParams.get('sub')?.toUpperCase() ?? 'OVERVIEW');
+    const artistIdParam = searchParams.get('artistId');
+    if (!artistIdParam) {
+      setSelectedArtist(null);
+    } else if (favoriteArtists.length > 0) {
+      const found = favoriteArtists.find(a => a.id === parseInt(artistIdParam));
+      if (found) setSelectedArtist(found);
+    }
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // state → URL: 사용자 탭 클릭 시 history 항목 생성 (뒤로가기 지원)
+  // URL이 이미 현재 탭과 일치하면 skip — 뒤로가기에 의한 상태 변경 시 이중 push 방지
   const isTabMounted = useRef(false);
   useEffect(() => {
     if (!isTabMounted.current) { isTabMounted.current = true; return; }
     if (TRANSIENT_TABS.has(activeTab)) return;
-    const params: Record<string, string> = { tab: TAB_TO_URL[activeTab] ?? 'home' };
+    const desiredUrlTab = TAB_TO_URL[activeTab] ?? 'home';
+    if ((searchParams.get('tab') ?? 'home') === desiredUrlTab) return;
+    const params: Record<string, string> = { tab: desiredUrlTab };
     if (selectedArtist) params.artistId = String(selectedArtist.id);
-    if (selectedArtist && boardTab !== 'FEED') params.board = boardTab.toLowerCase();
     setSearchParams(params, { replace: false });
   }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // URL ← 서브 상태 변경 (replace — 추가 history 항목 없음)
+  // state → URL: 서브 상태 변경 시 replace (추가 history 항목 없음)
   useEffect(() => {
     if (TRANSIENT_TABS.has(activeTab)) return;
     const params: Record<string, string> = { tab: TAB_TO_URL[activeTab] ?? 'home' };
@@ -436,7 +454,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     setSearchParams(params, { replace: true });
   }, [boardTab, myPageTab, selectedArtist?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 새로고침 후 favoriteArtists 로드 완료 시점에 URL의 artistId 복원
+  // 새로고침 후 favoriteArtists 로드 완료 시 URL의 artistId 복원
   useEffect(() => {
     if (favoriteArtists.length === 0 || selectedArtist) return;
     const artistIdParam = searchParams.get('artistId');

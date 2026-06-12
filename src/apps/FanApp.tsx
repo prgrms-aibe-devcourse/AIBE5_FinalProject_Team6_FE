@@ -9,6 +9,8 @@ import { getMainBanners } from '../api/banners';
 import type { BannerResponse } from '../types/banner';
 import { getCart, addCartItem, updateCartItem, removeCartItem } from '../api/cart';
 import type { CartItemResponse } from '../types/cart';
+import { getFeeds, createFeed, createComment, likeFeed, unlikeFeed, followArtist, unfollowArtist, getJoinedArtists } from '../api/community';
+import type { FeedResponse } from '../types/feed';
 
 const SORT_OPTIONS = ['낮은가격순', '높은가격순'];
 
@@ -22,128 +24,139 @@ function getSortedItems(items: ProductResponse[], sortKey: string) {
 
 
 
+function artistGradient(id: number): string {
+  const gradients = [
+    'linear-gradient(135deg, #FF9A9E, #FECFEF)',
+    'linear-gradient(135deg, #fccb90, #d57eeb)',
+    'linear-gradient(135deg, #a1c4fd, #c2e9fb)',
+    'linear-gradient(135deg, #84fab0, #8fd3f4)',
+    'linear-gradient(135deg, #f6d365, #fda085)',
+  ]
+  return gradients[id % gradients.length]
+}
+
+function formatCount(n: number): string {
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'K'
+  return String(n)
+}
+
+function formatTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return '방금 전'
+  if (mins < 60) return `${mins}분 전`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}시간 전`
+  return `${Math.floor(hours / 24)}일 전`
+}
+
 export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () => void, onApply: () => void, role?: any }) {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [favoriteArtists, setFavoriteArtists] = useState([
-    { id: 'starlight', name: 'Starlight', bg: 'linear-gradient(135deg, #FF9A9E, #FECFEF)' },
-    { id: 'rose', name: 'ROSE', bg: 'linear-gradient(135deg, #fccb90, #d57eeb)' }
+  const [favoriteArtists, setFavoriteArtists] = useState<{ id: number; name: string; bg: string }[]>([
+    { id: 1, name: 'NOVA', bg: 'linear-gradient(135deg, #FF9A9E, #FECFEF)' },
+    { id: 2, name: 'LUNA', bg: 'linear-gradient(135deg, #a1c4fd, #c2e9fb)' },
+    { id: 3, name: 'ECHO', bg: 'linear-gradient(135deg, #84fab0, #8fd3f4)' },
   ]);
   const [selectedArtist, setSelectedArtist] = useState<any>(null);
   const [boardTab, setBoardTab] = useState('FEED');
   const [postInput, setPostInput] = useState('');
   const [commentInputs, setCommentInputs] = useState<{[key: string]: string}>({});
-  const [commentsMap, setCommentsMap] = useState<{[key: string]: any[]}>({
-    'p1': [
-      { id: 'c1', author: 'Fan_A', content: 'Love you so much! ❤️', time: '1 hour ago' },
-      { id: 'c2', author: 'Fan_B', content: 'Beautiful photo!', time: '30 mins ago' }
-    ]
-  });
+  const [commentsMap, setCommentsMap] = useState<{[key: string]: any[]}>({});
 
-  const handleCommentSubmit = (postId: string) => {
-    const content = commentInputs[postId];
-    if (!content?.trim()) return;
+  const handleCommentSubmit = async (postId: number) => {
+    const key = String(postId);
+    const content = commentInputs[key];
+    if (!content?.trim() || !selectedArtist) return;
 
-    const newComment = {
+    const tempComment = {
       id: crypto.randomUUID(),
-      author: role === 'ARTIST' ? 'Starlight' : 'Me',
+      author: role === 'ARTIST' ? selectedArtist.name : 'Me',
       content: content.trim(),
-      time: 'Just now'
+      time: '방금 전',
     };
 
-    setCommentsMap(prev => ({
-      ...prev,
-      [postId]: [...(prev[postId] || []), newComment]
-    }));
+    setCommentsMap(prev => ({ ...prev, [key]: [...(prev[key] || []), tempComment] }));
+    setCommentInputs(prev => ({ ...prev, [key]: '' }));
+    setFeeds(prev => prev.map(f => f.id === postId ? { ...f, commentCount: f.commentCount + 1 } : f));
 
-    setCommentInputs(prev => ({
-      ...prev,
-      [postId]: ''
-    }));
-
-    setAllPosts(prev => prev.map(p => p.id === postId ? { ...p, comments: (parseInt(p.comments.toString()) + 1).toString() } : p));
+    try {
+      await createComment(postId, selectedArtist.id, content.trim());
+    } catch {
+      setCommentsMap(prev => ({
+        ...prev,
+        [key]: (prev[key] || []).filter((c: any) => c.id !== tempComment.id),
+      }));
+      setFeeds(prev => prev.map(f => f.id === postId ? { ...f, commentCount: f.commentCount - 1 } : f));
+    }
   };
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState('HOME');
   const [isArtistAuthorized, setIsArtistAuthorized] = useState(false);
   
-  const [allPosts, setAllPosts] = useState<any[]>([
-    {
-      id: 'p1',
-      artistId: 'starlight',
-      author: 'Starlight',
-      role: 'ARTIST',
-      isOfficial: true,
-      content: "Thank you all for joining our live stream today! 🎤✨ Let's make more amazing memories together. Here's a behind-the-scenes shot!",
-      time: '2 hours ago',
-      likes: '12.4K',
-      comments: '852',
-      hasImage: true
-    },
-    {
-      id: 'p3',
-      artistId: 'moonlight',
-      author: 'Moonlight',
-      role: 'ARTIST',
-      isOfficial: true,
-      content: "깜짝 뉴스! 다음 프로젝트의 스포일러를 살짝 공개합니다. 이게 뭘 의미하는지 맞혀보세요? 👀✨",
-      time: '1일 전',
-      likes: '25.1K',
-      comments: '4.2K',
-      hasImage: false
-    },
-    {
-      id: 'p4',
-      artistId: 'starlight',
-      author: 'Starlight',
-      role: 'ARTIST',
-      isOfficial: true,
-      content: "새로운 앨범 'ECHO' 작업 중입니다! 여러분께 곧 들려드릴 수 있을 것 같아 설레네요. 조금만 더 기다려주세요! ❤️🎧",
-      time: '3시간 전',
-      likes: '15.8K',
-      comments: '1.5K',
-      hasImage: false
-    },
-    {
-      id: 'p5',
-      artistId: 'starlight',
-      author: 'Starlight',
-      role: 'ARTIST',
-      isOfficial: true,
-      content: "연습실에서 한 컷! 오늘도 열심히 달리고 있습니다. 여러분의 응원이 큰 힘이 돼요! 🔥💪",
-      time: '5시간 전',
-      likes: '10.2K',
-      comments: '920',
-      hasImage: true
-    }
-  ]);
+  const [feeds, setFeeds] = useState<FeedResponse[]>([]);
+  const [feedsLoading, setFeedsLoading] = useState(false);
+  const [feedsNextCursor, setFeedsNextCursor] = useState<string | null>(null);
+  const [feedsHasMore, setFeedsHasMore] = useState(false);
 
-  const handlePostSubmit = () => {
+  const handlePostSubmit = async () => {
     if (!postInput.trim() || !selectedArtist) return;
-    
-    // If role is ARTIST, the user is 'Starlight' (as per persona) regardless of the board
-    const artistName = 'Starlight'; 
-    
-    const newPostObj = {
-      id: crypto.randomUUID(),
-      artistId: selectedArtist.id,
-      author: role === 'ARTIST' ? artistName : 'Me',
-      role: role,
-      isOfficial: role === 'ARTIST',
-      content: postInput,
-      time: 'Just now',
-      likes: '0',
-      comments: '0',
-      hasImage: false,
-      isNew: true
-    };
-    
-    setAllPosts([newPostObj, ...allPosts]);
+    const content = postInput.trim();
     setPostInput('');
+    try {
+      await createFeed(selectedArtist.id, content, []);
+      const updated = await getFeeds(selectedArtist.id);
+      setFeeds(updated.items);
+      setFeedsNextCursor(updated.nextCursor);
+      setFeedsHasMore(updated.hasMore);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const currentArtistPosts = allPosts.filter(p => p.artistId === selectedArtist?.id);
-  const currentOfficialPosts = currentArtistPosts.filter(p => p.isOfficial);
+  const currentArtistPosts = feeds;
+  const currentOfficialPosts = feeds.filter(f => f.artistMemberId != null);
+
+  const handleLikeFeed = async (post: FeedResponse) => {
+    if (!selectedArtist) return;
+    const newIsLiked = !post.isLiked;
+    setFeeds(prev => prev.map(f => f.id === post.id
+      ? { ...f, isLiked: newIsLiked, likeCount: f.likeCount + (newIsLiked ? 1 : -1) }
+      : f
+    ));
+    try {
+      if (newIsLiked) {
+        await likeFeed(post.id, selectedArtist.id);
+      } else {
+        await unlikeFeed(post.id);
+      }
+    } catch {
+      setFeeds(prev => prev.map(f => f.id === post.id
+        ? { ...f, isLiked: !newIsLiked, likeCount: f.likeCount + (newIsLiked ? -1 : 1) }
+        : f
+      ));
+    }
+  };
+
+  const handleFollowToggle = async () => {
+    if (!selectedArtist || role === 'ARTIST') return;
+    const isFollowing = favoriteArtists.some(a => a.id === selectedArtist.id);
+    if (isFollowing) {
+      setFavoriteArtists(prev => prev.filter(a => a.id !== selectedArtist.id));
+      try {
+        await unfollowArtist(selectedArtist.id);
+      } catch {
+        setFavoriteArtists(prev => [...prev, selectedArtist]);
+      }
+    } else {
+      setFavoriteArtists(prev => [...prev, selectedArtist]);
+      try {
+        await followArtist(selectedArtist.id);
+      } catch {
+        setFavoriteArtists(prev => prev.filter(a => a.id !== selectedArtist.id));
+      }
+    }
+  };
 
   const [notifications, setNotifications] = useState([
     { id: 1, title: '새 댓글', content: '회원님의 포스트에 "Fan_A"님이 댓글을 남겼습니다.', time: '2시간 전', isRead: false },
@@ -177,14 +190,11 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
 
   // Auto-select artist board if role is ARTIST
   useEffect(() => {
-    if (role === 'ARTIST' && !selectedArtist) {
-      const starlight = favoriteArtists.find(a => a.id === 'starlight');
-      if (starlight) {
-        setTimeout(() => {
-          setSelectedArtist(starlight);
-          setBoardTab('FEED');
-        }, 0);
-      }
+    if (role === 'ARTIST' && !selectedArtist && favoriteArtists.length > 0) {
+      setTimeout(() => {
+        setSelectedArtist(favoriteArtists[0]);
+        setBoardTab('FEED');
+      }, 0);
     }
   }, [role, selectedArtist, favoriteArtists]);
 
@@ -243,20 +253,20 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
   const [isNotifUpdating, setIsNotifUpdating] = useState(false);
   const [showAttendanceBanner, setShowAttendanceBanner] = useState(false);
   const [attendanceStep, setAttendanceStep] = useState<'IDLE' | 'STAMPING' | 'REWARD'>('IDLE');
-  const [triggeredArtists, setTriggeredArtists] = useState<string[]>([]);
+  const [triggeredArtists, setTriggeredArtists] = useState<number[]>([]);
 
   const [notices] = useState([
-    { id: 'n1', tag: 'NOTICE', title: 'Starlight Studio 2주년 기념 라이브 콘서트 상세 안내', date: '2026.05.20', type: 'NOTICE' },
-    { id: 'n2', tag: 'TICKET', title: '별빛스튜디오 팬미팅 2025 티켓 오픈 안내', date: '2026.06.15', type: 'TICKET' },
-    { id: 'n3', tag: '이벤트', title: 'Echo 특별판 포토북 출시 기념 팬사인회', date: '2026.05.10', type: 'EVENT' },
+    { id: 'n1', tag: 'NOTICE', title: 'NOVA 2주년 기념 라이브 콘서트 상세 안내', date: '2026.05.20', type: 'NOTICE' },
+    { id: 'n2', tag: 'TICKET', title: 'LUNA 팬미팅 2025 티켓 오픈 안내', date: '2026.06.15', type: 'TICKET' },
+    { id: 'n3', tag: '이벤트', title: 'ECHO 특별판 포토북 출시 기념 팬사인회', date: '2026.05.10', type: 'EVENT' },
     { id: 'n4', tag: '공지', title: '공식 팬클럽 멤버십 키트 배송 지연 안내', date: '2026.05.08', type: 'NOTICE' },
   ]);
 
   const [schedules] = useState([
     { id: 's1', date: '14', month: '2026.05', time: '15:00 KST', title: '음악중심 방송 출연', category: 'VIDEO', noticeId: null },
     { id: 's2', date: '15', month: '2026.05', time: '22:00 KST', title: '심야 라디오 게스트 출연', category: 'RADIO', noticeId: null },
-    { id: 's3', date: '01', month: '2026.06', time: '18:00 KST', title: 'Echo 특별판 포토북 출시', category: 'RELEASE', noticeId: 'n3' },
-    { id: 's4', date: '12', month: '2026.06', time: '19:00 KST', title: 'Starlight Studio 2주년 기념 라이브 콘서트', category: 'LIVE', noticeId: 'n1' },
+    { id: 's3', date: '01', month: '2026.06', time: '18:00 KST', title: 'ECHO 특별판 포토북 출시', category: 'RELEASE', noticeId: 'n3' },
+    { id: 's4', date: '12', month: '2026.06', time: '19:00 KST', title: 'NOVA 2주년 기념 라이브 콘서트', category: 'LIVE', noticeId: 'n1' },
   ]);
 
   const [selectedSchedule, setSelectedSchedule] = useState<any>(null);
@@ -375,6 +385,33 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
       .finally(() => setCartLoading(false));
   }, [showCart]);
 
+  // 팔로우한 아티스트 목록 로드
+  useEffect(() => {
+    getJoinedArtists()
+      .then(res => {
+        setFavoriteArtists(res.items.map(a => ({
+          id: a.artistId,
+          name: `Artist #${a.artistId}`,
+          bg: artistGradient(a.artistId),
+        })));
+      })
+      .catch(console.error);
+  }, []);
+
+  // 선택한 아티스트 피드 로드
+  useEffect(() => {
+    if (!selectedArtist) return;
+    setFeedsLoading(true);
+    getFeeds(selectedArtist.id)
+      .then(res => {
+        setFeeds(res.items);
+        setFeedsNextCursor(res.nextCursor);
+        setFeedsHasMore(res.hasMore);
+      })
+      .catch(console.error)
+      .finally(() => setFeedsLoading(false));
+  }, [selectedArtist?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleLoadMore = () => {
     if (!storeNextCursor || storeLoading) return;
     setStoreLoading(true);
@@ -424,9 +461,8 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
               onClick={() => {
                 setIsArtistAuthorized(true);
                 setActiveTab('WORKSPACE');
-                const starlight = favoriteArtists.find(a => a.id === 'starlight');
-                if (starlight) {
-                  setSelectedArtist(starlight);
+                if (favoriteArtists.length > 0) {
+                  setSelectedArtist(favoriteArtists[0]);
                   setBoardTab('FEED');
                 }
               }}
@@ -1229,7 +1265,9 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
                 {role === 'ARTIST' ? (
                   <button className="bh-join-btn" onClick={onLogout} style={{ background: '#333' }}>로그아웃</button>
                 ) : (
-                  <button className="bh-join-btn">팔로우</button>
+                  <button className="bh-join-btn" onClick={handleFollowToggle}>
+                    {favoriteArtists.some(a => a.id === selectedArtist.id) ? '언팔로우' : '팔로우'}
+                  </button>
                 )}
               </div>
             </div>
@@ -1256,7 +1294,7 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
                       <div className="lb-pulse"></div>
                       <div className="lb-content">
                         <div className="lb-title">{selectedArtist.name} 라이브 방송 중! 🔴</div>
-                        <div className="lb-desc">Starlight Studio 2주년 기념 카운트다운...</div>
+                        <div className="lb-desc">{selectedArtist.name} 라이브 방송 중...</div>
                       </div>
                       <button className="c-btn" style={{ background: 'white', color: '#ff0f7b', padding: '8px 16px' }}>스트리밍 시청</button>
                     </div>
@@ -1328,77 +1366,81 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
 
                     <div className="space-y-6">
                       {currentArtistPosts.length === 0 ? (
-                        <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-sub)', fontWeight: 600 }}>게시물이 없습니다. 첫 게시물을 작성해보세요!</div>
+                        <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-sub)', fontWeight: 600 }}>
+                          {feedsLoading ? '불러오는 중...' : '게시물이 없습니다. 첫 게시물을 작성해보세요!'}
+                        </div>
                       ) : (
                         currentArtistPosts.map(post => (
-                          <motion.div 
-                            key={post.id} 
-                            initial={post.isNew ? { opacity: 0, y: 20 } : false}
-                            animate={post.isNew ? { opacity: 1, y: 0 } : false}
-                            className={`feed-post ${post.isOfficial ? 'artist-post' : ''}`} 
-                            style={post.isOfficial ? { background: 'rgba(194, 80, 122, 0.03)', border: '1px solid rgba(194, 80, 122, 0.15)' } : {}}
+                          <motion.div
+                            key={post.id}
+                            initial={false}
+                            animate={false}
+                            className={`feed-post ${post.artistMemberId != null ? 'artist-post' : ''}`}
+                            style={post.artistMemberId != null ? { background: 'rgba(194, 80, 122, 0.03)', border: '1px solid rgba(194, 80, 122, 0.15)' } : {}}
                           >
                             <div className="fp-header">
-                              <div className={`fp-avatar ${post.isOfficial ? 'artist-badge' : ''}`} style={post.isOfficial ? { background: selectedArtist.bg } : {}}></div>
+                              <div className={`fp-avatar ${post.artistMemberId != null ? 'artist-badge' : ''}`} style={post.artistMemberId != null ? { background: selectedArtist.bg } : {}}></div>
                               <div className="fp-meta">
                                 <div className="fp-author">
-                                  {post.author} 
-                                  {post.isOfficial && (
+                                  {selectedArtist.name}
+                                  {post.artistMemberId != null && (
                                     <span className="fp-badge artist" style={{ background: 'var(--point-rose)' }}>
                                       <CheckCircle2 size={10} fill="currentColor" /> Official
                                     </span>
                                   )}
-                                  {!post.isOfficial && <span className="fp-badge">팬</span>}
+                                  {post.artistMemberId == null && <span className="fp-badge">팬</span>}
                                 </div>
-                                <div className="fp-time">{post.time}</div>
+                                <div className="fp-time">{formatTime(post.createdAt)}</div>
                               </div>
                               <MoreHorizontal size={20} color="var(--text-sub)" />
                             </div>
                             <div className="fp-content">{post.content}</div>
-                            {post.hasImage && (
+                            {post.imageUrls.length > 0 && (
                               <div className="fp-image" style={{ background: selectedArtist.bg, backgroundImage: 'linear-gradient(rgba(0,0,0,0.1), rgba(0,0,0,0.1))', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                 <ImageIcon size={48} color="white" opacity={0.5} />
                               </div>
                             )}
                             <div className="fp-footer">
-                              <div className="fp-action"><Heart size={18} /> {post.likes}</div>
-                              <div className="fp-action"><MessageSquare size={18} /> {post.comments}</div>
-                              <div className="fp-action"><Share2 size={18} /> {post.role === 'ARTIST' ? 'Share' : '공유'}</div>
+                              <div className="fp-action" style={{ cursor: 'pointer', color: post.isLiked ? 'var(--point-rose)' : undefined }} onClick={() => handleLikeFeed(post)}>
+                                <Heart size={18} fill={post.isLiked ? 'currentColor' : 'none'} /> {formatCount(post.likeCount)}
+                              </div>
+                              <div className="fp-action"><MessageSquare size={18} /> {String(post.commentCount)}</div>
+                              <div className="fp-action"><Share2 size={18} /> Share</div>
                             </div>
 
                             {/* Comment Section */}
                             <div className="fp-comments">
-                              {commentsMap[post.id]?.map((comment: any) => (
+                              {(commentsMap[String(post.id)] || []).map((comment: any) => (
                                 <div key={comment.id} className="fp-comment-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                   <div>
                                     <span className="fp-comment-author">{comment.author}</span>
                                     <span className="fp-comment-content">{comment.content}</span>
                                   </div>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', color: comment.isLiked ? '#C2507A' : '#888' }} onClick={() => {
-                                     setCommentsMap(prev => ({
-                                       ...prev,
-                                       [post.id]: prev[post.id].map(c => c.id === comment.id ? { ...c, isLiked: !c.isLiked, likes: (c.likes || 0) + (c.isLiked ? -1 : 1) } : c)
-                                     }));
+                                    setCommentsMap(prev => ({
+                                      ...prev,
+                                      [String(post.id)]: (prev[String(post.id)] || []).map((c: any) => c.id === comment.id ? { ...c, isLiked: !c.isLiked, likes: (c.likes || 0) + (c.isLiked ? -1 : 1) } : c)
+                                    }));
                                   }}>
                                     <Heart size={12} fill={comment.isLiked ? "currentColor" : "none"} />
                                     <span style={{ fontSize: '10px', fontWeight: 700 }}>{comment.likes || 0}</span>
                                   </div>
                                 </div>
                               ))}
-                              
+
                               <div className="fp-comment-input-area">
-                                <input 
-                                  type="text" 
-                                  className="fp-comment-input" 
-                                  placeholder="댓글을 입력하세요..." 
-                                  value={commentInputs[post.id] || ''}
-                                  onChange={(e) => setCommentInputs(prev => ({ ...prev, [post.id]: e.target.value }))}
+                                <input
+                                  type="text"
+                                  className="fp-comment-input"
+                                  placeholder="댓글을 입력하세요..."
+                                  value={commentInputs[String(post.id)] || ''}
+                                  onChange={(e) => setCommentInputs(prev => ({ ...prev, [String(post.id)]: e.target.value }))}
                                   onKeyDown={(e) => e.key === 'Enter' && handleCommentSubmit(post.id)}
                                 />
-                                <button 
+                                <button
                                   className="fp-comment-submit"
                                   onClick={() => handleCommentSubmit(post.id)}
-                                  disabled={!(commentInputs[post.id]?.trim())}
+                                  disabled={!(commentInputs[String(post.id)]?.trim())}
                                 >
                                   게시
                                 </button>
@@ -1418,58 +1460,60 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
                       <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-sub)', fontWeight: 600 }}>아티스트의 게시물이 없습니다.</div>
                     ) : (
                       currentOfficialPosts.map(post => (
-                        <div 
-                          key={post.id} 
-                          className="feed-post artist-post" 
+                        <div
+                          key={post.id}
+                          className="feed-post artist-post"
                           style={{ background: 'rgba(194, 80, 122, 0.03)', border: '1px solid rgba(194, 80, 122, 0.15)' }}
                         >
                           <div className="fp-header">
                             <div className="fp-avatar artist-badge" style={{ background: selectedArtist.bg }}></div>
                             <div className="fp-meta">
                               <div className="fp-author">
-                                {post.author} 
+                                {selectedArtist.name}
                                 <span className="fp-badge artist" style={{ background: 'var(--point-rose)' }}>
                                   <CheckCircle2 size={10} fill="currentColor" /> Official
                                 </span>
                               </div>
-                              <div className="fp-time">{post.time}</div>
+                              <div className="fp-time">{formatTime(post.createdAt)}</div>
                             </div>
                             <MoreHorizontal size={20} color="var(--text-sub)" />
                           </div>
                           <div className="fp-content">{post.content}</div>
-                          {post.hasImage && (
+                          {post.imageUrls.length > 0 && (
                             <div className="fp-image" style={{ background: selectedArtist.bg, backgroundImage: 'linear-gradient(rgba(0,0,0,0.1), rgba(0,0,0,0.1))', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                               <ImageIcon size={48} color="white" opacity={0.5} />
                             </div>
                           )}
                           <div className="fp-footer">
-                            <div className="fp-action"><Heart size={18} /> {post.likes}</div>
-                            <div className="fp-action"><MessageSquare size={18} /> {post.comments}</div>
-                            <div className="fp-action"><Share2 size={18} /> {post.role === 'ARTIST' ? 'Share' : '공유'}</div>
+                            <div className="fp-action" style={{ cursor: 'pointer', color: post.isLiked ? 'var(--point-rose)' : undefined }} onClick={() => handleLikeFeed(post)}>
+                              <Heart size={18} fill={post.isLiked ? 'currentColor' : 'none'} /> {formatCount(post.likeCount)}
+                            </div>
+                            <div className="fp-action"><MessageSquare size={18} /> {String(post.commentCount)}</div>
+                            <div className="fp-action"><Share2 size={18} /> Share</div>
                           </div>
 
                           {/* Comment Section */}
                           <div className="fp-comments">
-                            {commentsMap[post.id]?.map((comment: any) => (
+                            {(commentsMap[String(post.id)] || []).map((comment: any) => (
                               <div key={comment.id} className="fp-comment-item">
                                 <span className="fp-comment-author">{comment.author}</span>
                                 <span className="fp-comment-content">{comment.content}</span>
                               </div>
                             ))}
-                            
+
                             <div className="fp-comment-input-area">
-                              <input 
-                                type="text" 
-                                className="fp-comment-input" 
-                                placeholder="댓글을 입력하세요..." 
-                                value={commentInputs[post.id] || ''}
-                                onChange={(e) => setCommentInputs(prev => ({ ...prev, [post.id]: e.target.value }))}
+                              <input
+                                type="text"
+                                className="fp-comment-input"
+                                placeholder="댓글을 입력하세요..."
+                                value={commentInputs[String(post.id)] || ''}
+                                onChange={(e) => setCommentInputs(prev => ({ ...prev, [String(post.id)]: e.target.value }))}
                                 onKeyDown={(e) => e.key === 'Enter' && handleCommentSubmit(post.id)}
                               />
-                              <button 
+                              <button
                                 className="fp-comment-submit"
                                 onClick={() => handleCommentSubmit(post.id)}
-                                disabled={!(commentInputs[post.id]?.trim())}
+                                disabled={!(commentInputs[String(post.id)]?.trim())}
                               >
                                 게시
                               </button>
@@ -1680,7 +1724,7 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
               <div className="reveal delay-200" style={{ width: '100%', height: '400px', borderRadius: '24px', background: 'linear-gradient(135deg, #C8BEB6, #A89890)', position: 'relative', overflow: 'hidden', boxShadow: '0 24px 48px rgba(0,0,0,0.08)' }}>
                 <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(26,26,26,0.5) 0%, transparent 50%)' }}></div>
                 <div style={{ position: 'absolute', bottom: '40px', left: '40px', textAlign: 'left', color: 'white' }}>
-                  <span style={{ background: 'white', color: 'var(--text-main)', padding: '6px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: 800, letterSpacing: '2px', display: 'inline-block', marginBottom: '16px' }}>STARLIGHT STUDIO</span>
+                  <span style={{ background: 'white', color: 'var(--text-main)', padding: '6px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: 800, letterSpacing: '2px', display: 'inline-block', marginBottom: '16px' }}>FANDROPS</span>
                   <h2 style={{fontSize: '32px', fontWeight: 800, letterSpacing: '-1px'}}>Echo 특별판 포토북</h2>
                 </div>
               </div>
@@ -1744,11 +1788,11 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
               <div className="grid-3">
                 <div className="card reveal delay-100">
                   <div className="c-img" style={{background:'linear-gradient(135deg, #E8E0D8, #D5CCC2)'}}>
-                    <span className="c-tag">Starlight</span>
+                    <span className="c-tag">NOVA</span>
                     <span className="c-status">40 LEFT</span>
                   </div>
                   <div className="c-body">
-                    <h3>Echo 특별판<br/>3D 아트 포토북</h3>
+                    <h3>NOVA 특별판<br/>3D 아트 포토북</h3>
                     <div style={{display:'flex', justifyContent:'space-between', fontSize:'12px', fontWeight:'700', marginBottom:'8px'}}>
                       <span style={{color:'var(--text-sub)'}}>진행률</span>
                       <span>80%</span>
@@ -1765,11 +1809,11 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
 
                 <div className="card reveal delay-200">
                   <div className="c-img" style={{background:'linear-gradient(135deg, #DDD8F0, #D0CAEC)'}}>
-                    <span className="c-tag">Luna Girls</span>
+                    <span className="c-tag">LUNA</span>
                     <span className="c-status" style={{background:'var(--point-violet)'}}>275 LEFT</span>
                   </div>
                   <div className="c-body">
-                    <h3>Luna Girls 1주년 기념<br/>베스트 포토카드 세트</h3>
+                    <h3>LUNA 1주년 기념<br/>베스트 포토카드 세트</h3>
                     <div style={{display:'flex', justifyContent:'space-between', fontSize:'12px', fontWeight:'700', marginBottom:'8px'}}>
                       <span style={{color:'var(--text-sub)'}}>진행률</span>
                       <span>45%</span>
@@ -1790,7 +1834,7 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
                     <span style={{color:'white', opacity:0.6, fontSize:'12px', marginTop:'8px', fontWeight:600}}>Sold in 23s</span>
                   </div>
                   <div className="c-body" style={{opacity:0.6}}>
-                    <h3>Starlight Studio 1주년 콘서트<br/>멤버십 얼리버드 티켓</h3>
+                    <h3>NOVA 1주년 콘서트<br/>멤버십 얼리버드 티켓</h3>
                     <div style={{display:'flex', justifyContent:'space-between', fontSize:'12px', fontWeight:'700', marginBottom:'8px'}}>
                       <span style={{color:'var(--text-sub)'}}>진행률</span>
                       <span>100%</span>
@@ -1820,11 +1864,11 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
               <div className="grid-3">
                 <div className="card reveal delay-100">
                   <div className="c-img" style={{background:'linear-gradient(135deg, #E8E0D8, #D5CCC2)'}}>
-                    <span className="c-tag">Starlight</span>
+                    <span className="c-tag">NOVA</span>
                     <span className="c-status">NEW</span>
                   </div>
                   <div className="c-body">
-                    <h3>Starlight 2주년 기념<br/>쿠션 필로우</h3>
+                    <h3>NOVA 2주년 기념<br/>쿠션 필로우</h3>
                     <div className="c-footer">
                       <span className="c-price">₩32,000</span>
                       <button className="c-btn">구매하기</button>
@@ -1834,11 +1878,11 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
 
                 <div className="card reveal delay-200">
                   <div className="c-img" style={{background:'linear-gradient(135deg, #fccb90, #d57eeb)'}}>
-                    <span className="c-tag">ROSE</span>
+                    <span className="c-tag">ECHO</span>
                     <span className="c-status" style={{background:'var(--point-violet)'}}>120 LEFT</span>
                   </div>
                   <div className="c-body">
-                    <h3>ROSE 1st Solo Album<br/>Limited Vinyl</h3>
+                    <h3>ECHO 1st Solo Album<br/>Limited Vinyl</h3>
                     <div className="c-footer">
                       <span className="c-price" style={{color:'var(--point-violet)'}}>₩45,000</span>
                       <button className="c-btn">구매하기</button>
@@ -1876,16 +1920,11 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
 
             <div className="grid-4">
               {[
-                { name: 'Starlight', type: '버추얼 아이돌 그룹', followers: '1.2M', bg: 'linear-gradient(135deg, #FF9A9E, #FECFEF)' },
-                { name: 'Luna Girls', type: 'K-Pop 걸그룹', followers: '850K', bg: 'linear-gradient(135deg, #a18cd1, #fbc2eb)' },
-                { name: 'Syndicate', type: '힙합 크루', followers: '420K', bg: 'linear-gradient(135deg, #84fab0, #8fd3f4)' },
-                { name: 'ROSE', type: '솔로 아티스트', followers: '2.1M', bg: 'linear-gradient(135deg, #fccb90, #d57eeb)' },
-                { name: 'Aether', type: '버추얼 스트리머', followers: '95K', bg: 'linear-gradient(135deg, #e0c3fc, #8ec5fc)' },
-                { name: 'Neon City', type: '인디 밴드', followers: '12K', bg: 'linear-gradient(135deg, #43e97b, #38f9d7)' },
-                { name: 'Crimson', type: '록 그룹', followers: '34K', bg: 'linear-gradient(135deg, #fa709a, #fee140)' },
-                { name: 'V-Makers', type: '크리에이터 콜렉티브', followers: '890K', bg: 'linear-gradient(135deg, #fdfbfb, #ebedee)' }
+                { id: 1, name: 'NOVA', type: '버추얼 아이돌 그룹', followers: '-', bg: 'linear-gradient(135deg, #FF9A9E, #FECFEF)' },
+                { id: 2, name: 'LUNA', type: 'K-Pop 걸그룹', followers: '-', bg: 'linear-gradient(135deg, #a1c4fd, #c2e9fb)' },
+                { id: 3, name: 'ECHO', type: '솔로 아티스트', followers: '-', bg: 'linear-gradient(135deg, #84fab0, #8fd3f4)' },
               ].map((artist, idx) => (
-                <div className={`artist-card reveal delay-${(idx % 4) * 100}`} key={idx} onClick={() => { setSelectedArtist(artist); setBoardTab('FEED'); }}>
+                <div className={`artist-card reveal delay-${(idx % 4) * 100}`} key={artist.id} onClick={() => { setSelectedArtist(artist); setBoardTab('FEED'); }}>
                   <div className="ac-avatar" style={{ background: artist.bg }}></div>
                   <div className="ac-name">{artist.name}</div>
                   <div className="ac-desc">{artist.type}<br/>{artist.followers} 팔로워</div>
@@ -2179,10 +2218,10 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
 
           {favoriteArtists.map(a => (
                         <div key={a.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', cursor: 'pointer', minWidth: '72px' }} onClick={() => {
-                          if (activeTab === 'STORE') setStoreArtist(a.id);
+                          if (activeTab === 'STORE') setStoreArtist(String(a.id));
                         }}>
                            <div style={{ position: 'relative' }}>
-                             <div style={{ width: '64px', height: '64px', borderRadius: '50%', border: (storeArtist === a.id) ? '2px solid #111' : '1px solid #E5E5E5', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#FAFAFA', whiteSpace: 'nowrap', transition: 'all 0.2s', fontWeight: 800, fontSize: '14px' }}>
+                             <div style={{ width: '64px', height: '64px', borderRadius: '50%', border: (storeArtist === String(a.id)) ? '2px solid #111' : '1px solid #E5E5E5', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#FAFAFA', whiteSpace: 'nowrap', transition: 'all 0.2s', fontWeight: 800, fontSize: '14px' }}>
                                 {a.name.substring(0,3)}
                              </div>
                            </div>
@@ -2233,7 +2272,7 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
       <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '24px' }}>
         {storeArtist !== 'ALL' && (
           <span style={{ background: '#F7F3EE', border: '1px solid #EDE8E2', borderRadius: '20px', padding: '4px 12px', fontSize: '12px', color: '#111', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
-            {favoriteArtists.find(a => a.id === storeArtist)?.name ?? storeArtist} <X size={12} cursor="pointer" onClick={() => setStoreArtist('ALL')} />
+            {favoriteArtists.find(a => String(a.id) === storeArtist)?.name ?? storeArtist} <X size={12} cursor="pointer" onClick={() => setStoreArtist('ALL')} />
           </span>
         )}
         {storeCategory !== '전체' && (
@@ -2907,18 +2946,18 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
                       <div className="shine"></div>
                       <div style={{ position: 'absolute', bottom: '16px', left: '16px', color: 'white', textShadow: '0 2px 4px rgba(0,0,0,0.5)', textAlign: 'left' }}>
                         <div style={{ fontSize: '10px', fontWeight: 800, opacity: 0.8 }}>EXCLUSIVE DROP</div>
-                        <div style={{ fontSize: '16px', fontWeight: 900 }}>Starlight: Behind</div>
+                        <div style={{ fontSize: '16px', fontWeight: 900 }}>{selectedArtist?.name || 'NOVA'}: Behind</div>
                       </div>
                     </motion.div>
 
-                    <button 
-                      className="btn-primary" 
+                    <button
+                      className="btn-primary"
                       style={{ background: 'var(--point-rose)' }}
                       onClick={() => {
                         const newCard = {
                           id: Date.now(),
-                          artistName: selectedArtist?.name || 'Starlight',
-                          title: 'Starlight: Behind',
+                          artistName: selectedArtist?.name || 'NOVA',
+                          title: `${selectedArtist?.name || 'NOVA'}: Behind`,
                           img: 'https://images.unsplash.com/photo-1493225255756-d9584f8606e9?auto=format&fit=crop&q=80&w=600',
                           date: new Date().toLocaleDateString()
                         };
@@ -3111,14 +3150,14 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
                     {selectedNotice.title}
                   </h2>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px', fontSize: '11px', fontWeight: 700, color: '#A0958C', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                    <span>Starlight Agency</span>
+                    <span>FANDROPS</span>
                     <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'rgba(194, 80, 122, 0.2)' }} />
                     <span>{selectedNotice.date}</span>
                   </div>
                 </div>
 
                 <div style={{ fontSize: '16px', color: '#444', lineHeight: 1.8, fontWeight: 500, paddingTop: '48px', borderTop: '1px solid #EDE8E2' }}>
-                  <p style={{ marginBottom: '32px' }}>안녕하세요, 별빛스튜디오(Starlight Agency)입니다.</p>
+                  <p style={{ marginBottom: '32px' }}>안녕하세요, FANDROPS입니다.</p>
                   
                   <div style={{ padding: '32px', background: '#F7F3EE', borderRadius: '24px', border: '1px solid #EDE8E2', marginBottom: '48px' }}>
                     <p style={{ fontWeight: 900, color: '#111', fontSize: '18px', marginBottom: '16px' }}>안내 말씀</p>

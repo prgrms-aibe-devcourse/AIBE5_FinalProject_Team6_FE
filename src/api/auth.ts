@@ -71,6 +71,14 @@ export async function logout(): Promise<void> {
   clearToken()
 }
 
+export function getArtistIdHeader(artistId: number): Record<string, string> {
+  return { 'X-Artist-Id': String(artistId) }
+}
+
+export function getArtistMemberIdHeader(memberId: number): Record<string, string> {
+  return { 'X-Artist-Member-Id': String(memberId) }
+}
+
 export async function refresh(): Promise<AuthToken> {
   const refreshToken = getRefreshToken()
   if (!refreshToken) throw new Error('no refresh token')

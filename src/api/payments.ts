@@ -1,4 +1,5 @@
 import { getAuthHeaders } from './auth'
+import { fetchWithAuth } from '../lib/fetchWithAuth'
 
 const BASE = '/api/v1/payments/toss'
 
@@ -13,7 +14,7 @@ export async function confirmPayment(
   orderPaymentKey: string,
   amount: number,
 ): Promise<PaymentConfirmResponse> {
-  const res = await fetch(`${BASE}/confirm`, {
+  const res = await fetchWithAuth(`${BASE}/confirm`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify({ tossPaymentKey, orderId, orderPaymentKey, amount }),

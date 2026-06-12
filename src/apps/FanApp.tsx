@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { logout } from '../api/auth';
+import { ROLE_KEY } from '../App';
 import { AnimatePresence, motion } from 'motion/react';
 import { Plus, Search, Calendar, Heart, Share2, Filter, Image as ImageIcon, Smile, MoreHorizontal, MessageSquare, Video, Radio, Bell, Pin, Play, Youtube, ChevronLeft, ChevronRight, X, User, ShoppingBag, LogOut, Ticket, Settings, ThumbsUp, CheckCircle2, Gift } from 'lucide-react';
 import { useCheckout } from '../hooks/useCheckout';
@@ -50,14 +53,28 @@ function formatTime(iso: string): string {
   return `${Math.floor(hours / 24)}일 전`
 }
 
-export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () => void, onApply: () => void, role?: any }) {
+const TAB_TO_URL: Record<string, string> = {
+  'HOME': 'home', 'ARTISTS': 'artists', 'STORE': 'store',
+  'WORKSPACE': 'workspace', 'MY PAGE': 'my-page', 'NOTIFICATIONS': 'notifications',
+};
+const TAB_FROM_URL: Record<string, string> = Object.fromEntries(
+  Object.entries(TAB_TO_URL).map(([k, v]) => [v, k])
+);
+const TRANSIENT_TABS = new Set(['CHECKOUT', 'QUEUE_WAIT', 'ORDER_COMPLETE']);
+
+export default function App({ role = 'FAN' }: { role?: string }) {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [favoriteArtists, setFavoriteArtists] = useState<{ id: number; name: string; bg: string }[]>([
     { id: 1, name: 'NOVA', bg: 'linear-gradient(135deg, #FF9A9E, #FECFEF)' },
     { id: 2, name: 'LUNA', bg: 'linear-gradient(135deg, #a1c4fd, #c2e9fb)' },
     { id: 3, name: 'ECHO', bg: 'linear-gradient(135deg, #84fab0, #8fd3f4)' },
   ]);
   const [selectedArtist, setSelectedArtist] = useState<any>(null);
-  const [boardTab, setBoardTab] = useState('FEED');
+  const [boardTab, setBoardTab] = useState<string>(() => {
+    const b = searchParams.get('board');
+    return b ? b.toUpperCase() : 'FEED';
+  });
   const [postInput, setPostInput] = useState('');
   const [commentInputs, setCommentInputs] = useState<{[key: string]: string}>({});
   const [commentsMap, setCommentsMap] = useState<{[key: string]: any[]}>({});
@@ -90,7 +107,9 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
   };
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const [activeTab, setActiveTab] = useState('HOME');
+  const [activeTab, setActiveTab] = useState<string>(() =>
+    TAB_FROM_URL[searchParams.get('tab') ?? ''] ?? 'HOME'
+  );
   const [isArtistAuthorized, setIsArtistAuthorized] = useState(false);
   
   const [feeds, setFeeds] = useState<FeedResponse[]>([]);
@@ -197,7 +216,10 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
   const [showNotifications] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
 
-  const [myPageTab, setMyPageTab] = useState('OVERVIEW');
+  const [myPageTab, setMyPageTab] = useState<string>(() => {
+    const s = searchParams.get('sub');
+    return s ? s.toUpperCase() : 'OVERVIEW';
+  });
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
 
   // New Filter & Sort States
@@ -393,6 +415,121 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
       .catch(console.error);
   }, []);
 
+  // URL → state: 뒤로가기/앞으로가기 시 React 상태를 URL에 맞게 동기화
+  useEffect(() => {
+    void (async () => {
+      if (searchParams.get('mode') === 'checkout') { setActiveTab('CHECKOUT'); return; }
+      const urlTab = searchParams.get('tab');
+      const tab = (urlTab && TAB_FROM_URL[urlTab]) ?? 'HOME';
+      if (!TRANSIENT_TABS.has(tab)) setActiveTab(tab);
+      setBoardTab(searchParams.get('board')?.toUpperCase() ?? 'FEED');
+      setMyPageTab(searchParams.get('sub')?.toUpperCase() ?? 'OVERVIEW');
+      // 아티스트
+      const artistIdParam = searchParams.get('artistId');
+      if (!artistIdParam) { setSelectedArtist(null); }
+      else if (favoriteArtists.length > 0) {
+        const found = favoriteArtists.find(a => a.id === parseInt(artistIdParam));
+        if (found) setSelectedArtist(found);
+      }
+      // 스토어 필터 (STORE 탭일 때만 복원)
+      if (tab === 'STORE') {
+        setStoreArtist(searchParams.get('storeArtist') ?? 'ALL');
+        setStoreCategory(searchParams.get('category') ?? '전체');
+        setStoreSort(searchParams.get('sort') ?? '낮은가격순');
+        setStoreSearch(searchParams.get('q') ?? '');
+      }
+      // 상품 상세 (storeItems 로드 후 별도 복원)
+      if (!searchParams.get('productId')) setSelectedProduct(null);
+      // 공지 상세
+      const noticeIdParam = searchParams.get('noticeId');
+      if (!noticeIdParam) { setSelectedNotice(null); }
+      else {
+        const found = notices.find((n: any) => String(n.id) === noticeIdParam);
+        if (found) setSelectedNotice(found);
+      }
+    })();
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // state → URL: 사용자 탭 클릭 시 history 항목 생성 (뒤로가기 지원)
+  const isTabMounted = useRef(false);
+  useEffect(() => {
+    if (!isTabMounted.current) { isTabMounted.current = true; return; }
+    if (TRANSIENT_TABS.has(activeTab)) {
+      if (activeTab === 'CHECKOUT' && selectedProduct) {
+        setSearchParams({ tab: 'store', productId: String(selectedProduct.id), mode: 'checkout' }, { replace: false });
+      }
+      return;
+    }
+    const desiredUrlTab = TAB_TO_URL[activeTab] ?? 'home';
+    if ((searchParams.get('tab') ?? 'home') === desiredUrlTab) return;
+    const params: Record<string, string> = { tab: desiredUrlTab };
+    if (selectedArtist) params.artistId = String(selectedArtist.id);
+    setSearchParams(params, { replace: false });
+  }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // state → URL: 상품/공지 상세 진입 시 history 항목 생성
+  const isDetailMounted = useRef(false);
+  useEffect(() => {
+    if (!isDetailMounted.current) { isDetailMounted.current = true; return; }
+    if (!selectedProduct && !selectedNotice) return;
+    if (selectedProduct && searchParams.get('productId') === String(selectedProduct.id)) return;
+    if (selectedNotice && searchParams.get('noticeId') === String(selectedNotice.id)) return;
+    const params: Record<string, string> = { tab: TAB_TO_URL[activeTab] ?? 'home' };
+    if (selectedArtist) params.artistId = String(selectedArtist.id);
+    if (selectedArtist && boardTab !== 'FEED') params.board = boardTab.toLowerCase();
+    if (selectedProduct) params.productId = String(selectedProduct.id);
+    if (selectedNotice) params.noticeId = String(selectedNotice.id);
+    setSearchParams(params, { replace: false });
+  }, [selectedProduct?.id, selectedNotice?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // state → URL: 서브 상태 변경 시 replace (추가 history 항목 없음)
+  useEffect(() => {
+    if (TRANSIENT_TABS.has(activeTab)) return;
+    const params: Record<string, string> = { tab: TAB_TO_URL[activeTab] ?? 'home' };
+    if (selectedArtist) params.artistId = String(selectedArtist.id);
+    if (selectedArtist && boardTab !== 'FEED') params.board = boardTab.toLowerCase();
+    if (activeTab === 'MY PAGE' && myPageTab !== 'OVERVIEW') params.sub = myPageTab.toLowerCase();
+    if (selectedProduct) params.productId = String(selectedProduct.id);
+    if (selectedNotice) params.noticeId = String(selectedNotice.id);
+    if (activeTab === 'STORE') {
+      if (storeArtist !== 'ALL') params.storeArtist = storeArtist;
+      if (storeCategory !== '전체') params.category = storeCategory;
+      if (storeSort !== '낮은가격순') params.sort = storeSort;
+      if (storeSearch) params.q = storeSearch;
+    }
+    setSearchParams(params, { replace: true });
+  }, [boardTab, myPageTab, selectedArtist?.id, storeArtist, storeCategory, storeSort, storeSearch]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 새로고침 후 favoriteArtists 로드 완료 시 URL의 artistId 복원
+  useEffect(() => {
+    if (favoriteArtists.length === 0 || selectedArtist) return;
+    const artistIdParam = searchParams.get('artistId');
+    if (!artistIdParam) return;
+    const found = favoriteArtists.find(a => a.id === parseInt(artistIdParam));
+    if (found) void (async () => { setSelectedArtist(found); setBoardTab(searchParams.get('board')?.toUpperCase() ?? 'FEED'); })();
+  }, [favoriteArtists]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 새로고침 후 storeItems 로드 완료 시 URL의 productId 복원
+  useEffect(() => {
+    if (storeItems.length === 0 || selectedProduct) return;
+    const productIdParam = searchParams.get('productId');
+    if (!productIdParam) return;
+    const found = storeItems.find(p => String(p.id) === productIdParam);
+    if (found) void (async () => { setSelectedProduct(found); })();
+  }, [storeItems]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 새로고침 시 mode=checkout이지만 checkoutData가 없으면 상품 상세로 복원
+  useEffect(() => {
+    if (activeTab === 'CHECKOUT' && !checkoutData) void (async () => { setActiveTab('STORE'); })();
+  }, [activeTab, checkoutData]);
+
+  // CHECKOUT 탈출(인앱 취소) 시 mode=checkout 파라미터 제거
+  useEffect(() => {
+    if (activeTab !== 'CHECKOUT' && searchParams.get('mode') === 'checkout') {
+      setSearchParams(prev => { const p = new URLSearchParams(prev); p.delete('mode'); return p; }, { replace: true });
+    }
+  }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // 선택한 아티스트 피드 로드
   useEffect(() => {
     if (!selectedArtist) return;
@@ -470,7 +607,7 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
             
             <div className="pt-6 border-t border-[#F7F3EE] text-center">
               <button 
-                onClick={onLogout}
+                onClick={() => { logout(); localStorage.removeItem(ROLE_KEY); navigate('/login', { replace: true }); }}
                 className="text-sm font-bold text-[#888] hover:text-[#C2507A] transition-colors"
               >
                 ← Back to main
@@ -1012,7 +1149,7 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
           }}></div>
           {role === 'ARTIST' && (
             <button 
-              onClick={onLogout}
+              onClick={() => { logout(); localStorage.removeItem(ROLE_KEY); navigate('/login', { replace: true }); }}
               style={{ padding: '8px 12px', background: '#F7F3EE', border: '1px solid #EDE8E2', borderRadius: '12px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
             >
               로그아웃
@@ -1260,7 +1397,7 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
                   <div className="bh-stats">{selectedArtist.type || 'Artist'} · {selectedArtist.followers || '10K'} 팔로워</div>
                 </div>
                 {role === 'ARTIST' ? (
-                  <button className="bh-join-btn" onClick={onLogout} style={{ background: '#333' }}>로그아웃</button>
+                  <button className="bh-join-btn" onClick={() => { logout(); localStorage.removeItem(ROLE_KEY); navigate('/login', { replace: true }); }} style={{ background: '#333' }}>로그아웃</button>
                 ) : (
                   <button className="bh-join-btn" onClick={handleFollowToggle}>
                     {favoriteArtists.some(a => a.id === selectedArtist.id) ? '언팔로우' : '팔로우'}
@@ -2706,7 +2843,7 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
                 <div className={`mp-nav-item ${myPageTab === 'TICKETS' ? 'active' : ''}`} onClick={() => setMyPageTab('TICKETS')}><Ticket size={18} /> 나의 티켓</div>
                 <div className={`mp-nav-item ${myPageTab === 'COLLECTION' ? 'active' : ''}`} onClick={() => setMyPageTab('COLLECTION')}><ImageIcon size={18} /> 나의 컬렉션</div>
                 <div className={`mp-nav-item ${myPageTab === 'SETTINGS' ? 'active' : ''}`} onClick={() => setMyPageTab('SETTINGS')}><Settings size={18} /> 설정</div>
-                <div className="mp-nav-item" style={{ color: '#FF4444', marginTop: '20px' }} onClick={() => onLogout()}><LogOut size={18} /> 로그아웃</div>
+                <div className="mp-nav-item" style={{ color: '#FF4444', marginTop: '20px' }} onClick={() => { logout(); localStorage.removeItem(ROLE_KEY); navigate('/login', { replace: true }); }}><LogOut size={18} /> 로그아웃</div>
               </div>
               
               <div style={{ background: 'var(--bg-cream)', borderRadius: '16px', padding: '24px' }}>
@@ -3228,7 +3365,7 @@ export default function App({ onLogout, onApply, role = 'FAN' }: { onLogout: () 
           <hr style={{ width: '100%', borderTop: '1px solid var(--border)', borderBottom: 'none', margin: '0 0 32px 0' }} />
 
           <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-sub)', marginBottom: '16px' }}>비즈니스 문의</div>
-          <button onClick={onApply} style={{ background: '#111', color: 'white', padding: '12px 24px', borderRadius: '8px', fontSize: '13px', fontWeight: 800, marginBottom: '16px' }}>
+          <button onClick={() => navigate('/apply')} style={{ background: '#111', color: 'white', padding: '12px 24px', borderRadius: '8px', fontSize: '13px', fontWeight: 800, marginBottom: '16px' }}>
             파트너 입점 신청 →
           </button>
           <div style={{ fontSize: '12px', color: 'var(--text-sub)' }}>기획사/아티스트 전용 플랫폼입니다</div>

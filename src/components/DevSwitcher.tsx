@@ -1,6 +1,25 @@
-// Common dummy data and designs are shared inside the components.
+import { useNavigate, useLocation } from 'react-router-dom';
+import { ROLE_KEY } from '../App';
+import type { Role } from '../App';
 
-export default function DevSwitcher({ currentRole, onRoleChange }: { currentRole: 'FAN' | 'ARTIST' | 'ADMIN' | 'AGENCY', onRoleChange: (r: 'FAN'|'ARTIST'|'ADMIN'|'AGENCY') => void }) {
+const ROLE_ROUTES: Record<Role, string> = {
+  FAN: '/fan',
+  ARTIST: '/artist',
+  AGENCY: '/agency',
+  ADMIN: '/admin',
+};
+
+export default function DevSwitcher() {
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+
+  const currentRole = (Object.entries(ROLE_ROUTES).find(([, path]) => pathname.startsWith(path))?.[0] ?? 'FAN') as Role;
+
+  const handleRoleChange = (role: Role) => {
+    localStorage.setItem(ROLE_KEY, role);
+    navigate(ROLE_ROUTES[role]);
+  };
+
   return (
     <div style={{
       position: 'fixed',
@@ -22,10 +41,10 @@ export default function DevSwitcher({ currentRole, onRoleChange }: { currentRole
         🛠 DEV ONLY · 배포 시 제거
       </div>
       <div style={{ display: 'flex', gap: '4px' }}>
-        {['FAN', 'ARTIST', 'AGENCY', 'ADMIN'].map((role) => (
+        {(['FAN', 'ARTIST', 'AGENCY', 'ADMIN'] as Role[]).map((role) => (
           <button
             key={role}
-            onClick={() => onRoleChange(role as any)}
+            onClick={() => handleRoleChange(role)}
             style={{
               background: currentRole === role ? 'rgba(255,255,255,0.2)' : 'transparent',
               color: currentRole === role ? '#fff' : 'rgba(255,255,255,0.6)',

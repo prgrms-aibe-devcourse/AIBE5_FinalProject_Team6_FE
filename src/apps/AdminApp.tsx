@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Users, Building2, MessageSquare, ShoppingBag, AlertTriangle, Image as ImageIcon, Activity, Menu, X, Check, XCircle, ChevronRight, Search, Loader2 } from 'lucide-react';
 import type { AgencyApplication, ApplicationStatus } from '../types/partnership';
 import { getAdminApplications, reviewApplication } from '../api/agencyApplications';
+import { logout } from '../api/auth';
+import { ROLE_KEY } from '../App';
 
-interface AdminAppProps {
-  onLogout: () => void;
-}
-
-export default function AdminApp({ onLogout }: AdminAppProps) {
+export default function AdminApp() {
+  const navigate = useNavigate();
   const [activeMenu, setActiveMenu] = useState('agencies');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [agencyTab, setAgencyTab] = useState<ApplicationStatus | 'ALL'>('ALL');
@@ -124,7 +124,7 @@ export default function AdminApp({ onLogout }: AdminAppProps) {
           ))}
         </div>
         <div className="p-4 border-t border-[#333]">
-          <button onClick={onLogout} className={`flex items-center justify-center gap-2 w-full py-2 rounded-lg text-[#888] hover:text-white hover:bg-white/5 transition-colors ${sidebarOpen ? '' : 'px-0'}`}>
+          <button onClick={() => { logout(); localStorage.removeItem(ROLE_KEY); navigate('/login', { replace: true }); }} className={`flex items-center justify-center gap-2 w-full py-2 rounded-lg text-[#888] hover:text-white hover:bg-white/5 transition-colors ${sidebarOpen ? '' : 'px-0'}`}>
             <XCircle className="w-4 h-4 shrink-0" />
             {sidebarOpen && <span className="text-sm">Logout</span>}
           </button>

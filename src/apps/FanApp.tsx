@@ -417,7 +417,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
 
   // URL → state: 뒤로가기/앞으로가기 시 React 상태를 URL에 맞게 동기화
   useEffect(() => {
-    if (searchParams.get('mode') === 'checkout') { setActiveTab('CHECKOUT'); return; }
+    if (searchParams.get('mode') === 'checkout') { void (async () => { setActiveTab('CHECKOUT'); })(); return; }
     const urlTab = searchParams.get('tab');
     const tab = (urlTab && TAB_FROM_URL[urlTab]) ?? 'HOME';
     if (!TRANSIENT_TABS.has(tab)) setActiveTab(tab);
@@ -504,7 +504,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     const artistIdParam = searchParams.get('artistId');
     if (!artistIdParam) return;
     const found = favoriteArtists.find(a => a.id === parseInt(artistIdParam));
-    if (found) { setSelectedArtist(found); setBoardTab(searchParams.get('board')?.toUpperCase() ?? 'FEED'); }
+    if (found) void (async () => { setSelectedArtist(found); setBoardTab(searchParams.get('board')?.toUpperCase() ?? 'FEED'); })();
   }, [favoriteArtists]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 새로고침 후 storeItems 로드 완료 시 URL의 productId 복원
@@ -513,12 +513,12 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     const productIdParam = searchParams.get('productId');
     if (!productIdParam) return;
     const found = storeItems.find(p => String(p.id) === productIdParam);
-    if (found) setSelectedProduct(found);
+    if (found) void (async () => { setSelectedProduct(found); })();
   }, [storeItems]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 새로고침 시 mode=checkout이지만 checkoutData가 없으면 상품 상세로 복원
   useEffect(() => {
-    if (activeTab === 'CHECKOUT' && !checkoutData) setActiveTab('STORE');
+    if (activeTab === 'CHECKOUT' && !checkoutData) void (async () => { setActiveTab('STORE'); })();
   }, [activeTab, checkoutData]);
 
   // CHECKOUT 탈출(인앱 취소) 시 mode=checkout 파라미터 제거

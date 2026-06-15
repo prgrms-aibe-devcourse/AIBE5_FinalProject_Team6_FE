@@ -61,17 +61,19 @@ function formatTime(iso: string): string {
   return `${Math.floor(hours / 24)}일 전`
 }
 
-function scheduleDateTime(iso: string): { date: string; time: string } {
+function scheduleDateTime(iso: string): { date: string; time: string; fullDate: string } {
   const kst = new Date(new Date(iso).getTime() + 9 * 60 * 60 * 1000)
   return {
     date: String(kst.getUTCDate()).padStart(2, '0'),
     time: `${String(kst.getUTCHours()).padStart(2, '0')}:${String(kst.getUTCMinutes()).padStart(2, '0')} KST`,
+    fullDate: `${kst.getUTCFullYear()}.${String(kst.getUTCMonth() + 1).padStart(2, '0')}.${String(kst.getUTCDate()).padStart(2, '0')}`,
   }
 }
 
 function groupSchedulesByMonth(events: ScheduleResult[]): [string, ScheduleResult[]][] {
+  const sorted = [...events].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
   const map = new Map<string, ScheduleResult[]>()
-  for (const e of events) {
+  for (const e of sorted) {
     const kst = new Date(new Date(e.startTime).getTime() + 9 * 60 * 60 * 1000)
     const key = `${kst.getUTCFullYear()}.${String(kst.getUTCMonth() + 1).padStart(2, '0')}`
     if (!map.has(key)) map.set(key, [])
@@ -1210,8 +1212,18 @@ export default function App({ role = 'FAN' }: { role?: string }) {
               {notifications.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--text-sub)', fontWeight: 600 }}>새로운 알림이 없습니다.</div>
               ) : (
-                [...notifications].reverse().map(n => (
-                  <div key={n.id} style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '20px', padding: '24px', position: 'relative', opacity: n.isRead ? 0.7 : 1 }}>
+                [...notifications]
+                  .sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime())
+                  .map(n => (
+                  <div
+                    key={n.id}
+                    onClick={async () => {
+                      if (n.isRead) return;
+                      await markAsRead(n.id).catch(() => {});
+                      setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, isRead: true } : x));
+                    }}
+                    style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '20px', padding: '24px', position: 'relative', opacity: n.isRead ? 0.7 : 1, cursor: n.isRead ? 'default' : 'pointer' }}
+                  >
                     {!n.isRead && <div style={{ position: 'absolute', top: 24, right: 24, width: '8px', height: '8px', background: 'var(--point-rose)', borderRadius: '50%' }}></div>}
                     <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--point-rose)', marginBottom: '8px' }}>{n.type}</div>
                     <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '8px', color: 'var(--text-main)' }}>{n.message}</div>
@@ -3171,7 +3183,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                    {selectedSchedule.title}
                  </h3>
                  <div style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 12px', background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(10px)', borderRadius: '20px', fontSize: '9px', fontWeight: 900, color: 'rgba(255,255,255,0.8)', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                   {selectedSchedule.category} EVENT
+                   {selectedSchedule.type} EVENT
                  </div>
                </div>
                <div 
@@ -3188,11 +3200,11 @@ export default function App({ role = 'FAN' }: { role?: string }) {
               <div className="schedule-grid-50">
                 <div className="schedule-info-box">
                   <span style={{ fontSize: '9px', fontWeight: 900, color: '#A0958C', textTransform: 'uppercase', letterSpacing: '-0.5px' }}>Event Date</span>
-                  <div style={{ fontWeight: 900, color: '#111', fontSize: '14px' }}>{selectedSchedule.month}.{selectedSchedule.date}</div>
+                  <div style={{ fontWeight: 900, color: '#111', fontSize: '14px' }}>{scheduleDateTime(selectedSchedule.startTime).fullDate}</div>
                 </div>
                 <div className="schedule-info-box">
                   <span style={{ fontSize: '9px', fontWeight: 900, color: '#A0958C', textTransform: 'uppercase', letterSpacing: '-0.5px' }}>Time (KST)</span>
-                  <div style={{ fontWeight: 900, color: '#111', fontSize: '14px' }}>{selectedSchedule.time}</div>
+                  <div style={{ fontWeight: 900, color: '#111', fontSize: '14px' }}>{scheduleDateTime(selectedSchedule.startTime).time}</div>
                 </div>
               </div>
 

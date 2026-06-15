@@ -45,7 +45,7 @@ export default function App() {
         <Route path="/" element={<RootRedirect />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
-        <Route path="/password-reset" element={<PasswordResetPage />} />
+        <Route path="/reset-password" element={<PasswordResetPage />} />
         <Route path="/apply" element={<ApplyWrapper />} />
         <Route path="/fan" element={<RequireAuth><FanApp role="FAN" /></RequireAuth>} />
         <Route path="/artist" element={<RequireAuth><FanApp role="ARTIST" /></RequireAuth>} />

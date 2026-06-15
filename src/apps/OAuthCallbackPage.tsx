@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { socialLogin, setToken } from '../api/auth';
 import { ROLE_KEY } from '../App';
@@ -9,8 +9,12 @@ export default function OAuthCallbackPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [error, setError] = useState('');
+  const called = useRef(false);
 
   useEffect(() => {
+    if (called.current) return;
+    called.current = true;
+
     const code = searchParams.get('code');
     const provider = sessionStorage.getItem(PROVIDER_KEY);
 

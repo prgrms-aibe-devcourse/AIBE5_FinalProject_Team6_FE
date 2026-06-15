@@ -3019,7 +3019,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                         />
                         <span style={{
                           position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0,
-                          backgroundColor: isAllowNotification ? 'var(--primary)' : '#e5e7eb',
+                          backgroundColor: isAllowNotification ? 'var(--point-rose)' : '#e5e7eb',
                           transition: '.4s', borderRadius: '34px'
                         }}>
                           <span style={{

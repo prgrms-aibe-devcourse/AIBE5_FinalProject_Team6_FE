@@ -2978,10 +2978,10 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                         {myOrders.map(order => {
                           const statusLabel: Record<string, string> = {
-                            PENDING: '결제 대기', PAID: '결제 완료', CANCELLED: '취소됨', REFUNDED: '환불 완료',
+                            PENDING: '결제 대기', PAID: '결제 완료', COMPLETED: '구매 완료', CANCELLED: '취소됨', REFUNDED: '환불 완료',
                           };
                           const statusColor: Record<string, string> = {
-                            PENDING: '#F5A623', PAID: '#4CAF50', CANCELLED: '#999', REFUNDED: '#7F77DD',
+                            PENDING: '#F5A623', PAID: '#4CAF50', COMPLETED: '#4CAF50', CANCELLED: '#999', REFUNDED: '#7F77DD',
                           };
                           return (
                             <div key={order.orderId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px', borderRadius: '12px', border: '1px solid var(--border)', gap: '16px' }}>

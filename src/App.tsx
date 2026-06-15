@@ -7,6 +7,7 @@ import AdminApp from './apps/AdminApp';
 import LoginPage from './apps/LoginPage';
 import SignupPage from './apps/SignupPage';
 import PasswordResetPage from './apps/PasswordResetPage';
+import OAuthCallbackPage from './apps/OAuthCallbackPage';
 import PartnershipApplication from './apps/PartnershipApplication';
 import DevSwitcher from './components/DevSwitcher';
 
@@ -46,6 +47,7 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/reset-password" element={<PasswordResetPage />} />
+        <Route path="/oauth/callback" element={<OAuthCallbackPage />} />
         <Route path="/apply" element={<ApplyWrapper />} />
         <Route path="/fan" element={<RequireAuth><FanApp role="FAN" /></RequireAuth>} />
         <Route path="/artist" element={<RequireAuth><FanApp role="ARTIST" /></RequireAuth>} />

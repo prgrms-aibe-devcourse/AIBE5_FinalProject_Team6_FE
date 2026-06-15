@@ -112,6 +112,17 @@ export async function confirmPasswordReset(token: string, newPassword: string): 
   if (!res.ok) throw new Error(`confirmPasswordReset failed: ${res.status}`)
 }
 
+export async function socialLogin(provider: string, code: string): Promise<AuthToken> {
+  const res = await fetch(`${BASE}/social/${provider.toLowerCase()}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code }),
+  })
+  if (!res.ok) throw new Error(`socialLogin failed: ${res.status}`)
+  const body = await res.json()
+  return body.data as AuthToken
+}
+
 export async function refresh(): Promise<AuthToken> {
   const refreshToken = getRefreshToken()
   if (!refreshToken) throw new Error('no refresh token')

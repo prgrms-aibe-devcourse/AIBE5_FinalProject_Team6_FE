@@ -4,6 +4,21 @@ import { login, setToken } from '../api/auth';
 import { ROLE_KEY } from '../App';
 import type { Role } from '../App';
 
+const REDIRECT_URI = 'http://localhost:5173/oauth/callback';
+const PROVIDER_KEY = 'oauth_provider';
+
+function redirectToKakao() {
+  const clientId = import.meta.env.VITE_KAKAO_CLIENT_ID;
+  sessionStorage.setItem(PROVIDER_KEY, 'KAKAO');
+  window.location.href = `https://kauth.kakao.com/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code`;
+}
+
+function redirectToGoogle() {
+  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+  sessionStorage.setItem(PROVIDER_KEY, 'GOOGLE');
+  window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=email%20profile`;
+}
+
 export default function LoginPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
@@ -28,11 +43,6 @@ export default function LoginPage() {
     }
   };
 
-  const handleSocialLogin = () => {
-    localStorage.setItem(ROLE_KEY, 'FAN');
-    navigate('/fan', { replace: true });
-  };
-
   return (
     <div className="min-h-screen bg-[#F7F3EE] flex flex-col font-sans">
       <div className="flex-1 flex items-center justify-center p-8 relative overflow-hidden">
@@ -48,13 +58,13 @@ export default function LoginPage() {
 
           <div className="space-y-4 mb-8">
             <button
-                onClick={handleSocialLogin}
+                onClick={redirectToKakao}
                 className="w-full flex items-center justify-center gap-3 bg-[#FEE500] text-[#191919] font-bold py-4 rounded-2xl transition-all hover:opacity-90 active:scale-[0.98] shadow-sm"
             >
               <span className="text-lg">카카오로 1초 로그인</span>
             </button>
             <button
-                onClick={handleSocialLogin}
+                onClick={redirectToGoogle}
                 className="w-full flex items-center justify-center gap-3 bg-white border border-[#E5E5E5] text-[#111] font-bold py-4 rounded-2xl transition-all hover:bg-gray-50 active:scale-[0.98] shadow-sm"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">

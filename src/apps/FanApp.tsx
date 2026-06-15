@@ -14,7 +14,7 @@ import { getCart, addCartItem, updateCartItem, removeCartItem } from '../api/car
 import type { CartItemResponse } from '../types/cart';
 import { getFeeds, createFeed, createComment, likeFeed, unlikeFeed, followArtist, unfollowArtist, getJoinedArtists } from '../api/community';
 import type { FeedResponse } from '../types/feed';
-import { getCalendar } from '../api/schedule';
+import { getCalendar, getLives } from '../api/schedule';
 import type { ScheduleResult } from '../types/schedule';
 import { getVotes, castBallot } from '../api/votes';
 import type { GoodsVoteResult } from '../types/vote';
@@ -308,6 +308,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   ]);
 
   const [schedules, setSchedules] = useState<ScheduleResult[]>([]);
+  const [activeLives, setActiveLives] = useState<ScheduleResult[]>([]);
   const [activeAttendanceEvent, setActiveAttendanceEvent] = useState<AttendanceEventResult | null>(null);
 
   const [selectedSchedule, setSelectedSchedule] = useState<any>(null);
@@ -333,6 +334,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     const id = selectedArtist.id as number;
     getVotes(id).then(res => setGoodsVotes(res.items)).catch(() => {});
     getCalendar(id).then(res => setSchedules(res.events)).catch(() => {});
+    getLives(id).then(res => setActiveLives(res.lives)).catch(() => {});
     getAttendanceEvents(id).then(evts => setActiveAttendanceEvent(evts[0] ?? null)).catch(() => {});
   }, [selectedArtist]);
 
@@ -1487,15 +1489,29 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                 {/* FEED TAB */}
                 {boardTab === 'FEED' && (
                   <div className="reveal">
-                    {/* Live Banner */}
-                    <div className="live-banner">
-                      <div className="lb-pulse"></div>
-                      <div className="lb-content">
-                        <div className="lb-title">{selectedArtist.name} 라이브 방송 중! 🔴</div>
-                        <div className="lb-desc">{selectedArtist.name} 라이브 방송 중...</div>
+                    {/* Live Banner — 실 API: 활성 라이브 있을 때만 표시 */}
+                    {activeLives.length > 0 && (
+                      <div className="live-banner">
+                        <div className="lb-pulse"></div>
+                        <div className="lb-content">
+                          <div className="lb-title">{selectedArtist.name} 라이브 방송 중! 🔴</div>
+                          <div className="lb-desc">{activeLives[0].title}</div>
+                        </div>
+                        {activeLives[0].liveUrl ? (
+                          <a
+                            href={activeLives[0].liveUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="c-btn"
+                            style={{ background: 'white', color: '#ff0f7b', padding: '8px 16px', textDecoration: 'none' }}
+                          >
+                            스트리밍 시청
+                          </a>
+                        ) : (
+                          <button className="c-btn" style={{ background: 'white', color: '#ff0f7b', padding: '8px 16px' }}>스트리밍 시청</button>
+                        )}
                       </div>
-                      <button className="c-btn" style={{ background: 'white', color: '#ff0f7b', padding: '8px 16px' }}>스트리밍 시청</button>
-                    </div>
+                    )}
 
                     {/* Attendance Event Banner */}
                     {showAttendanceBanner && (
@@ -1857,7 +1873,20 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                                     {s.type === 'NOTICE' && <Bell size={14} />}
                                     {time}
                                   </div>
-                                  <div className="si-title">{s.title}</div>
+                                  <div className="si-title">
+                                    {s.title}
+                                    {s.type === 'LIVE' && s.liveUrl && (
+                                      <a
+                                        href={s.liveUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={e => e.stopPropagation()}
+                                        style={{ marginLeft: 8, color: 'var(--point-rose)', fontWeight: 700, fontSize: '12px', textDecoration: 'none' }}
+                                      >
+                                        시청하기 →
+                                      </a>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             );

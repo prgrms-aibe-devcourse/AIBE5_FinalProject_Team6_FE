@@ -1,5 +1,5 @@
 import { getAuthHeaders } from './auth'
-import type { CalendarResponse } from '../types/schedule'
+import type { CalendarResponse, LivesResponse } from '../types/schedule'
 
 export async function getCalendar(
   artistId: number,
@@ -16,4 +16,13 @@ export async function getCalendar(
   if (!res.ok) throw new Error(`getCalendar failed: ${res.status}`)
   const body = await res.json()
   return body.data as CalendarResponse
+}
+
+export async function getLives(artistId: number): Promise<LivesResponse> {
+  const res = await fetch(`/api/v1/artists/${artistId}/lives`, {
+    headers: getAuthHeaders(),
+  })
+  if (!res.ok) throw new Error(`getLives failed: ${res.status}`)
+  const body = await res.json()
+  return body.data as LivesResponse
 }

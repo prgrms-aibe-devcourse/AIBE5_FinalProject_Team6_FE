@@ -56,9 +56,10 @@ be-integration.md의 Phase 1 작업을 이어서 진행해줘. 이슈 #17.
 |---|---|---|---|
 | Phase 1 | [#17](https://github.com/prgrms-aibe-devcourse/AIBE5_FinalProject_Team6_FE/issues/17) | STORE 탭 — 상품 목록 / 장바구니 / 배너 | ⏳ 대기 |
 | Phase 2 | [#18](https://github.com/prgrms-aibe-devcourse/AIBE5_FinalProject_Team6_FE/issues/18) | 커뮤니티 — 피드 / 댓글 / 좋아요 / 팔로우 | ⏳ 대기 |
-| Phase 3 | [#19](https://github.com/prgrms-aibe-devcourse/AIBE5_FinalProject_Team6_FE/issues/19) | 이벤트 — 스케줄 / 투표 / 출석 / 알림 | ⏳ 대기 |
-| Phase 4 | [#20](https://github.com/prgrms-aibe-devcourse/AIBE5_FinalProject_Team6_FE/issues/20) | AgencyApp — 상품 / 투표 / 스케줄 관리 | ⏳ 대기 |
+| Phase 3 | [#19](https://github.com/prgrms-aibe-devcourse/AIBE5_FinalProject_Team6_FE/issues/19) | 이벤트 — 스케줄 / 투표 / 출석 / 알림 | ✅ 완료 |
+| Phase 4 | [#20](https://github.com/prgrms-aibe-devcourse/AIBE5_FinalProject_Team6_FE/issues/20) | AgencyApp — 상품 / 투표 / 스케줄 관리 | 🚫 차단 (#21 + #35) |
 | Blocker | [#21](https://github.com/prgrms-aibe-devcourse/AIBE5_FinalProject_Team6_FE/issues/21) | 아티스트 프로필 조회 API — BE 대응 필요 | 🚫 차단 |
+| Blocker | [#35](https://github.com/prgrms-aibe-devcourse/AIBE5_FinalProject_Team6_FE/issues/35) | AgencyApp 배너 관리 — Admin 전용 엔드포인트 | 🚫 차단 |
 
 ---
 

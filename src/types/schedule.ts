@@ -5,8 +5,13 @@ export interface ScheduleResult {
   type: ArtistScheduleType
   title: string
   startTime: string // ISO-8601 UTC
+  liveUrl?: string | null
 }
 
 export interface CalendarResponse {
   events: ScheduleResult[]
+}
+
+export interface LivesResponse {
+  lives: ScheduleResult[]
 }

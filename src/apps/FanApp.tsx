@@ -14,6 +14,14 @@ import { getCart, addCartItem, updateCartItem, removeCartItem } from '../api/car
 import type { CartItemResponse } from '../types/cart';
 import { getFeeds, createFeed, createComment, likeFeed, unlikeFeed, followArtist, unfollowArtist, getJoinedArtists } from '../api/community';
 import type { FeedResponse } from '../types/feed';
+import { getCalendar } from '../api/schedule';
+import type { ScheduleResult } from '../types/schedule';
+import { getVotes, castBallot } from '../api/votes';
+import type { GoodsVoteResult } from '../types/vote';
+import { getAttendanceEvents, checkIn } from '../api/attendance';
+import type { AttendanceEventResult } from '../types/attendance';
+import { getNotifications, markAsRead } from '../api/notifications';
+import type { NotificationResult } from '../types/notification';
 
 const SORT_OPTIONS = ['낮은가격순', '높은가격순'];
 
@@ -51,6 +59,25 @@ function formatTime(iso: string): string {
   const hours = Math.floor(mins / 60)
   if (hours < 24) return `${hours}시간 전`
   return `${Math.floor(hours / 24)}일 전`
+}
+
+function scheduleDateTime(iso: string): { date: string; time: string } {
+  const kst = new Date(new Date(iso).getTime() + 9 * 60 * 60 * 1000)
+  return {
+    date: String(kst.getUTCDate()).padStart(2, '0'),
+    time: `${String(kst.getUTCHours()).padStart(2, '0')}:${String(kst.getUTCMinutes()).padStart(2, '0')} KST`,
+  }
+}
+
+function groupSchedulesByMonth(events: ScheduleResult[]): [string, ScheduleResult[]][] {
+  const map = new Map<string, ScheduleResult[]>()
+  for (const e of events) {
+    const kst = new Date(new Date(e.startTime).getTime() + 9 * 60 * 60 * 1000)
+    const key = `${kst.getUTCFullYear()}.${String(kst.getUTCMonth() + 1).padStart(2, '0')}`
+    if (!map.has(key)) map.set(key, [])
+    map.get(key)!.push(e)
+  }
+  return Array.from(map.entries())
 }
 
 const TAB_TO_URL: Record<string, string> = {
@@ -172,12 +199,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     }
   };
 
-  const [notifications, setNotifications] = useState([
-    { id: 1, title: '새 댓글', content: '회원님의 포스트에 "Fan_A"님이 댓글을 남겼습니다.', time: '2시간 전', isRead: false },
-    { id: 2, title: '재입고 알림', content: '신청하신 "에코 파스텔 숄더백" 상품이 재입고되었습니다.', time: '4시간 전', isRead: false },
-    { id: 3, title: '투표 시작', content: '새로운 굿즈 투표 "에코백 디자인 결정"이 시작되었습니다.', time: '5시간 전', isRead: true },
-    { id: 4, title: '스케줄림', content: '음악중심 방송 출연 1시간 전입니다.', time: '12시간 전', isRead: true },
-  ]);
+  const [notifications, setNotifications] = useState<NotificationResult[]>([]);
 
   const [showArtistSearch, setShowArtistSearch] = useState(false);
   
@@ -255,12 +277,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
 
   // Rank Game State (Removed as per user request)
   
-  const [goodsVotes, setGoodsVotes] = useState([
-    { id: 1, title: '에코백 디자인 A', category: '에코백', votes: 1240, img: 'https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&q=80&w=400', color: '#E5D9D1' },
-    { id: 2, title: '에코백 디자인 B', category: '에코백', votes: 890, img: 'https://images.unsplash.com/photo-1622560480605-d83c853bc5c3?auto=format&fit=crop&q=80&w=400', color: '#D1E5DE' },
-    { id: 3, title: '응원봉 실리콘 커버', category: '액세서리', votes: 2150, img: 'https://images.unsplash.com/photo-1618335829737-2228ad3088fe?auto=format&fit=crop&q=80&w=400', color: '#E5D1E1' },
-    { id: 4, title: '아티스트 시그니처 향수', category: '뷰티', votes: 1560, img: 'https://images.unsplash.com/photo-1541643600914-78b084683601?auto=format&fit=crop&q=80&w=400', color: '#E2E5D1' },
-  ]);
+  const [goodsVotes, setGoodsVotes] = useState<GoodsVoteResult[]>([]);
   const [hasVoted, setHasVoted] = useState<number[]>([]);
   const [collectedCards, setCollectedCards] = useState<any[]>([]);
 
@@ -279,12 +296,8 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     { id: 'n4', tag: '공지', title: '공식 팬클럽 멤버십 키트 배송 지연 안내', date: '2026.05.08', type: 'NOTICE' },
   ]);
 
-  const [schedules] = useState([
-    { id: 's1', date: '14', month: '2026.05', time: '15:00 KST', title: '음악중심 방송 출연', category: 'VIDEO', noticeId: null },
-    { id: 's2', date: '15', month: '2026.05', time: '22:00 KST', title: '심야 라디오 게스트 출연', category: 'RADIO', noticeId: null },
-    { id: 's3', date: '01', month: '2026.06', time: '18:00 KST', title: 'ECHO 특별판 포토북 출시', category: 'RELEASE', noticeId: 'n3' },
-    { id: 's4', date: '12', month: '2026.06', time: '19:00 KST', title: 'NOVA 2주년 기념 라이브 콘서트', category: 'LIVE', noticeId: 'n1' },
-  ]);
+  const [schedules, setSchedules] = useState<ScheduleResult[]>([]);
+  const [activeAttendanceEvent, setActiveAttendanceEvent] = useState<AttendanceEventResult | null>(null);
 
   const [selectedSchedule, setSelectedSchedule] = useState<any>(null);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
@@ -303,6 +316,19 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     }, 0);
     return () => clearTimeout(timer);
   }, [boardTab, selectedArtist, triggeredArtists]);
+
+  useEffect(() => {
+    if (!selectedArtist) return;
+    const id = selectedArtist.id as number;
+    getVotes(id).then(res => setGoodsVotes(res.items)).catch(() => {});
+    getCalendar(id).then(res => setSchedules(res.events)).catch(() => {});
+    getAttendanceEvents(id).then(evts => setActiveAttendanceEvent(evts[0] ?? null)).catch(() => {});
+  }, [selectedArtist]);
+
+  useEffect(() => {
+    if (activeTab !== 'NOTIFICATIONS') return;
+    getNotifications().then(setNotifications).catch(() => {});
+  }, [activeTab]);
 
   // Trigger Intersection Observer again when activeTab changes
   useEffect(() => {
@@ -1184,14 +1210,14 @@ export default function App({ role = 'FAN' }: { role?: string }) {
               {notifications.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--text-sub)', fontWeight: 600 }}>새로운 알림이 없습니다.</div>
               ) : (
-                notifications.map(n => (
+                [...notifications].reverse().map(n => (
                   <div key={n.id} style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '20px', padding: '24px', position: 'relative', opacity: n.isRead ? 0.7 : 1 }}>
                     {!n.isRead && <div style={{ position: 'absolute', top: 24, right: 24, width: '8px', height: '8px', background: 'var(--point-rose)', borderRadius: '50%' }}></div>}
-                    <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--point-rose)', marginBottom: '8px' }}>{n.title}</div>
-                    <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '8px', color: 'var(--text-main)' }}>{n.content}</div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-sub)', fontWeight: 600 }}>{n.time}</div>
+                    <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--point-rose)', marginBottom: '8px' }}>{n.type}</div>
+                    <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '8px', color: 'var(--text-main)' }}>{n.message}</div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-sub)', fontWeight: 600 }}>{formatTime(n.sentAt)}</div>
                   </div>
-                )).reverse()
+                ))
               )}
             </div>
           </div>
@@ -1286,16 +1312,16 @@ export default function App({ role = 'FAN' }: { role?: string }) {
           <div style={{ position: 'fixed', top: '80px', right: '40px', width: '360px', maxHeight: '500px', background: 'white', borderRadius: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.15)', zIndex: 1000, overflow: 'hidden', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
             <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ fontSize: '18px', fontWeight: 800 }}>Notifications</h3>
-              <button onClick={() => setNotifications(notifications.map(n => ({ ...n, isRead: true })))} style={{ fontSize: '12px', fontWeight: 700, color: 'var(--point-rose)', background: 'none', border: 'none', cursor: 'pointer' }}>Mark all as read</button>
+              <button onClick={async () => { const unread = notifications.filter(n => !n.isRead); await Promise.all(unread.map(n => markAsRead(n.id).catch(() => {}))); setNotifications(prev => prev.map(n => ({ ...n, isRead: true }))); }} style={{ fontSize: '12px', fontWeight: 700, color: 'var(--point-rose)', background: 'none', border: 'none', cursor: 'pointer' }}>Mark all as read</button>
             </div>
             <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }} className="hide-scrollbar">
               {notifications.map(n => (
                 <div key={n.id} style={{ padding: '16px 24px', cursor: 'pointer', borderBottom: '1px solid rgba(0,0,0,0.03)', background: n.isRead ? 'transparent' : 'rgba(194, 80, 122, 0.03)', transition: 'background 0.2s' }} className="hover-item">
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '13px', fontWeight: 800, color: n.isRead ? 'var(--text-main)' : 'var(--point-rose)' }}>{n.title}</span>
-                    <span style={{ fontSize: '11px', color: 'var(--text-sub)' }}>{n.time}</span>
+                    <span style={{ fontSize: '13px', fontWeight: 800, color: n.isRead ? 'var(--text-main)' : 'var(--point-rose)' }}>{n.type}</span>
+                    <span style={{ fontSize: '11px', color: 'var(--text-sub)' }}>{formatTime(n.sentAt)}</span>
                   </div>
-                  <p style={{ fontSize: '13px', color: 'var(--text-sub)', lineHeight: 1.4 }}>{n.content}</p>
+                  <p style={{ fontSize: '13px', color: 'var(--text-sub)', lineHeight: 1.4 }}>{n.message}</p>
                 </div>
               ))}
             </div>
@@ -1365,7 +1391,6 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                </div>
 
                <button className="btn-primary" onClick={() => {
-                 setNotifications([...notifications, { id: Date.now(), title: '프로필 업데이트', content: '프로필 수정이 완료되었습니다.', time: '방금 전', isRead: false }]);
                  setShowEditProfile(false);
                }} style={{ width: '100%', background: 'var(--text-main)', color: 'white', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 800 }}>저장하기</button>
             </div>
@@ -1447,11 +1472,14 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                           boxShadow: '0 10px 25px rgba(255, 106, 136, 0.2)',
                           padding: '20px 24px'
                         }}
-                        onClick={() => {
+                        onClick={async () => {
                           setShowAttendance(true);
                           setAttendanceStep('STAMPING');
                           setTriggeredArtists(prev => [...prev, selectedArtist.id]);
                           setShowAttendanceBanner(false);
+                          if (activeAttendanceEvent) {
+                            checkIn(activeAttendanceEvent.id).catch(() => {});
+                          }
                         }}
                       >
                         <div style={{ width: '44px', height: '44px', background: 'rgba(255,255,255,0.2)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', backdropFilter: 'blur(4px)' }}>
@@ -1668,28 +1696,30 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                     </div>
                     
                     <div className="vote-grid">
-                      {goodsVotes.map(item => (
-                        <div key={item.id} className="vote-card">
-                          <div className="vote-img" style={{ background: item.color }}>
-                            <img src={item.img} alt={item.title} />
+                      {goodsVotes.flatMap(vote =>
+                        vote.options.map(opt => ({ voteId: vote.id, voteTitle: vote.title, opt }))
+                      ).map(({ voteId, voteTitle, opt }) => (
+                        <div key={`${voteId}-${opt.id}`} className="vote-card">
+                          <div className="vote-img">
+                            {opt.imageUrl && <img src={opt.imageUrl} alt={opt.label} />}
                           </div>
                           <div className="vote-body">
                             <div className="vote-info">
-                              <div className="vote-category">{item.category}</div>
-                              <div className="vote-title">{item.title}</div>
+                              <div className="vote-category">{voteTitle}</div>
+                              <div className="vote-title">{opt.label}</div>
                               <div className="vote-count">
-                                <ThumbsUp size={14} /> {item.votes.toLocaleString()} 투표됨
+                                <ThumbsUp size={14} /> {opt.voteCount.toLocaleString()} 투표됨
                               </div>
                             </div>
-                            <button 
-                              className={`vote-btn ${hasVoted.includes(item.id) ? 'disabled' : 'active'}`}
-                              disabled={hasVoted.includes(item.id)}
-                              onClick={() => {
-                                setGoodsVotes(prev => prev.map(v => v.id === item.id ? { ...v, votes: v.votes + 1 } : v));
-                                setHasVoted(prev => [...prev, item.id]);
+                            <button
+                              className={`vote-btn ${hasVoted.includes(voteId) ? 'disabled' : 'active'}`}
+                              disabled={hasVoted.includes(voteId)}
+                              onClick={async () => {
+                                await castBallot(voteId, opt.id).catch(() => {});
+                                setHasVoted(prev => [...prev, voteId]);
                               }}
                             >
-                              {hasVoted.includes(item.id) ? '투표 완료' : '투표하기'}
+                              {hasVoted.includes(voteId) ? '투표 완료' : '투표하기'}
                             </button>
                           </div>
                         </div>
@@ -1769,41 +1799,33 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                 {/* SCHEDULE TAB */}
                 {boardTab === 'SCHEDULE' && (
                   <div className="schedule-list reveal">
-                    {/* Simplified grouped display for demo */}
-                    <div className="schedule-month">2026.05</div>
-                    {schedules.filter(s => s.month === '2026.05').map(s => (
-                      <div key={s.id} className="schedule-item" onClick={() => { setSelectedSchedule(s); setShowScheduleModal(true); }}>
-                        <div className="si-date">{s.date}</div>
-                        <div className="si-info">
-                          <div className="si-time">
-                            {s.category === 'VIDEO' && <Video size={14} />}
-                            {s.category === 'RADIO' && <Radio size={14} />}
-                            {s.category === 'RELEASE' && <span style={{color: 'var(--point-rose)', fontWeight: 800}}>발매</span>}
-                            {s.category === 'LIVE' && <Calendar size={14} />}
-                            {s.time}
-                          </div>
-                          <div className="si-title">{s.title}</div>
+                    {schedules.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-sub)', fontWeight: 600 }}>등록된 스케줄이 없습니다.</div>
+                    ) : (
+                      groupSchedulesByMonth(schedules).map(([month, events]) => (
+                        <div key={month}>
+                          <div className="schedule-month">{month}</div>
+                          {events.map(s => {
+                            const { date, time } = scheduleDateTime(s.startTime);
+                            return (
+                              <div key={s.id} className="schedule-item" onClick={() => { setSelectedSchedule(s); setShowScheduleModal(true); }}>
+                                <div className="si-date">{date}</div>
+                                <div className="si-info">
+                                  <div className="si-time">
+                                    {s.type === 'DROP' && <span style={{color: 'var(--point-rose)', fontWeight: 800}}>발매</span>}
+                                    {s.type === 'LIVE' && <Calendar size={14} />}
+                                    {s.type === 'EVENT' && <Calendar size={14} />}
+                                    {s.type === 'NOTICE' && <Bell size={14} />}
+                                    {time}
+                                  </div>
+                                  <div className="si-title">{s.title}</div>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                      </div>
-                    ))}
-
-                    <div className="schedule-month">2026.06</div>
-                    {schedules.filter(s => s.month === '2026.06').map(s => (
-                      <div key={s.id} className="schedule-item" onClick={() => { setSelectedSchedule(s); setShowScheduleModal(true); }}>
-                        <div className="si-date">{s.date}</div>
-                        <div className="si-info">
-                          <div className="si-time">
-                            {s.category === 'VIDEO' && <Video size={14} />}
-                            {s.category === 'RADIO' && <Radio size={14} />}
-                            {s.category === 'RELEASE' && <span style={{color: 'var(--point-rose)', fontWeight: 800}}>발매</span>}
-                            {s.category === 'LIVE' && <Calendar size={14} />}
-                            {s.time}
-                          </div>
-                          <div className="si-title">{s.title}</div>
-                        </div>
-                        {s.noticeId && <div className="text-[10px] font-bold bg-[#F7F3EE] px-2 py-1 rounded text-[#C2507A] border border-[#C2507A]">공지연동</div>}
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 )}
               </div>

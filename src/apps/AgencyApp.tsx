@@ -1,8 +1,29 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LayoutDashboard, PenTool, Image, Calendar as CalendarIcon, Package, ShoppingCart, Users, UserCircle, LogOut, CheckCircle2, Activity, ArrowUpRight, ArrowDownRight, Clock, Plus, Upload, X } from 'lucide-react';
 import { logout } from '../api/auth';
 import { ROLE_KEY } from '../App';
+import { getCalendar, createEvent, registerLive, startLive } from '../api/schedule';
+import type { ScheduleResult } from '../types/schedule';
+
+const SCHEDULE_ARTISTS = [
+  { id: 1, name: 'NOVA' },
+  { id: 2, name: 'LUNA' },
+  { id: 3, name: 'ECHO' },
+]
+
+function fmtSchedule(iso: string) {
+  const d = new Date(iso)
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return {
+    date: `${mm}/${dd}`,
+    time: `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`,
+  }
+}
+
+const TYPE_LABELS: Record<string, string> = { DROP: '발매', LIVE: 'LIVE', EVENT: '이벤트', NOTICE: '공지' }
+const TYPE_COLORS: Record<string, string> = { DROP: '#C2507A', LIVE: '#FF4444', EVENT: '#7F77DD', NOTICE: '#888' }
 
 export default function AgencyApp() {
   const navigate = useNavigate();
@@ -103,6 +124,14 @@ export default function AgencyApp() {
   const [editingMember, setEditingMember] = useState<any>(null);
   const [newNotice, setNewNotice] = useState({ title: '', tag: 'NOTICE (일반공지)', content: '' });
 
+  // 스케줄 관리 상태
+  const [agencyArtistId, setAgencyArtistId] = useState(1);
+  const [agencySchedules, setAgencySchedules] = useState<ScheduleResult[]>([]);
+  const [eventForm, setEventForm] = useState({ title: '', type: 'EVENT', date: '', time: '' });
+  const [liveForm, setLiveForm] = useState({ title: '', date: '', time: '', liveUrl: '' });
+  const [showLiveModal, setShowLiveModal] = useState(false);
+  const [startingLiveId, setStartingLiveId] = useState<number | null>(null);
+
   const updateArtist = (updated: any) => {
     setArtists(artists.map(a => a.id === updated.id ? updated : a));
     setEditingArtist(null);
@@ -155,6 +184,13 @@ export default function AgencyApp() {
     { id: 'banners', icon: Image, label: 'Home Promotion Banners' },
     { id: 'orders', icon: ShoppingCart, label: 'Order Management' },
   ];
+
+  useEffect(() => {
+    if (activeMenu !== 'calendar') return;
+    getCalendar(agencyArtistId)
+      .then(res => setAgencySchedules(res.events))
+      .catch(() => {});
+  }, [activeMenu, agencyArtistId]);
 
   return (
     <div className="min-h-screen bg-[#F7F3EE] flex flex-col font-sans">
@@ -703,108 +739,150 @@ export default function AgencyApp() {
 
             {activeMenu === 'calendar' && (
               <div className="bg-white p-8 rounded-[32px] border border-[#EDE8E2] shadow-sm">
-                 <div className="flex justify-between items-center mb-8">
-                   <h3 className="text-xl font-black">예정된 스케줄 (Upcoming Schedule)</h3>
-                   <button className="bg-[#C2507A] text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-pink-100" onClick={() => setShowEventModal(true)}>일정 추가</button>
-                 </div>
-                 
-                 {showEventModal && (
-                    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                      <div className="bg-white rounded-2xl w-full max-w-md p-6">
-                        <h3 className="text-xl font-bold mb-4">새 일정 추가</h3>
-                        <div className="space-y-4">
-                          <div>
-                            <label className="block text-sm font-bold text-[#888] mb-1">일정명</label>
-                            <input type="text" className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]" />
-                          </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <label className="block text-sm font-bold text-[#888] mb-1">날짜</label>
-                              <input type="date" className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]" />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-bold text-[#888] mb-1">시간</label>
-                              <input type="time" className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]" />
-                            </div>
-                          </div>
-                          <div>
-                            <label className="block text-sm font-bold text-[#888] mb-1">종류</label>
-                            <select className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]">
-                              <option>콘서트 (CONCERT)</option>
-                              <option>팬미팅 (FAN MEETING)</option>
-                              <option>앨범 발매 (RELEASE)</option>
-                              <option>라이브 스트리밍 (LIVE STREAM)</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-sm font-bold text-[#888] mb-1">상세 설명</label>
-                            <textarea className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A] h-20 resize-none"></textarea>
-                          </div>
-                          <div className="space-y-4 pt-2">
-                            <div className="flex items-center justify-between border border-[#EDE8E2] rounded-xl p-4">
-                              <label className="text-sm font-bold text-[#111] cursor-pointer" onClick={() => setLinkNoticeToggle(!linkNoticeToggle)}>
-                                기존 공지사항 연동하기 (Link Notice)
-                              </label>
-                              <div className="relative inline-flex items-center cursor-pointer" onClick={() => setLinkNoticeToggle(!linkNoticeToggle)}>
-                                <input type="checkbox" className="sr-only peer" checked={linkNoticeToggle} readOnly />
-                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#C2507A]"></div>
-                              </div>
-                            </div>
-                            
-                            {linkNoticeToggle && (
-                               <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
-                                  <label className="block text-xs font-black text-[#888] uppercase tracking-wider">공지사항 선택</label>
-                                  <select id="notice-select-box" className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A] text-sm">
-                                    <option value="">연동 안 함 (None)</option>
-                                    {notices.map(n => (
-                                      <option key={n.id} value={n.id}>[{n.tag}] {n.title}</option>
-                                    ))}
-                                  </select>
-                               </div>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex gap-2 mt-6">
-                          <button className="flex-1 bg-[#F7F3EE] text-[#111] py-3 rounded-xl font-bold" onClick={() => setShowEventModal(false)}>취소</button>
-                          <button className="flex-1 bg-[#C2507A] text-white py-3 rounded-xl font-bold" onClick={() => { 
-                            const noticeSelect = document.getElementById('notice-select-box') as HTMLSelectElement;
-                            const existingNoticeId = noticeSelect?.value;
-                             
-                            if (linkNoticeToggle && !existingNoticeId) {
-                               alert('연동할 공지사항을 선택해주세요.');
-                               return;
-                            }
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-xl font-black">예정된 스케줄 (Upcoming Schedule)</h3>
+                  <div className="flex items-center gap-3">
+                    <select
+                      value={agencyArtistId}
+                      onChange={e => setAgencyArtistId(Number(e.target.value))}
+                      className="bg-[#F7F3EE] border border-[#ede8e2] px-3 py-2 rounded-xl text-sm font-bold focus:outline-none focus:border-[#C2507A]"
+                    >
+                      {SCHEDULE_ARTISTS.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                    </select>
+                    <button className="bg-[#F7F3EE] border border-[#ede8e2] text-[#111] px-4 py-2 rounded-xl text-sm font-bold" onClick={() => setShowLiveModal(true)}>라이브 등록</button>
+                    <button className="bg-[#C2507A] text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg shadow-pink-100" onClick={() => setShowEventModal(true)}>일정 추가</button>
+                  </div>
+                </div>
 
-                            setShowEventModal(false); 
-                            alert(linkNoticeToggle && existingNoticeId
-                              ? '공지사항이 연동된 일정이 추가되었습니다!' 
-                              : '일정이 추가되었습니다!'
-                            ); 
-                          }}>저장</button>
+                {/* 이벤트 추가 모달 */}
+                {showEventModal && (
+                  <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl w-full max-w-md p-6">
+                      <h3 className="text-xl font-bold mb-4">새 일정 추가</h3>
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-bold text-[#888] mb-1">일정명</label>
+                          <input type="text" value={eventForm.title} onChange={e => setEventForm({...eventForm, title: e.target.value})} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]" placeholder="일정 제목을 입력하세요" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-bold text-[#888] mb-1">종류</label>
+                          <select value={eventForm.type} onChange={e => setEventForm({...eventForm, type: e.target.value})} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]">
+                            <option value="EVENT">이벤트 (EVENT)</option>
+                            <option value="DROP">앨범·굿즈 발매 (DROP)</option>
+                            <option value="NOTICE">공지 (NOTICE)</option>
+                          </select>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-bold text-[#888] mb-1">날짜</label>
+                            <input type="date" value={eventForm.date} onChange={e => setEventForm({...eventForm, date: e.target.value})} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]" />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-bold text-[#888] mb-1">시간</label>
+                            <input type="time" value={eventForm.time} onChange={e => setEventForm({...eventForm, time: e.target.value})} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]" />
+                          </div>
                         </div>
                       </div>
+                      <div className="flex gap-2 mt-6">
+                        <button className="flex-1 bg-[#F7F3EE] text-[#111] py-3 rounded-xl font-bold" onClick={() => { setShowEventModal(false); setEventForm({ title: '', type: 'EVENT', date: '', time: '' }); }}>취소</button>
+                        <button className="flex-1 bg-[#C2507A] text-white py-3 rounded-xl font-bold" onClick={async () => {
+                          if (!eventForm.title.trim() || !eventForm.date || !eventForm.time) { alert('모든 필드를 입력해주세요.'); return; }
+                          try {
+                            await createEvent(agencyArtistId, eventForm.title.trim(), eventForm.type, `${eventForm.date}T${eventForm.time}:00+09:00`);
+                            setShowEventModal(false);
+                            setEventForm({ title: '', type: 'EVENT', date: '', time: '' });
+                            getCalendar(agencyArtistId).then(res => setAgencySchedules(res.events)).catch(() => {});
+                            alert('일정이 등록되었습니다.');
+                          } catch { alert('일정 등록에 실패했습니다.'); }
+                        }}>저장</button>
+                      </div>
                     </div>
-                  )}
+                  </div>
+                )}
 
-                 <div className="space-y-4">
-                   {[
-                     { date: 'June 1', time: '19:00', title: '2nd LIVE Concert (Seoul)', type: 'CONCERT' },
-                     { date: 'June 5', time: '20:00', title: 'New Album Release', type: 'RELEASE' },
-                     { date: 'June 10', time: '14:00', title: 'Fan Signing Event', type: 'EVENT' }
-                   ].map((ev, i) => (
-                     <div key={i} className="flex items-center gap-6 p-4 rounded-xl border border-[#EDE8E2] hover:bg-[#F7F3EE] transition-colors">
-                       <div className="text-center w-20 shrink-0 border-r border-[#EDE8E2] pr-6">
-                         <div className="text-[#C2507A] font-bold text-sm">{ev.date}</div>
-                         <div className="text-[#888] text-xs font-mono">{ev.time}</div>
-                       </div>
-                       <div className="flex-1">
-                         <div className="text-xs font-bold text-[#7F77DD] mb-1">{ev.type}</div>
-                         <div className="font-bold">{ev.title}</div>
-                       </div>
-                       <button className="text-sm font-bold text-[#888] hover:text-[#111]">수정 (Edit)</button>
-                     </div>
-                   ))}
-                 </div>
+                {/* 라이브 등록 모달 */}
+                {showLiveModal && (
+                  <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl w-full max-w-md p-6">
+                      <h3 className="text-xl font-bold mb-4">라이브 방송 등록</h3>
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-bold text-[#888] mb-1">라이브 제목</label>
+                          <input type="text" value={liveForm.title} onChange={e => setLiveForm({...liveForm, title: e.target.value})} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]" placeholder="라이브 제목을 입력하세요" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-bold text-[#888] mb-1">날짜</label>
+                            <input type="date" value={liveForm.date} onChange={e => setLiveForm({...liveForm, date: e.target.value})} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]" />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-bold text-[#888] mb-1">시간</label>
+                            <input type="time" value={liveForm.time} onChange={e => setLiveForm({...liveForm, time: e.target.value})} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]" />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-bold text-[#888] mb-1">YouTube 임베드 URL</label>
+                          <input type="text" value={liveForm.liveUrl} onChange={e => setLiveForm({...liveForm, liveUrl: e.target.value})} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]" placeholder="https://www.youtube.com/embed/VIDEO_ID" />
+                          <p className="text-xs text-[#888] mt-1">형식: https://www.youtube.com/embed/VIDEO_ID</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 mt-6">
+                        <button className="flex-1 bg-[#F7F3EE] text-[#111] py-3 rounded-xl font-bold" onClick={() => { setShowLiveModal(false); setLiveForm({ title: '', date: '', time: '', liveUrl: '' }); }}>취소</button>
+                        <button className="flex-1 bg-[#FF4444] text-white py-3 rounded-xl font-bold" onClick={async () => {
+                          if (!liveForm.title.trim() || !liveForm.date || !liveForm.time || !liveForm.liveUrl.trim()) { alert('모든 필드를 입력해주세요.'); return; }
+                          if (!/^https:\/\/www\.youtube\.com\/embed\/[^/?#]+$/.test(liveForm.liveUrl.trim())) { alert('YouTube 임베드 URL 형식이 올바르지 않습니다.\n예: https://www.youtube.com/embed/VIDEO_ID'); return; }
+                          try {
+                            await registerLive(agencyArtistId, liveForm.title.trim(), `${liveForm.date}T${liveForm.time}:00+09:00`, liveForm.liveUrl.trim());
+                            setShowLiveModal(false);
+                            setLiveForm({ title: '', date: '', time: '', liveUrl: '' });
+                            getCalendar(agencyArtistId).then(res => setAgencySchedules(res.events)).catch(() => {});
+                            alert('라이브가 등록되었습니다.');
+                          } catch { alert('라이브 등록에 실패했습니다.'); }
+                        }}>등록</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 스케줄 목록 */}
+                {agencySchedules.length === 0 ? (
+                  <div className="text-center py-12 text-[#888] font-bold">등록된 스케줄이 없습니다.</div>
+                ) : (
+                  <div className="space-y-3">
+                    {agencySchedules.map(s => {
+                      const { date, time } = fmtSchedule(s.startTime);
+                      return (
+                        <div key={s.id} className="flex items-center gap-6 p-4 rounded-xl border border-[#EDE8E2] hover:bg-[#F7F3EE] transition-colors">
+                          <div className="text-center w-20 shrink-0 border-r border-[#EDE8E2] pr-6">
+                            <div className="text-[#C2507A] font-bold text-sm">{date}</div>
+                            <div className="text-[#888] text-xs font-mono">{time}</div>
+                          </div>
+                          <div className="flex-1">
+                            <div className="text-xs font-bold mb-1" style={{ color: TYPE_COLORS[s.type] ?? '#888' }}>{TYPE_LABELS[s.type] ?? s.type}</div>
+                            <div className="font-bold">{s.title}</div>
+                          </div>
+                          {s.type === 'LIVE' && (
+                            <button
+                              disabled={startingLiveId === s.id}
+                              onClick={async () => {
+                                setStartingLiveId(s.id);
+                                try {
+                                  await startLive(s.id);
+                                  getCalendar(agencyArtistId).then(res => setAgencySchedules(res.events)).catch(() => {});
+                                  alert('라이브가 시작되었습니다!');
+                                } catch { alert('라이브 시작에 실패했습니다.'); }
+                                finally { setStartingLiveId(null); }
+                              }}
+                              className="text-sm font-bold text-white bg-[#FF4444] px-3 py-1.5 rounded-lg disabled:opacity-50"
+                            >
+                              {startingLiveId === s.id ? '처리 중...' : '라이브 시작'}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 

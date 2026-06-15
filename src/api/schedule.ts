@@ -1,5 +1,9 @@
 import { getAuthHeaders } from './auth'
-import type { CalendarResponse, LivesResponse } from '../types/schedule'
+import type { CalendarResponse, LivesResponse, ScheduleResult } from '../types/schedule'
+
+function agencyHeaders() {
+  return { ...getAuthHeaders(), 'Content-Type': 'application/json', 'X-Artist-Member-Id': '1' }
+}
 
 export async function getCalendar(
   artistId: number,
@@ -25,4 +29,46 @@ export async function getLives(artistId: number): Promise<LivesResponse> {
   if (!res.ok) throw new Error(`getLives failed: ${res.status}`)
   const body = await res.json()
   return body.data as LivesResponse
+}
+
+export async function createEvent(
+  artistId: number,
+  title: string,
+  type: string,
+  scheduledAt: string,
+): Promise<{ eventId: number }> {
+  const res = await fetch(`/api/v1/artists/${artistId}/events`, {
+    method: 'POST',
+    headers: agencyHeaders(),
+    body: JSON.stringify({ title, type, scheduledAt }),
+  })
+  if (!res.ok) throw new Error(`createEvent failed: ${res.status}`)
+  const body = await res.json()
+  return body.data as { eventId: number }
+}
+
+export async function registerLive(
+  artistId: number,
+  title: string,
+  scheduledAt: string,
+  liveUrl: string,
+): Promise<{ scheduleId: number }> {
+  const res = await fetch(`/api/v1/artists/${artistId}/lives`, {
+    method: 'POST',
+    headers: agencyHeaders(),
+    body: JSON.stringify({ title, scheduledAt, liveUrl }),
+  })
+  if (!res.ok) throw new Error(`registerLive failed: ${res.status}`)
+  const body = await res.json()
+  return body.data as { scheduleId: number }
+}
+
+export async function startLive(scheduleId: number): Promise<ScheduleResult> {
+  const res = await fetch(`/api/v1/lives/${scheduleId}/start`, {
+    method: 'PATCH',
+    headers: agencyHeaders(),
+  })
+  if (!res.ok) throw new Error(`startLive failed: ${res.status}`)
+  const body = await res.json()
+  return body.data as ScheduleResult
 }

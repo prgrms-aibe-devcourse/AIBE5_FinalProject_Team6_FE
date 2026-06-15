@@ -127,7 +127,6 @@ export default function AgencyApp() {
   // 스케줄 관리 상태
   const [agencyArtistId, setAgencyArtistId] = useState(1);
   const [agencySchedules, setAgencySchedules] = useState<ScheduleResult[]>([]);
-  const [scheduleLoading, setScheduleLoading] = useState(false);
   const [eventForm, setEventForm] = useState({ title: '', type: 'EVENT', date: '', time: '' });
   const [liveForm, setLiveForm] = useState({ title: '', date: '', time: '', liveUrl: '' });
   const [showLiveModal, setShowLiveModal] = useState(false);
@@ -188,11 +187,9 @@ export default function AgencyApp() {
 
   useEffect(() => {
     if (activeMenu !== 'calendar') return;
-    setScheduleLoading(true);
     getCalendar(agencyArtistId)
       .then(res => setAgencySchedules(res.events))
-      .catch(() => {})
-      .finally(() => setScheduleLoading(false));
+      .catch(() => {});
   }, [activeMenu, agencyArtistId]);
 
   return (
@@ -848,9 +845,7 @@ export default function AgencyApp() {
                 )}
 
                 {/* 스케줄 목록 */}
-                {scheduleLoading ? (
-                  <div className="text-center py-12 text-[#888] font-bold">로딩 중...</div>
-                ) : agencySchedules.length === 0 ? (
+                {agencySchedules.length === 0 ? (
                   <div className="text-center py-12 text-[#888] font-bold">등록된 스케줄이 없습니다.</div>
                 ) : (
                   <div className="space-y-3">

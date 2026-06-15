@@ -24,6 +24,8 @@ import { getNotifications, markAsRead } from '../api/notifications';
 import type { NotificationResult } from '../types/notification';
 import { getMyProfile, updateMyProfile, getMyActivities } from '../api/fan';
 import type { FanResult, ActivityItem } from '../types/fan';
+import { getMyOrders, cancelOrder } from '../api/orders';
+import type { OrderListItem } from '../types/order';
 
 const SORT_OPTIONS = ['낮은가격순', '높은가격순'];
 
@@ -292,6 +294,8 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [restockSubscribed, setRestockSubscribed] = useState<Set<number>>(new Set());
   const [fanProfile, setFanProfile] = useState<FanResult | null>(null);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [myOrders, setMyOrders] = useState<OrderListItem[]>([]);
+  const [cancellingOrderId, setCancellingOrderId] = useState<number | null>(null);
   const [showAttendanceBanner, setShowAttendanceBanner] = useState(false);
   const [attendanceStep, setAttendanceStep] = useState<'IDLE' | 'STAMPING' | 'REWARD'>('IDLE');
   const [triggeredArtists, setTriggeredArtists] = useState<number[]>([]);
@@ -348,6 +352,11 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   useEffect(() => {
     if (activeTab !== 'MY PAGE' || myPageTab !== 'OVERVIEW') return;
     getMyActivities().then(res => setActivities(res.items)).catch(() => {});
+  }, [activeTab, myPageTab]);
+
+  useEffect(() => {
+    if (activeTab !== 'MY PAGE' || myPageTab !== 'ORDERS') return;
+    getMyOrders().then(res => setMyOrders(res.items)).catch(() => {});
   }, [activeTab, myPageTab]);
 
   // Trigger Intersection Observer again when activeTab changes
@@ -2963,7 +2972,57 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                 <div className="reveal">
                   <h3 style={{fontSize: '24px', fontWeight: 800, marginBottom: '24px'}}>주문 내역</h3>
                   <div className="card" style={{padding: '32px'}}>
-                    <p style={{ color: 'var(--text-sub)', fontSize: '15px' }}>주문 내역이 없습니다.</p>
+                    {myOrders.length === 0 ? (
+                      <p style={{ color: 'var(--text-sub)', fontSize: '15px' }}>주문 내역이 없습니다.</p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        {myOrders.map(order => {
+                          const statusLabel: Record<string, string> = {
+                            PENDING: '주문 생성', RESERVED: '결제 대기', PAID: '결제 완료', FAILED: '결제 실패', COMPLETED: '구매 완료', CANCELLED: '취소됨', REFUNDED: '환불 완료',
+                          };
+                          const statusColor: Record<string, string> = {
+                            PENDING: '#888', RESERVED: '#F5A623', PAID: '#4CAF50', FAILED: '#FF4444', COMPLETED: '#4CAF50', CANCELLED: '#999', REFUNDED: '#7F77DD',
+                          };
+                          return (
+                            <div key={order.orderId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px', borderRadius: '12px', border: '1px solid var(--border)', gap: '16px' }}>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                                  <span style={{ fontSize: '13px', fontWeight: 800, color: statusColor[order.status] ?? '#111', background: `${statusColor[order.status] ?? '#111'}18`, padding: '2px 10px', borderRadius: '20px' }}>
+                                    {statusLabel[order.status] ?? order.status}
+                                  </span>
+                                  <span style={{ fontSize: '12px', color: 'var(--text-sub)' }}>#{order.orderId}</span>
+                                </div>
+                                <div style={{ fontSize: '18px', fontWeight: 800 }}>
+                                  {order.totalAmount.toLocaleString()}원
+                                </div>
+                                <div style={{ fontSize: '12px', color: 'var(--text-sub)', marginTop: '4px' }}>
+                                  {new Date(order.createdAt).toLocaleDateString('ko-KR')}
+                                </div>
+                              </div>
+                              {order.status === 'RESERVED' && (
+                                <button
+                                  onClick={async () => {
+                                    setCancellingOrderId(order.orderId);
+                                    try {
+                                      await cancelOrder(order.orderId);
+                                      setMyOrders(prev => prev.map(o => o.orderId === order.orderId ? { ...o, status: 'CANCELLED' } : o));
+                                    } catch {
+                                      alert('주문 취소에 실패했습니다.');
+                                    } finally {
+                                      setCancellingOrderId(null);
+                                    }
+                                  }}
+                                  disabled={cancellingOrderId === order.orderId}
+                                  style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #FF4444', background: 'transparent', color: '#FF4444', fontSize: '13px', fontWeight: 700, cursor: 'pointer', opacity: cancellingOrderId === order.orderId ? 0.5 : 1 }}
+                                >
+                                  {cancellingOrderId === order.orderId ? '취소 중...' : '주문 취소'}
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

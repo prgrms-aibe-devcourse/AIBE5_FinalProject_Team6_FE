@@ -1,4 +1,4 @@
-export type OrderStatus = 'PENDING' | 'PAID' | 'COMPLETED' | 'CANCELLED' | 'REFUNDED'
+export type OrderStatus = 'PENDING' | 'RESERVED' | 'PAID' | 'FAILED' | 'COMPLETED' | 'CANCELLED' | 'REFUNDED'
 
 export interface OrderListItem {
   orderId: number

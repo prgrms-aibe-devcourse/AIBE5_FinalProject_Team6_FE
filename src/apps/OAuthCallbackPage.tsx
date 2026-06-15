@@ -19,7 +19,7 @@ export default function OAuthCallbackPage() {
     const provider = sessionStorage.getItem(PROVIDER_KEY);
 
     if (!code || !provider) {
-      setError('인증 정보가 올바르지 않습니다.');
+      navigate('/login', { replace: true });
       return;
     }
 

@@ -22,6 +22,8 @@ import { getAttendanceEvents, checkIn } from '../api/attendance';
 import type { AttendanceEventResult } from '../types/attendance';
 import { getNotifications, markAsRead } from '../api/notifications';
 import type { NotificationResult } from '../types/notification';
+import { getMyProfile, updateMyProfile, getMyActivities } from '../api/fan';
+import type { FanResult, ActivityItem } from '../types/fan';
 
 const SORT_OPTIONS = ['낮은가격순', '높은가격순'];
 
@@ -287,6 +289,8 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [showAttendance, setShowAttendance] = useState(false);
   const [isAllowNotification, setIsAllowNotification] = useState(true);
   const [isNotifUpdating, setIsNotifUpdating] = useState(false);
+  const [fanProfile, setFanProfile] = useState<FanResult | null>(null);
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [showAttendanceBanner, setShowAttendanceBanner] = useState(false);
   const [attendanceStep, setAttendanceStep] = useState<'IDLE' | 'STAMPING' | 'REWARD'>('IDLE');
   const [triggeredArtists, setTriggeredArtists] = useState<number[]>([]);
@@ -331,6 +335,19 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     if (activeTab !== 'NOTIFICATIONS') return;
     getNotifications().then(setNotifications).catch(() => {});
   }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab !== 'MY PAGE') return;
+    getMyProfile().then(p => {
+      setFanProfile(p);
+      setIsAllowNotification(p.allowNotification);
+    }).catch(() => {});
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab !== 'MY PAGE' || myPageTab !== 'OVERVIEW') return;
+    getMyActivities().then(res => setActivities(res.items)).catch(() => {});
+  }, [activeTab, myPageTab]);
 
   // Trigger Intersection Observer again when activeTab changes
   useEffect(() => {
@@ -2860,9 +2877,9 @@ export default function App({ role = 'FAN' }: { role?: string }) {
             <div className="bh-content">
               <div className="bh-avatar" style={{ background: 'linear-gradient(135deg, #E8E0D8, #D0C6BE)', width: '120px', height: '120px' }}></div>
               <div className="bh-info">
-                <div className="bh-name" style={{ fontSize: '40px' }}>Dreamer99</div>
+                <div className="bh-name" style={{ fontSize: '40px' }}>{fanProfile?.nickname ?? '—'}</div>
                 <div className="bh-stats" style={{ fontSize: '16px', opacity: 1, color: '#DDD' }}>
-                  <span style={{ color: 'var(--point-rose)', fontWeight: 800 }}>VIP 멤버</span> · 2024년 가입
+                  <span style={{ color: 'var(--point-rose)', fontWeight: 800 }}>VIP 멤버</span> · {fanProfile ? `${new Date(fanProfile.createdAt).getFullYear()}년 가입` : '—'}
                 </div>
               </div>
               <button className="c-btn" onClick={() => setShowEditProfile(true)} style={{background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)'}}>프로필 수정</button>
@@ -2898,7 +2915,26 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                 <div className="reveal">
                   <h3 style={{fontSize: '24px', fontWeight: 800, marginBottom: '24px'}}>전체 개요</h3>
                   <div className="card" style={{padding: '32px'}}>
-                    <p style={{ color: 'var(--text-sub)', fontSize: '15px' }}>최근 활동 내역이 없습니다.</p>
+                    {activities.length === 0 ? (
+                      <p style={{ color: 'var(--text-sub)', fontSize: '15px' }}>최근 활동 내역이 없습니다.</p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        {activities.map(a => (
+                          <div key={a.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '14px 0', borderBottom: '1px solid var(--border)' }}>
+                            <div style={{ flexShrink: 0, color: a.type === 'FEED_LIKE' ? 'var(--point-rose)' : 'var(--point-violet)' }}>
+                              {a.type === 'FEED_LIKE' ? <Heart size={16} /> : <MessageSquare size={16} />}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: '13px', fontWeight: 700, marginBottom: '4px' }}>
+                                {a.type === 'FEED_LIKE' ? '피드 좋아요' : '댓글 작성'}
+                              </div>
+                              <div style={{ fontSize: '13px', color: 'var(--text-sub)', marginBottom: '4px' }}>{a.content}</div>
+                              <div style={{ fontSize: '11px', color: 'var(--text-sub)' }}>{formatTime(a.createdAt)}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -2967,14 +3003,18 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                           style={{ opacity: 0, width: 0, height: 0 }} 
                           checked={isAllowNotification}
                           disabled={isNotifUpdating}
-                          onChange={(e) => {
-                             const newVal = e.target.checked;
-                             setIsNotifUpdating(true);
-                             setTimeout(() => {
-                               setIsAllowNotification(newVal);
-                               setIsNotifUpdating(false);
-                               alert('알림 설정이 변경되었습니다');
-                             }, 800);
+                          onChange={async (e) => {
+                            const newVal = e.target.checked;
+                            setIsNotifUpdating(true);
+                            try {
+                              const updated = await updateMyProfile({ allowNotification: newVal });
+                              setIsAllowNotification(updated.allowNotification);
+                              setFanProfile(prev => prev ? { ...prev, allowNotification: updated.allowNotification } : prev);
+                            } catch {
+                              // 실패 시 토글 원복 없음 — 다음 API 호출에서 서버 값으로 덮어씌워짐
+                            } finally {
+                              setIsNotifUpdating(false);
+                            }
                           }}
                         />
                         <span style={{

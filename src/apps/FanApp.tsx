@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Plus, Search, Calendar, Heart, Share2, Filter, Image as ImageIcon, Smile, MoreHorizontal, MessageSquare, Bell, Pin, Play, Youtube, ChevronLeft, ChevronRight, X, User, ShoppingBag, LogOut, Ticket, Settings, ThumbsUp, CheckCircle2, Gift } from 'lucide-react';
 import { useCheckout } from '../hooks/useCheckout';
 import { useQueue } from '../hooks/useQueue';
-import { getProducts } from '../api/products';
+import { getProducts, subscribeRestock, unsubscribeRestock } from '../api/products';
 import type { ProductResponse } from '../types/product';
 import { getMainBanners } from '../api/banners';
 import type { BannerResponse } from '../types/banner';
@@ -289,6 +289,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [showAttendance, setShowAttendance] = useState(false);
   const [isAllowNotification, setIsAllowNotification] = useState(true);
   const [isNotifUpdating, setIsNotifUpdating] = useState(false);
+  const [restockSubscribed, setRestockSubscribed] = useState<Set<number>>(new Set());
   const [fanProfile, setFanProfile] = useState<FanResult | null>(null);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [showAttendanceBanner, setShowAttendanceBanner] = useState(false);
@@ -2192,10 +2193,19 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                 <div style={{ display: 'flex', gap: '12px', marginBottom: '32px' }}>
                   {selectedProduct.status === 'SOLD_OUT' ? (
                     <button
-                      onClick={() => alert('재입고 알림이 설정되었습니다.')}
-                      style={{ flex: 1, padding: '16px', borderRadius: '12px', background: '#111', color: 'white', fontWeight: 800, textAlign: 'center', cursor: 'pointer' }}
+                      onClick={async () => {
+                        const pid = selectedProduct.id;
+                        if (restockSubscribed.has(pid)) {
+                          await unsubscribeRestock(pid).catch(() => {});
+                          setRestockSubscribed(prev => { const s = new Set(prev); s.delete(pid); return s; });
+                        } else {
+                          await subscribeRestock(pid).catch(() => {});
+                          setRestockSubscribed(prev => new Set(prev).add(pid));
+                        }
+                      }}
+                      style={{ flex: 1, padding: '16px', borderRadius: '12px', background: restockSubscribed.has(selectedProduct.id) ? '#888' : '#111', color: 'white', fontWeight: 800, textAlign: 'center', cursor: 'pointer' }}
                     >
-                      재입고 알림 신청하기
+                      {restockSubscribed.has(selectedProduct.id) ? '알림 취소' : '재입고 알림 신청하기'}
                     </button>
                   ) : (
                     <>
@@ -2536,9 +2546,19 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                   {isSoldOut && (
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); alert('재입고 알림이 설정되었습니다.'); }}
-                      style={{ background: 'white', color: '#C2507A', border: '1px solid #EDE8E2', padding: '8px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                      title="재입고 알림"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        const pid = item.id;
+                        if (restockSubscribed.has(pid)) {
+                          await unsubscribeRestock(pid).catch(() => {});
+                          setRestockSubscribed(prev => { const s = new Set(prev); s.delete(pid); return s; });
+                        } else {
+                          await subscribeRestock(pid).catch(() => {});
+                          setRestockSubscribed(prev => new Set(prev).add(pid));
+                        }
+                      }}
+                      style={{ background: restockSubscribed.has(item.id) ? '#f0f0f0' : 'white', color: restockSubscribed.has(item.id) ? '#888' : '#C2507A', border: '1px solid #EDE8E2', padding: '8px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      title={restockSubscribed.has(item.id) ? '알림 취소' : '재입고 알림'}
                     >
                       <Bell size={16} />
                     </button>

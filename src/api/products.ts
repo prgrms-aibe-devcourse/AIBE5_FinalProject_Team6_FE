@@ -1,5 +1,5 @@
 import type { ProductListResponse, ProductResponse } from '../types/product'
-import { getAuthHeaders } from './auth'
+import { getAuthHeaders, getFanIdHeader } from './auth'
 import { fetchWithAuth } from '../lib/fetchWithAuth'
 
 const BASE = '/api/v1/products'
@@ -22,4 +22,20 @@ export async function getProduct(id: number): Promise<ProductResponse> {
   if (!res.ok) throw new Error(`getProduct failed: ${res.status}`)
   const body = await res.json()
   return body.data as ProductResponse
+}
+
+export async function subscribeRestock(productId: number): Promise<void> {
+  const res = await fetchWithAuth(`${BASE}/${productId}/restock-subscribe`, {
+    method: 'POST',
+    headers: { ...getAuthHeaders(), 'X-Fan-Id': getFanIdHeader() },
+  })
+  if (!res.ok) throw new Error(`subscribeRestock failed: ${res.status}`)
+}
+
+export async function unsubscribeRestock(productId: number): Promise<void> {
+  const res = await fetchWithAuth(`${BASE}/${productId}/restock-subscribe`, {
+    method: 'DELETE',
+    headers: { ...getAuthHeaders(), 'X-Fan-Id': getFanIdHeader() },
+  })
+  if (!res.ok) throw new Error(`unsubscribeRestock failed: ${res.status}`)
 }

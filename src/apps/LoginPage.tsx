@@ -116,9 +116,9 @@ export default function LoginPage() {
           )}
 
           <div className="flex justify-center gap-4 mt-6 text-sm text-[#666]">
-            <button className="hover:text-[#111]">비밀번호 찾기</button>
+            <button onClick={() => navigate('/reset-password')} className="hover:text-[#111]">비밀번호 찾기</button>
             <span className="text-[#E5E5E5]">|</span>
-            <button className="hover:text-[#111]">회원가입</button>
+            <button onClick={() => navigate('/signup')} className="hover:text-[#111]">회원가입</button>
           </div>
 
           <div className="mt-12 pt-8 border-t border-[#EDE8E2] text-center">

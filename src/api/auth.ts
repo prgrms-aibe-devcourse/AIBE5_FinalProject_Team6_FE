@@ -79,6 +79,39 @@ export function getArtistMemberIdHeader(memberId: number): Record<string, string
   return { 'X-Artist-Member-Id': String(memberId) }
 }
 
+export async function signup(
+  email: string,
+  password: string,
+  nickname: string,
+): Promise<AuthToken> {
+  const res = await fetch(`${BASE}/signup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password, nickname, termsAgreed: true }),
+  })
+  if (!res.ok) throw new Error(`signup failed: ${res.status}`)
+  const body = await res.json()
+  return body.data as AuthToken
+}
+
+export async function requestPasswordReset(email: string): Promise<void> {
+  const res = await fetch(`${BASE}/password-reset/request`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  })
+  if (!res.ok) throw new Error(`requestPasswordReset failed: ${res.status}`)
+}
+
+export async function confirmPasswordReset(token: string, newPassword: string): Promise<void> {
+  const res = await fetch(`${BASE}/password-reset/confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, newPassword }),
+  })
+  if (!res.ok) throw new Error(`confirmPasswordReset failed: ${res.status}`)
+}
+
 export async function refresh(): Promise<AuthToken> {
   const refreshToken = getRefreshToken()
   if (!refreshToken) throw new Error('no refresh token')

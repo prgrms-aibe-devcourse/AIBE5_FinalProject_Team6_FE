@@ -12,7 +12,7 @@ import { getStoreBanners } from '../api/banners';
 import type { StoreBannerResponse } from '../types/banner';
 import { getCart, addCartItem, updateCartItem, removeCartItem } from '../api/cart';
 import type { CartItemResponse } from '../types/cart';
-import { getFeeds, createFeed, createComment, likeFeed, unlikeFeed, followArtist, unfollowArtist, getJoinedArtists } from '../api/community';
+import { getFeeds, createFeed, createComment, likeFeed, unlikeFeed, followArtist, unfollowArtist, getJoinedArtists, likeComment, unlikeComment } from '../api/community';
 import type { FeedResponse } from '../types/feed';
 import { getCalendar, getLives } from '../api/schedule';
 import type { ScheduleResult } from '../types/schedule';
@@ -125,8 +125,9 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     const content = commentInputs[key];
     if (!content?.trim() || !selectedArtist) return;
 
+    const tempId = crypto.randomUUID();
     const tempComment = {
-      id: crypto.randomUUID(),
+      id: tempId,
       author: role === 'ARTIST' ? selectedArtist.name : 'Me',
       content: content.trim(),
       time: '방금 전',
@@ -137,11 +138,15 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     setFeeds(prev => prev.map(f => f.id === postId ? { ...f, commentCount: f.commentCount + 1 } : f));
 
     try {
-      await createComment(postId, selectedArtist.id, content.trim());
+      const { commentId } = await createComment(postId, selectedArtist.id, content.trim());
+      setCommentsMap(prev => ({
+        ...prev,
+        [key]: (prev[key] || []).map((c: any) => c.id === tempId ? { ...c, id: commentId } : c),
+      }));
     } catch {
       setCommentsMap(prev => ({
         ...prev,
-        [key]: (prev[key] || []).filter((c: any) => c.id !== tempComment.id),
+        [key]: (prev[key] || []).filter((c: any) => c.id !== tempId),
       }));
       setFeeds(prev => prev.map(f => f.id === postId ? { ...f, commentCount: f.commentCount - 1 } : f));
     }
@@ -1644,11 +1649,26 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                                     <span className="fp-comment-author">{comment.author}</span>
                                     <span className="fp-comment-content">{comment.content}</span>
                                   </div>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', color: comment.isLiked ? '#C2507A' : '#888' }} onClick={() => {
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', color: comment.isLiked ? '#C2507A' : '#888' }} onClick={async () => {
+                                    if (typeof comment.id !== 'number') return;
+                                    const next = !comment.isLiked;
                                     setCommentsMap(prev => ({
                                       ...prev,
-                                      [String(post.id)]: (prev[String(post.id)] || []).map((c: any) => c.id === comment.id ? { ...c, isLiked: !c.isLiked, likes: (c.likes || 0) + (c.isLiked ? -1 : 1) } : c)
+                                      [String(post.id)]: (prev[String(post.id)] || []).map((c: any) =>
+                                        c.id === comment.id ? { ...c, isLiked: next, likes: (c.likes || 0) + (next ? 1 : -1) } : c
+                                      ),
                                     }));
+                                    try {
+                                      if (next) await likeComment(comment.id);
+                                      else await unlikeComment(comment.id);
+                                    } catch {
+                                      setCommentsMap(prev => ({
+                                        ...prev,
+                                        [String(post.id)]: (prev[String(post.id)] || []).map((c: any) =>
+                                          c.id === comment.id ? { ...c, isLiked: !next, likes: (c.likes || 0) + (next ? -1 : 1) } : c
+                                        ),
+                                      }));
+                                    }
                                   }}>
                                     <Heart size={12} fill={comment.isLiked ? "currentColor" : "none"} />
                                     <span style={{ fontSize: '10px', fontWeight: 700 }}>{comment.likes || 0}</span>

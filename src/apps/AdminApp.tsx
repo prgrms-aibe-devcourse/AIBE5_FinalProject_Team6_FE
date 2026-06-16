@@ -58,11 +58,19 @@ export default function AdminApp() {
 
   useEffect(() => {
     if (activeMenu !== 'banners') return;
-    setBannersLoading(true);
-    Promise.all([getAdminMainBanners(), getStoreBanners()])
-      .then(([main, store]) => { setMainBanners(main); setStoreBanners(store); })
-      .catch(() => {})
-      .finally(() => setBannersLoading(false));
+    const load = async () => {
+      setBannersLoading(true);
+      try {
+        const [main, store] = await Promise.all([getAdminMainBanners(), getStoreBanners()]);
+        setMainBanners(main);
+        setStoreBanners(store);
+      } catch {
+        // ignore
+      } finally {
+        setBannersLoading(false);
+      }
+    };
+    load();
   }, [activeMenu]);
 
   const navItems = [
@@ -176,12 +184,13 @@ export default function AdminApp() {
         imageUrl = uploaded;
       }
       if (!imageUrl) { alert('이미지를 선택해주세요.'); setBannerSubmitting(false); return; }
-
+      const toLocalDateTime = (v: string) => v.length === 16 ? `${v}:00` : v;
       const payload: BannerFormData = {
         title: bannerForm.title, imageUrl,
         landingUrl: bannerForm.landingUrl,
         exposureOrder: bannerForm.exposureOrder,
-        startAt: bannerForm.startAt, endAt: bannerForm.endAt,
+        startAt: toLocalDateTime(bannerForm.startAt),
+        endAt: toLocalDateTime(bannerForm.endAt),
       };
 
       if (bannerModalType === 'main') {

@@ -101,6 +101,22 @@ export async function unfollowArtist(artistId: number): Promise<void> {
   if (!res.ok) throw new Error(`unfollowArtist failed: ${res.status}`)
 }
 
+export async function likeComment(commentId: number): Promise<void> {
+  const res = await fetchWithAuth(`/api/v1/comments/${commentId}/likes`, {
+    method: 'POST',
+    headers: { ...getAuthHeaders(), 'X-Fan-Id': getFanIdHeader() },
+  })
+  if (!res.ok) throw new Error(`likeComment failed: ${res.status}`)
+}
+
+export async function unlikeComment(commentId: number): Promise<void> {
+  const res = await fetchWithAuth(`/api/v1/comments/${commentId}/likes`, {
+    method: 'DELETE',
+    headers: { ...getAuthHeaders(), 'X-Fan-Id': getFanIdHeader() },
+  })
+  if (!res.ok) throw new Error(`unlikeComment failed: ${res.status}`)
+}
+
 export async function getJoinedArtists(
   cursor?: string,
   size = 20,

@@ -5,6 +5,8 @@ import { logout } from '../api/auth';
 import { ROLE_KEY } from '../App';
 import { getCalendar, createEvent, registerLive, startLive } from '../api/schedule';
 import type { ScheduleResult } from '../types/schedule';
+import { getNotices, createNotice } from '../api/notices';
+import type { NoticeResult } from '../types/notice';
 
 const SCHEDULE_ARTISTS = [
   { id: 1, name: 'NOVA' },
@@ -81,11 +83,7 @@ export default function AgencyApp() {
     }
   };
 
-  const [notices, setNotices] = useState([
-    { id: 'n1', tag: 'NOTICE', title: 'Starlight Studio 2주년 기념 라이브 콘서트 상세 안내', date: '2026.05.20', type: 'NOTICE' },
-    { id: 'n2', tag: 'TICKET', title: '별빛스튜디오 팬미팅 2025 티켓 오픈 안내', date: '2026.06.15', type: 'TICKET' },
-    { id: 'n3', tag: '이벤트', title: 'Echo 특별판 포토북 출시 기념 팬사인회', date: '2026.05.10', type: 'EVENT' },
-  ]);
+  const [notices, setNotices] = useState<NoticeResult[]>([]);
 
   const [artists, setArtists] = useState([
     { 
@@ -158,19 +156,18 @@ export default function AgencyApp() {
     alert('멤버 정보가 성공적으로 반영되었습니다.');
   };
 
-  const addNotice = () => {
+  const addNotice = async () => {
     if (!newNotice.title.trim()) return;
-    const notice = {
-      id: 'n' + Date.now(),
-      tag: newNotice.tag.split(' ')[0],
-      title: newNotice.title,
-      date: new Date().toISOString().split('T')[0].replace(/-/g, '.'),
-      type: newNotice.tag.split(' ')[0]
-    };
-    setNotices([notice, ...notices]);
-    setNewNotice({ title: '', tag: 'NOTICE (일반공지)', content: '' });
-    setShowNoticeModal(false);
-    alert('새 공지사항이 등록되었습니다!');
+    try {
+      await createNotice(agencyArtistId, newNotice.title, newNotice.content);
+      const res = await getNotices(agencyArtistId);
+      setNotices(res.items);
+      setNewNotice({ title: '', tag: 'NOTICE (일반공지)', content: '' });
+      setShowNoticeModal(false);
+      alert('새 공지사항이 등록되었습니다!');
+    } catch {
+      alert('공지 등록에 실패했습니다.');
+    }
   };
 
   const navItems = [
@@ -190,6 +187,13 @@ export default function AgencyApp() {
     getCalendar(agencyArtistId)
       .then(res => setAgencySchedules(res.events))
       .catch(() => {});
+  }, [activeMenu, agencyArtistId]);
+
+  useEffect(() => {
+    if (activeMenu !== 'notices') return;
+    getNotices(agencyArtistId)
+      .then(res => setNotices(res.items))
+      .catch(console.error);
   }, [activeMenu, agencyArtistId]);
 
   return (
@@ -1001,8 +1005,8 @@ export default function AgencyApp() {
                          <div className="w-2 cursor-grab text-[#EDE8E2] group-hover:text-[#C2507A]">⠿</div>
                          <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
-                               <span className="text-[10px] font-black px-2 py-0.5 rounded bg-[#F7F3EE] text-[#C2507A]">{notice.tag}</span>
-                               <span className="text-xs font-medium text-[#888]">{notice.date}</span>
+                               <span className="text-[10px] font-black px-2 py-0.5 rounded bg-[#F7F3EE] text-[#C2507A]">{notice.type}</span>
+                               <span className="text-xs font-medium text-[#888]">{notice.scheduledAt ? fmtSchedule(notice.scheduledAt).date : ''}</span>
                             </div>
                             <div className="font-bold text-[#111]">{notice.title}</div>
                          </div>

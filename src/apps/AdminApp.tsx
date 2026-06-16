@@ -1,10 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Building2, MessageSquare, ShoppingBag, AlertTriangle, Image as ImageIcon, Activity, Menu, X, Check, XCircle, ChevronRight, Search, Loader2 } from 'lucide-react';
+import { Users, Building2, MessageSquare, ShoppingBag, AlertTriangle, Image as ImageIcon, Activity, Menu, X, Check, XCircle, ChevronRight, Search, Loader2, Plus } from 'lucide-react';
 import type { AgencyApplication, ApplicationStatus } from '../types/partnership';
 import { getAdminApplications, reviewApplication } from '../api/agencyApplications';
 import { logout } from '../api/auth';
 import { ROLE_KEY } from '../App';
+import {
+  getAdminMainBanners, createAdminMainBanner, updateAdminMainBanner, deleteAdminMainBanner,
+  createAdminStoreBanner, updateAdminStoreBanner, deleteAdminStoreBanner,
+  requestPresignedUrl, uploadToS3,
+} from '../api/adminBanners';
+import type { BannerFormData } from '../api/adminBanners';
+import { getStoreBanners } from '../api/banners';
+import type { BannerResponse, StoreBannerResponse } from '../types/banner';
 
 export default function AdminApp() {
   const navigate = useNavigate();
@@ -17,6 +25,22 @@ export default function AdminApp() {
   const [toast, setToast] = useState<string | null>(null);
   const [applications, setApplications] = useState<AgencyApplication[]>([]);
   const [appsLoading, setAppsLoading] = useState(true);
+
+  // Banner management
+  const [bannerTab, setBannerTab] = useState<'main' | 'store'>('main');
+  const [mainBanners, setMainBanners] = useState<BannerResponse[]>([]);
+  const [storeBanners, setStoreBanners] = useState<StoreBannerResponse[]>([]);
+  const [bannersLoading, setBannersLoading] = useState(false);
+  const [bannerModalOpen, setBannerModalOpen] = useState(false);
+  const [bannerModalType, setBannerModalType] = useState<'main' | 'store'>('main');
+  const [bannerModalMode, setBannerModalMode] = useState<'create' | 'edit'>('create');
+  const [editingBannerId, setEditingBannerId] = useState<number | null>(null);
+  const [bannerImageFile, setBannerImageFile] = useState<File | null>(null);
+  const [bannerSubmitting, setBannerSubmitting] = useState(false);
+  const [bannerForm, setBannerForm] = useState({
+    title: '', imageUrl: '', landingUrl: '', exposureOrder: 1,
+    startAt: '', endAt: '', isActive: true, productId: null as number | null,
+  });
 
   useEffect(() => {
     if (toast) {
@@ -31,6 +55,15 @@ export default function AdminApp() {
       .catch(() => setApplications([]))
       .finally(() => setAppsLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (activeMenu !== 'banners') return;
+    setBannersLoading(true);
+    Promise.all([getAdminMainBanners(), getStoreBanners()])
+      .then(([main, store]) => { setMainBanners(main); setStoreBanners(store); })
+      .catch(() => {})
+      .finally(() => setBannersLoading(false));
+  }, [activeMenu]);
 
   const navItems = [
     { id: 'dashboard', icon: Activity, label: 'Dashboard' },
@@ -83,6 +116,98 @@ export default function AdminApp() {
       setLoading(null);
       setSelectedApp(null);
       setRejectionReason('');
+    }
+  };
+
+  const openBannerModal = (
+    type: 'main' | 'store',
+    mode: 'create' | 'edit',
+    banner?: BannerResponse | StoreBannerResponse,
+  ) => {
+    setBannerModalType(type);
+    setBannerModalMode(mode);
+    setBannerImageFile(null);
+    if (mode === 'edit' && banner) {
+      setEditingBannerId(banner.id);
+      setBannerForm({
+        title: banner.title,
+        imageUrl: banner.imageUrl,
+        landingUrl: banner.landingUrl,
+        exposureOrder: banner.exposureOrder,
+        startAt: banner.startAt?.slice(0, 16) ?? '',
+        endAt: banner.endAt?.slice(0, 16) ?? '',
+        isActive: 'isActive' in banner ? banner.isActive : true,
+        productId: 'productId' in banner ? (banner.productId ?? null) : null,
+      });
+    } else {
+      setEditingBannerId(null);
+      setBannerForm({ title: '', imageUrl: '', landingUrl: '', exposureOrder: 1, startAt: '', endAt: '', isActive: true, productId: null });
+    }
+    setBannerModalOpen(true);
+  };
+
+  const handleBannerDelete = async (type: 'main' | 'store', id: number) => {
+    if (!confirm('배너를 삭제하시겠습니까?')) return;
+    try {
+      if (type === 'main') {
+        await deleteAdminMainBanner(id);
+        setMainBanners(prev => prev.filter(b => b.id !== id));
+      } else {
+        await deleteAdminStoreBanner(id);
+        setStoreBanners(prev => prev.filter(b => b.id !== id));
+      }
+      setToast('배너가 삭제되었습니다');
+    } catch {
+      setToast('삭제 중 오류가 발생했습니다');
+    }
+  };
+
+  const handleBannerSubmit = async () => {
+    if (!bannerForm.title.trim() || !bannerForm.landingUrl.trim() || !bannerForm.startAt || !bannerForm.endAt) {
+      alert('제목, 랜딩 URL, 기간은 필수입니다.');
+      return;
+    }
+    setBannerSubmitting(true);
+    try {
+      let imageUrl = bannerForm.imageUrl;
+      if (bannerImageFile) {
+        const { presignedUrl, imageUrl: uploaded } = await requestPresignedUrl(bannerImageFile.type, bannerImageFile.size);
+        await uploadToS3(presignedUrl, bannerImageFile);
+        imageUrl = uploaded;
+      }
+      if (!imageUrl) { alert('이미지를 선택해주세요.'); setBannerSubmitting(false); return; }
+
+      const payload: BannerFormData = {
+        title: bannerForm.title, imageUrl,
+        landingUrl: bannerForm.landingUrl,
+        exposureOrder: bannerForm.exposureOrder,
+        startAt: bannerForm.startAt, endAt: bannerForm.endAt,
+      };
+
+      if (bannerModalType === 'main') {
+        if (bannerModalMode === 'create') {
+          const created = await createAdminMainBanner(payload);
+          setMainBanners(prev => [...prev, created]);
+        } else if (editingBannerId !== null) {
+          const updated = await updateAdminMainBanner(editingBannerId, { ...payload, isActive: bannerForm.isActive });
+          setMainBanners(prev => prev.map(b => b.id === editingBannerId ? updated : b));
+        }
+      } else {
+        const storePayload = { ...payload, productId: bannerForm.productId };
+        if (bannerModalMode === 'create') {
+          await createAdminStoreBanner(storePayload);
+        } else if (editingBannerId !== null) {
+          await updateAdminStoreBanner(editingBannerId, storePayload);
+        }
+        const fresh = await getStoreBanners();
+        setStoreBanners(fresh);
+      }
+      setToast(bannerModalMode === 'create' ? '배너가 등록되었습니다' : '배너가 수정되었습니다');
+      setBannerModalOpen(false);
+    } catch {
+      setToast('처리 중 오류가 발생했습니다');
+    } finally {
+      setBannerSubmitting(false);
     }
   };
 
@@ -388,30 +513,64 @@ export default function AdminApp() {
           )}
 
           {activeMenu === 'banners' && (
-            <div className="bg-white rounded-2xl border border-[#EDE8E2] shadow-sm p-6">
-              <h3 className="font-bold text-[#111] mb-6">Home Banner Management</h3>
-              <div className="space-y-4">
-                 {[
-                   { title: 'Global Audition 2026', desc: 'Join the next generation of stars.', color: 'bg-indigo-100 text-indigo-800' },
-                   { title: 'Starlight Live Concert', desc: 'Ticket open now!', color: 'bg-purple-100 text-purple-800' },
-                 ].map((b, i) => (
-                   <div key={i} className="flex gap-4 items-center border border-[#EDE8E2] p-4 rounded-xl">
-                      <div className={`w-32 h-16 rounded-lg flex items-center justify-center font-bold text-xs text-center p-2 ${b.color}`}>
-                        {b.title}
-                      </div>
-                      <div className="flex-1">
-                        <div className="font-bold text-sm">{b.title}</div>
-                        <div className="text-xs text-[#888]">{b.desc}</div>
-                      </div>
-                      <div className="flex gap-2">
-                         <button className="p-2 border border-[#EDE8E2] rounded hover:bg-gray-50 text-xs">Edit</button>
-                         <button className="p-2 border border-[#EDE8E2] rounded hover:bg-red-50 text-red-600 text-xs">Remove</button>
-                      </div>
-                   </div>
-                 ))}
-                 <button className="w-full border-2 border-dashed border-[#EDE8E2] rounded-xl p-4 text-[#888] text-sm font-bold hover:border-[#111] hover:text-[#111] transition-colors flex items-center justify-center gap-2">
-                   <ImageIcon size={16} /> Add New Banner
-                 </button>
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div className="flex bg-white rounded-xl p-1 border border-[#EDE8E2] shadow-sm">
+                  {([{ id: 'main', label: '메인 배너' }, { id: 'store', label: '스토어 배너' }] as const).map(tab => (
+                    <button key={tab.id} onClick={() => setBannerTab(tab.id)}
+                      className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${bannerTab === tab.id ? 'bg-[#111] text-white' : 'text-[#888] hover:text-[#111]'}`}>
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+                <button onClick={() => openBannerModal(bannerTab, 'create')}
+                  className="flex items-center gap-2 bg-[#111] text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-black/80">
+                  <Plus className="w-4 h-4" /> 배너 추가
+                </button>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-[#EDE8E2] shadow-sm p-6">
+                {bannersLoading ? (
+                  <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-[#888]" /></div>
+                ) : (
+                  <div className="space-y-3">
+                    {(bannerTab === 'main' ? mainBanners : storeBanners).length === 0 ? (
+                      <div className="text-center text-[#888] py-16 text-sm">등록된 배너가 없습니다</div>
+                    ) : (
+                      (bannerTab === 'main' ? mainBanners : storeBanners).map((b) => (
+                        <div key={b.id} className="flex gap-4 items-center border border-[#EDE8E2] p-4 rounded-xl">
+                          <div className="w-24 h-14 rounded-lg bg-[#F7F3EE] overflow-hidden shrink-0">
+                            {b.imageUrl
+                              ? <img src={b.imageUrl} alt={b.title} className="w-full h-full object-cover" />
+                              : <div className="w-full h-full flex items-center justify-center"><ImageIcon className="w-5 h-5 text-[#CCC]" /></div>
+                            }
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold text-sm text-[#111] truncate">{b.title}</div>
+                            <div className="text-xs text-[#888] mt-0.5">
+                              노출순서 {b.exposureOrder} · {b.startAt?.slice(0, 10)} ~ {b.endAt?.slice(0, 10)}
+                            </div>
+                            {'isActive' in b && (
+                              <span className={`inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold ${b.isActive ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'}`}>
+                                {b.isActive ? 'ACTIVE' : 'INACTIVE'}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex gap-2 shrink-0">
+                            <button onClick={() => openBannerModal(bannerTab, 'edit', b)}
+                              className="px-3 py-1.5 border border-[#EDE8E2] rounded-lg hover:bg-gray-50 text-xs font-bold">수정</button>
+                            <button onClick={() => handleBannerDelete(bannerTab, b.id)}
+                              className="px-3 py-1.5 border border-red-100 rounded-lg hover:bg-red-50 text-red-600 text-xs font-bold">삭제</button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                    <button onClick={() => openBannerModal(bannerTab, 'create')}
+                      className="w-full border-2 border-dashed border-[#EDE8E2] rounded-xl p-4 text-[#888] text-sm font-bold hover:border-[#111] hover:text-[#111] transition-colors flex items-center justify-center gap-2">
+                      <Plus size={16} /> 배너 추가
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -568,6 +727,83 @@ export default function AdminApp() {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Banner Modal */}
+      {bannerModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+          <div className="absolute inset-0 bg-[#111]/40 backdrop-blur-[4px]" onClick={() => setBannerModalOpen(false)} />
+          <div className="bg-white w-full max-w-lg rounded-[32px] shadow-2xl relative z-10 border border-[#EDE8E2] overflow-hidden">
+            <div className="p-6 border-b border-[#EDE8E2] flex items-center justify-between">
+              <h3 className="font-black text-lg">
+                {bannerModalMode === 'create' ? '배너 추가' : '배너 수정'} — {bannerModalType === 'main' ? '메인' : '스토어'}
+              </h3>
+              <button onClick={() => setBannerModalOpen(false)} className="p-2 hover:bg-[#F7F3EE] rounded-full"><X /></button>
+            </div>
+            <div className="p-6 space-y-4 max-h-[65vh] overflow-y-auto">
+              <div>
+                <label className="text-xs font-black uppercase tracking-wider text-[#888] block mb-1">제목 *</label>
+                <input value={bannerForm.title} onChange={e => setBannerForm(f => ({ ...f, title: e.target.value }))}
+                  className="w-full border border-[#EDE8E2] rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#C2507A]" />
+              </div>
+              <div>
+                <label className="text-xs font-black uppercase tracking-wider text-[#888] block mb-1">이미지</label>
+                {bannerForm.imageUrl && (
+                  <img src={bannerForm.imageUrl} className="w-full h-28 object-cover rounded-xl mb-2 border border-[#EDE8E2]" alt="preview" />
+                )}
+                <input type="file" accept="image/*" onChange={e => setBannerImageFile(e.target.files?.[0] ?? null)}
+                  className="w-full text-sm text-[#888] file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-[#F7F3EE] file:text-[#111] hover:file:bg-[#EDE8E2]" />
+                <p className="text-[10px] text-[#888] mt-1">저장 시 S3에 자동 업로드됩니다.</p>
+              </div>
+              <div>
+                <label className="text-xs font-black uppercase tracking-wider text-[#888] block mb-1">랜딩 URL *</label>
+                <input value={bannerForm.landingUrl} onChange={e => setBannerForm(f => ({ ...f, landingUrl: e.target.value }))}
+                  className="w-full border border-[#EDE8E2] rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#C2507A]" />
+              </div>
+              <div>
+                <label className="text-xs font-black uppercase tracking-wider text-[#888] block mb-1">노출 순서</label>
+                <input type="number" min={1} value={bannerForm.exposureOrder}
+                  onChange={e => setBannerForm(f => ({ ...f, exposureOrder: Number(e.target.value) }))}
+                  className="w-full border border-[#EDE8E2] rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#C2507A]" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-black uppercase tracking-wider text-[#888] block mb-1">시작일 *</label>
+                  <input type="datetime-local" value={bannerForm.startAt}
+                    onChange={e => setBannerForm(f => ({ ...f, startAt: e.target.value }))}
+                    className="w-full border border-[#EDE8E2] rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#C2507A]" />
+                </div>
+                <div>
+                  <label className="text-xs font-black uppercase tracking-wider text-[#888] block mb-1">종료일 *</label>
+                  <input type="datetime-local" value={bannerForm.endAt}
+                    onChange={e => setBannerForm(f => ({ ...f, endAt: e.target.value }))}
+                    className="w-full border border-[#EDE8E2] rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#C2507A]" />
+                </div>
+              </div>
+              {bannerModalType === 'main' && bannerModalMode === 'edit' && (
+                <div className="flex items-center gap-3">
+                  <input type="checkbox" id="bannerIsActive" checked={bannerForm.isActive}
+                    onChange={e => setBannerForm(f => ({ ...f, isActive: e.target.checked }))} className="w-4 h-4" />
+                  <label htmlFor="bannerIsActive" className="text-sm font-bold">노출 활성화</label>
+                </div>
+              )}
+              {bannerModalType === 'store' && (
+                <div>
+                  <label className="text-xs font-black uppercase tracking-wider text-[#888] block mb-1">상품 ID (선택)</label>
+                  <input type="number" value={bannerForm.productId ?? ''}
+                    onChange={e => setBannerForm(f => ({ ...f, productId: e.target.value ? Number(e.target.value) : null }))}
+                    className="w-full border border-[#EDE8E2] rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#C2507A]" />
+                </div>
+              )}
+            </div>
+            <div className="p-6 border-t border-[#EDE8E2]">
+              <button onClick={handleBannerSubmit} disabled={bannerSubmitting}
+                className="w-full h-14 bg-[#111] text-white font-black rounded-2xl hover:bg-black/80 disabled:opacity-50 flex items-center justify-center gap-2">
+                {bannerSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : (bannerModalMode === 'create' ? '배너 등록' : '수정 저장')}
+              </button>
             </div>
           </div>
         </div>

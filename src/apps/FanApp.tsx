@@ -320,7 +320,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
 
   // 아티스트 선택 시 공지사항 로드
   useEffect(() => {
-    if (!selectedArtist) { setNotices([]); return; }
+    if (!selectedArtist) return;
     getNotices(selectedArtist.id)
       .then(res => setNotices(res.items))
       .catch(console.error);

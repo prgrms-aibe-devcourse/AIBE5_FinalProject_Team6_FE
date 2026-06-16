@@ -26,6 +26,8 @@ import { getMyProfile, updateMyProfile, getMyActivities } from '../api/fan';
 import type { FanResult, ActivityItem } from '../types/fan';
 import { getMyOrders, cancelOrder } from '../api/orders';
 import type { OrderListItem } from '../types/order';
+import { getPaymentDetail } from '../api/payments';
+import type { PaymentDetail } from '../types/payment';
 import { getNotices } from '../api/notices';
 import type { NoticeResult } from '../types/notice';
 
@@ -309,6 +311,8 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [myOrders, setMyOrders] = useState<OrderListItem[]>([]);
   const [cancellingOrderId, setCancellingOrderId] = useState<number | null>(null);
+  const [paymentDetails, setPaymentDetails] = useState<Record<number, PaymentDetail | 'loading' | 'error'>>({});
+  const [expandedPaymentIds, setExpandedPaymentIds] = useState<Set<number>>(new Set());
   const [showAttendanceBanner, setShowAttendanceBanner] = useState(false);
   const [attendanceStep, setAttendanceStep] = useState<'IDLE' | 'STAMPING' | 'REWARD'>('IDLE');
   const [triggeredArtists, setTriggeredArtists] = useState<number[]>([]);
@@ -3053,40 +3057,100 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                             PENDING: '#888', RESERVED: '#F5A623', PAID: '#4CAF50', FAILED: '#FF4444', COMPLETED: '#4CAF50', CANCELLED: '#999', REFUNDED: '#7F77DD',
                           };
                           return (
-                            <div key={order.orderId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px', borderRadius: '12px', border: '1px solid var(--border)', gap: '16px' }}>
-                              <div style={{ flex: 1 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                                  <span style={{ fontSize: '13px', fontWeight: 800, color: statusColor[order.status] ?? '#111', background: `${statusColor[order.status] ?? '#111'}18`, padding: '2px 10px', borderRadius: '20px' }}>
-                                    {statusLabel[order.status] ?? order.status}
-                                  </span>
-                                  <span style={{ fontSize: '12px', color: 'var(--text-sub)' }}>#{order.orderId}</span>
+                            <div key={order.orderId} style={{ padding: '20px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                                    <span style={{ fontSize: '13px', fontWeight: 800, color: statusColor[order.status] ?? '#111', background: `${statusColor[order.status] ?? '#111'}18`, padding: '2px 10px', borderRadius: '20px' }}>
+                                      {statusLabel[order.status] ?? order.status}
+                                    </span>
+                                    <span style={{ fontSize: '12px', color: 'var(--text-sub)' }}>#{order.orderId}</span>
+                                  </div>
+                                  <div style={{ fontSize: '18px', fontWeight: 800 }}>
+                                    {order.totalAmount.toLocaleString()}원
+                                  </div>
+                                  <div style={{ fontSize: '12px', color: 'var(--text-sub)', marginTop: '4px' }}>
+                                    {new Date(order.createdAt).toLocaleDateString('ko-KR')}
+                                  </div>
                                 </div>
-                                <div style={{ fontSize: '18px', fontWeight: 800 }}>
-                                  {order.totalAmount.toLocaleString()}원
-                                </div>
-                                <div style={{ fontSize: '12px', color: 'var(--text-sub)', marginTop: '4px' }}>
-                                  {new Date(order.createdAt).toLocaleDateString('ko-KR')}
-                                </div>
+                                {order.status === 'RESERVED' && (
+                                  <button
+                                    onClick={async () => {
+                                      setCancellingOrderId(order.orderId);
+                                      try {
+                                        await cancelOrder(order.orderId);
+                                        setMyOrders(prev => prev.map(o => o.orderId === order.orderId ? { ...o, status: 'CANCELLED' } : o));
+                                      } catch {
+                                        alert('주문 취소에 실패했습니다.');
+                                      } finally {
+                                        setCancellingOrderId(null);
+                                      }
+                                    }}
+                                    disabled={cancellingOrderId === order.orderId}
+                                    style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #FF4444', background: 'transparent', color: '#FF4444', fontSize: '13px', fontWeight: 700, cursor: 'pointer', opacity: cancellingOrderId === order.orderId ? 0.5 : 1 }}
+                                  >
+                                    {cancellingOrderId === order.orderId ? '취소 중...' : '주문 취소'}
+                                  </button>
+                                )}
                               </div>
-                              {order.status === 'RESERVED' && (
-                                <button
-                                  onClick={async () => {
-                                    setCancellingOrderId(order.orderId);
-                                    try {
-                                      await cancelOrder(order.orderId);
-                                      setMyOrders(prev => prev.map(o => o.orderId === order.orderId ? { ...o, status: 'CANCELLED' } : o));
-                                    } catch {
-                                      alert('주문 취소에 실패했습니다.');
-                                    } finally {
-                                      setCancellingOrderId(null);
-                                    }
-                                  }}
-                                  disabled={cancellingOrderId === order.orderId}
-                                  style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #FF4444', background: 'transparent', color: '#FF4444', fontSize: '13px', fontWeight: 700, cursor: 'pointer', opacity: cancellingOrderId === order.orderId ? 0.5 : 1 }}
-                                >
-                                  {cancellingOrderId === order.orderId ? '취소 중...' : '주문 취소'}
-                                </button>
-                              )}
+                              {['PAID', 'COMPLETED', 'REFUNDED'].includes(order.status) && (() => {
+                                const isExpanded = expandedPaymentIds.has(order.orderId);
+                                const detail = paymentDetails[order.orderId];
+                                return (
+                                  <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed var(--border)' }}>
+                                    <button
+                                      onClick={async () => {
+                                        const wasExpanded = expandedPaymentIds.has(order.orderId);
+                                        setExpandedPaymentIds(prev => {
+                                          const next = new Set(prev);
+                                          if (next.has(order.orderId)) { next.delete(order.orderId); } else { next.add(order.orderId); }
+                                          return next;
+                                        });
+                                        if (!wasExpanded && !paymentDetails[order.orderId]) {
+                                          setPaymentDetails(prev => ({ ...prev, [order.orderId]: 'loading' }));
+                                          try {
+                                            const d = await getPaymentDetail(order.orderId);
+                                            setPaymentDetails(prev => ({ ...prev, [order.orderId]: d }));
+                                          } catch {
+                                            setPaymentDetails(prev => ({ ...prev, [order.orderId]: 'error' }));
+                                          }
+                                        }
+                                      }}
+                                      style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-sub)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                                    >
+                                      결제 정보 {isExpanded ? '▲' : '▼'}
+                                    </button>
+                                    {isExpanded && (
+                                      <div style={{ marginTop: '10px', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                        {detail === 'loading' && <span style={{ color: 'var(--text-sub)' }}>불러오는 중...</span>}
+                                        {detail === 'error' && <span style={{ color: '#FF4444' }}>결제 정보를 불러올 수 없습니다.</span>}
+                                        {detail && detail !== 'loading' && detail !== 'error' && (
+                                          <>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                              <span style={{ color: 'var(--text-sub)' }}>결제 방법</span>
+                                              <span style={{ fontWeight: 700 }}>{(detail as PaymentDetail).paymentMethod}</span>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                              <span style={{ color: 'var(--text-sub)' }}>결제 금액</span>
+                                              <span style={{ fontWeight: 700 }}>{(detail as PaymentDetail).amount.toLocaleString()}원</span>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                              <span style={{ color: 'var(--text-sub)' }}>결제 상태</span>
+                                              <span style={{ fontWeight: 700 }}>{(detail as PaymentDetail).status}</span>
+                                            </div>
+                                            {(detail as PaymentDetail).paidAt && (
+                                              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                <span style={{ color: 'var(--text-sub)' }}>결제 일시</span>
+                                                <span style={{ fontWeight: 700 }}>{new Date((detail as PaymentDetail).paidAt!).toLocaleString('ko-KR')}</span>
+                                              </div>
+                                            )}
+                                          </>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           );
                         })}

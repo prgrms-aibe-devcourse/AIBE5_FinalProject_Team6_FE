@@ -26,6 +26,8 @@ import { getMyProfile, updateMyProfile, getMyActivities } from '../api/fan';
 import type { FanResult, ActivityItem } from '../types/fan';
 import { getMyOrders, cancelOrder } from '../api/orders';
 import type { OrderListItem } from '../types/order';
+import { getNotices } from '../api/notices';
+import type { NoticeResult } from '../types/notice';
 
 const SORT_OPTIONS = ['낮은가격순', '높은가격순'];
 
@@ -35,6 +37,12 @@ function getSortedItems(items: ProductResponse[], sortKey: string) {
     if (sortKey === '높은가격순') return b.price - a.price;
     return 0;
   });
+}
+
+function fmtNoticeDate(iso: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
 }
 
 
@@ -300,12 +308,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [attendanceStep, setAttendanceStep] = useState<'IDLE' | 'STAMPING' | 'REWARD'>('IDLE');
   const [triggeredArtists, setTriggeredArtists] = useState<number[]>([]);
 
-  const [notices] = useState([
-    { id: 'n1', tag: 'NOTICE', title: 'NOVA 2주년 기념 라이브 콘서트 상세 안내', date: '2026.05.20', type: 'NOTICE' },
-    { id: 'n2', tag: 'TICKET', title: 'LUNA 팬미팅 2025 티켓 오픈 안내', date: '2026.06.15', type: 'TICKET' },
-    { id: 'n3', tag: '이벤트', title: 'ECHO 특별판 포토북 출시 기념 팬사인회', date: '2026.05.10', type: 'EVENT' },
-    { id: 'n4', tag: '공지', title: '공식 팬클럽 멤버십 키트 배송 지연 안내', date: '2026.05.08', type: 'NOTICE' },
-  ]);
+  const [notices, setNotices] = useState<NoticeResult[]>([]);
 
   const [schedules, setSchedules] = useState<ScheduleResult[]>([]);
   const [activeLives, setActiveLives] = useState<ScheduleResult[]>([]);
@@ -313,7 +316,15 @@ export default function App({ role = 'FAN' }: { role?: string }) {
 
   const [selectedSchedule, setSelectedSchedule] = useState<any>(null);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
-  const [selectedNotice, setSelectedNotice] = useState<any>(null);
+  const [selectedNotice, setSelectedNotice] = useState<NoticeResult | null>(null);
+
+  // 아티스트 선택 시 공지사항 로드
+  useEffect(() => {
+    if (!selectedArtist) return;
+    getNotices(selectedArtist.id)
+      .then(res => setNotices(res.items))
+      .catch(console.error);
+  }, [selectedArtist?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Trigger Attendance Banner when entering Artist tab (Feed is default entry)
   useEffect(() => {
@@ -501,7 +512,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       const noticeIdParam = searchParams.get('noticeId');
       if (!noticeIdParam) { setSelectedNotice(null); }
       else {
-        const found = notices.find((n: any) => String(n.id) === noticeIdParam);
+        const found = notices.find(n => String(n.id) === noticeIdParam);
         if (found) setSelectedNotice(found);
       }
     })();
@@ -1818,21 +1829,21 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                   <div className="reveal">
                     <div className="notice-list">
                       {notices.map((notice) => (
-                          <div 
-                            key={notice.id} 
-                            className="notice-item" 
+                          <div
+                            key={notice.id}
+                            className="notice-item"
                             onClick={() => setSelectedNotice(notice)}
-                            style={{ 
+                            style={{
                               padding: '12px 16px',
-                              borderLeft: `3px solid ${notice.type === 'TICKET' ? '#C2507A' : notice.type === 'EVENT' ? 'var(--point-rose)' : 'var(--point-violet)'}` 
+                              borderLeft: `3px solid ${notice.type === 'TICKET' ? '#C2507A' : notice.type === 'EVENT' ? 'var(--point-rose)' : 'var(--point-violet)'}`
                             }}
                           >
                             <div style={{ flex: 1 }}>
                               <div className="ni-tag" style={{ color: notice.type === 'TICKET' ? '#C2507A' : notice.type === 'EVENT' ? 'var(--point-rose)' : 'var(--point-violet)', marginBottom: '2px', fontSize: '10px' }}>
-                                {notice.tag}
+                                {notice.type}
                               </div>
                               <div className="ni-title" style={{ fontSize: '13px', marginBottom: '1px', fontWeight: 'bold' }}>{notice.title}</div>
-                              <div className="ni-date" style={{ fontSize: '11px', opacity: 0.7 }}>{notice.date}</div>
+                              <div className="ni-date" style={{ fontSize: '11px', opacity: 0.7 }}>{fmtNoticeDate(notice.scheduledAt)}</div>
                             </div>
                             <ChevronRight size={16} color="var(--text-sub)" />
                           </div>
@@ -3460,7 +3471,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
               <div style={{ maxWidth: '640px', margin: '0 auto' }}>
                 <div style={{ marginBottom: '48px', textAlign: 'center' }}>
                   <div style={{ display: 'inline-block', padding: '4px 16px', background: '#111', borderRadius: '20px', fontSize: '10px', fontWeight: 900, color: 'white', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '24px' }}>
-                    {selectedNotice.tag}
+                    {selectedNotice.type}
                   </div>
                   <h2 style={{ fontSize: '32px', fontWeight: 900, color: '#111', lineHeight: 1.2, margin: '0 0 32px 0' }}>
                     {selectedNotice.title}
@@ -3468,24 +3479,16 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px', fontSize: '11px', fontWeight: 700, color: '#A0958C', textTransform: 'uppercase', letterSpacing: '1px' }}>
                     <span>FANDROPS</span>
                     <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'rgba(194, 80, 122, 0.2)' }} />
-                    <span>{selectedNotice.date}</span>
+                    <span>{fmtNoticeDate(selectedNotice.scheduledAt)}</span>
                   </div>
                 </div>
 
                 <div style={{ fontSize: '16px', color: '#444', lineHeight: 1.8, fontWeight: 500, paddingTop: '48px', borderTop: '1px solid #EDE8E2' }}>
-                  <p style={{ marginBottom: '32px' }}>안녕하세요, FANDROPS입니다.</p>
-                  
-                  <div style={{ padding: '32px', background: '#F7F3EE', borderRadius: '24px', border: '1px solid #EDE8E2', marginBottom: '48px' }}>
-                    <p style={{ fontWeight: 900, color: '#111', fontSize: '18px', marginBottom: '16px' }}>안내 말씀</p>
-                    <p style={{ color: '#666', lineHeight: 1.6 }}>
-                      "{selectedNotice.title}"와 관련하여 팬 여러분께 안내 말씀 드립니다. 
-                      아티스트를 아껴주시는 팬 여러분께 진심으로 감사드리며, 상세 일정 및 참여 방법은 추후 공식 채널을 통해 다시 한 번 안내해 드릴 예정입니다.
-                    </p>
-                  </div>
-
-                  <p style={{ marginBottom: '32px', fontWeight: 600 }}>
-                    팬 여러분의 많은 관심과 응원 부탁드립니다.
-                  </p>
+                  {selectedNotice.content ? (
+                    <p style={{ whiteSpace: 'pre-wrap', marginBottom: '32px' }}>{selectedNotice.content}</p>
+                  ) : (
+                    <p style={{ marginBottom: '32px', color: '#999' }}>내용이 없습니다.</p>
+                  )}
                   
                   <div style={{ marginTop: '64px', paddingTop: '32px', borderTop: '1px dashed #EDE8E2' }}>
                     <p style={{ fontWeight: 900, color: '#111' }}>감사합니다.</p>

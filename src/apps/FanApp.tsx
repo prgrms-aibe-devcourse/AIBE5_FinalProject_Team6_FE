@@ -8,8 +8,8 @@ import { useCheckout } from '../hooks/useCheckout';
 import { useQueue } from '../hooks/useQueue';
 import { getProducts, subscribeRestock, unsubscribeRestock } from '../api/products';
 import type { ProductResponse } from '../types/product';
-import { getMainBanners } from '../api/banners';
-import type { BannerResponse } from '../types/banner';
+import { getStoreBanners } from '../api/banners';
+import type { StoreBannerResponse } from '../types/banner';
 import { getCart, addCartItem, updateCartItem, removeCartItem } from '../api/cart';
 import type { CartItemResponse } from '../types/cart';
 import { getFeeds, createFeed, createComment, likeFeed, unlikeFeed, followArtist, unfollowArtist, getJoinedArtists } from '../api/community';
@@ -270,7 +270,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [storeNextCursor, setStoreNextCursor] = useState<string | null>(null);
   const [storeHasMore, setStoreHasMore] = useState(false);
   const [storeLoading, setStoreLoading] = useState(true);
-  const [banners, setBanners] = useState<BannerResponse[]>([]);
+  const [banners, setBanners] = useState<StoreBannerResponse[]>([]);
   const [cartItems, setCartItems] = useState<CartItemResponse[]>([]);
   const [cartLoading, setCartLoading] = useState(false);
 
@@ -452,9 +452,9 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       .finally(() => setStoreLoading(false));
   }, []);
 
-  // 메인 배너 로드
+  // 스토어 배너 로드
   useEffect(() => {
-    getMainBanners()
+    getStoreBanners()
       .then(setBanners)
       .catch(console.error);
   }, []);
@@ -2382,6 +2382,14 @@ export default function App({ role = 'FAN' }: { role?: string }) {
           {banners.map((banner, i) => (
             <div
               key={banner.id}
+              onClick={() => {
+                if (banner.productId) {
+                  const product = storeItems.find(p => p.id === banner.productId);
+                  if (product) setSelectedProduct(product);
+                } else if (banner.landingUrl) {
+                  window.open(banner.landingUrl, '_blank');
+                }
+              }}
               style={{
                 position: 'absolute',
                 inset: 0,
@@ -2391,6 +2399,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                 opacity: storeBannerIdx === i ? 1 : 0,
                 transition: 'opacity 0.55s ease',
                 pointerEvents: storeBannerIdx === i ? 'auto' : 'none',
+                cursor: (banner.productId || banner.landingUrl) ? 'pointer' : 'default',
               }}
             >
               <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(26,26,26,0.48) 0%, transparent 58%)' }} />

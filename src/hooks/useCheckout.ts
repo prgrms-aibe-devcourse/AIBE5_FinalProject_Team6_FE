@@ -57,16 +57,16 @@ export function useCheckout(setActiveTab: (tab: string) => void) {
       localStorage.removeItem('fd_pending_order_id')
       setTimeout(() => {
         setPaymentStatus('processing')
-        setActiveTab('CHECKOUT')
         confirmPayment(paymentKey, storedOrderId, tossOrderId, Number(amount))
           .then(() => {
             setPaymentStatus('success')
             setActiveTab('ORDER_COMPLETE')
           })
           .catch(() => {
+            const msg = '결제 확인 중 오류가 발생했습니다. 고객센터에 문의해 주세요.'
             setPaymentStatus('failed')
-            setPaymentError('결제 확인 중 오류가 발생했습니다. 고객센터에 문의해 주세요.')
-            setActiveTab('CHECKOUT')
+            setPaymentError(msg)
+            alert(msg)
           })
       }, 0)
     } else if (code && code !== 'PAY_PROCESS_CANCELED' && code !== 'USER_CANCEL') {
@@ -105,8 +105,8 @@ export function useCheckout(setActiveTab: (tab: string) => void) {
         orderId: order.orderPaymentKey,
         orderName: checkoutData.title,
         customerName: checkoutForm.name,
-        successUrl: window.location.origin,
-        failUrl: window.location.origin,
+        successUrl: `${window.location.origin}${window.location.pathname}`,
+        failUrl: `${window.location.origin}${window.location.pathname}`,
       })
     } catch (err: unknown) {
       const tossErr = err as { code?: string; message?: string }

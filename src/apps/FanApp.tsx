@@ -455,9 +455,13 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   // 상품 목록 로드 — 아티스트 필터 변경 시 재fetch
   useEffect(() => {
     const artistId = storeArtist !== 'ALL' ? Number(storeArtist) : undefined;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setStoreLoading(true);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setStoreItems([]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setStoreNextCursor(null);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setStoreHasMore(false);
     getProducts('regular', undefined, 20, artistId)
       .then(res => {
@@ -467,7 +471,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       })
       .catch(console.error)
       .finally(() => setStoreLoading(false));
-  }, [storeArtist]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [storeArtist]);
 
   // 스토어 배너 로드
   useEffect(() => {

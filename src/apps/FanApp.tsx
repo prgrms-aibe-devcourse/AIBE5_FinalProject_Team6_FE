@@ -8,8 +8,6 @@ import { useCheckout } from '../hooks/useCheckout';
 import { useQueue } from '../hooks/useQueue';
 import { getProducts, subscribeRestock, unsubscribeRestock } from '../api/products';
 import type { ProductResponse } from '../types/product';
-import { getArtists } from '../api/artist';
-import type { ArtistItem } from '../types/artist';
 import { getStoreBanners } from '../api/banners';
 import type { StoreBannerResponse } from '../types/banner';
 import { getCart, addCartItem, updateCartItem, removeCartItem } from '../api/cart';
@@ -282,7 +280,6 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [banners, setBanners] = useState<StoreBannerResponse[]>([]);
   const [cartItems, setCartItems] = useState<CartItemResponse[]>([]);
   const [cartLoading, setCartLoading] = useState(false);
-  const [storeArtists, setStoreArtists] = useState<ArtistItem[]>([]);
 
   useEffect(() => {
     if (activeTab !== 'STORE' || selectedProduct || banners.length === 0) return;
@@ -500,12 +497,6 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       .catch(console.error);
   }, []);
 
-  // 스토어 아티스트 필터 목록 로드
-  useEffect(() => {
-    getArtists(undefined, 50, 'fanCount')
-      .then(res => setStoreArtists(res.items))
-      .catch(console.error);
-  }, []);
 
   // URL → state: 뒤로가기/앞으로가기 시 React 상태를 URL에 맞게 동기화
   useEffect(() => {
@@ -2509,18 +2500,14 @@ export default function App({ role = 'FAN' }: { role?: string }) {
              <span style={{ fontSize: '13px', color: '#111', fontWeight: 600 }}>전체</span>
           </div>
 
-          {storeArtists.map(a => (
+          {favoriteArtists.map(a => (
                         <div key={a.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', cursor: 'pointer', minWidth: '72px' }} onClick={() => {
                           if (activeTab === 'STORE') setStoreArtist(String(a.id));
                         }}>
                            <div style={{ position: 'relative' }}>
-                             {a.profileImageUrl ? (
-                               <img src={a.profileImageUrl} alt={a.name} style={{ width: '64px', height: '64px', borderRadius: '50%', objectFit: 'cover', border: (storeArtist === String(a.id)) ? '2px solid #111' : '1px solid #E5E5E5', transition: 'all 0.2s' }} />
-                             ) : (
-                               <div style={{ width: '64px', height: '64px', borderRadius: '50%', border: (storeArtist === String(a.id)) ? '2px solid #111' : '1px solid #E5E5E5', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#FAFAFA', whiteSpace: 'nowrap', transition: 'all 0.2s', fontWeight: 800, fontSize: '14px' }}>
-                                 {a.name.substring(0, 3)}
-                               </div>
-                             )}
+                             <div style={{ width: '64px', height: '64px', borderRadius: '50%', border: (storeArtist === String(a.id)) ? '2px solid #111' : '1px solid #E5E5E5', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#FAFAFA', whiteSpace: 'nowrap', transition: 'all 0.2s', fontWeight: 800, fontSize: '14px' }}>
+                               {a.name.substring(0, 3)}
+                             </div>
                            </div>
                            <span style={{ fontSize: '13px', color: '#111', fontWeight: 600, whiteSpace: 'nowrap' }}>{a.name}</span>
                         </div>
@@ -2569,7 +2556,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '24px' }}>
         {storeArtist !== 'ALL' && (
           <span style={{ background: '#F7F3EE', border: '1px solid #EDE8E2', borderRadius: '20px', padding: '4px 12px', fontSize: '12px', color: '#111', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
-            {storeArtists.find(a => String(a.id) === storeArtist)?.name ?? storeArtist} <X size={12} cursor="pointer" onClick={() => setStoreArtist('ALL')} />
+            {favoriteArtists.find(a => String(a.id) === storeArtist)?.name ?? storeArtist} <X size={12} cursor="pointer" onClick={() => setStoreArtist('ALL')} />
           </span>
         )}
         {storeCategory !== '전체' && (

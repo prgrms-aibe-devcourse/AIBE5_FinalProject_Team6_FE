@@ -2234,7 +2234,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                   </div>
                   {/* Right: Info */}
                   <div style={{ width: '420px', flexShrink: 0 }}>
-                    <div style={{ fontSize: '12px', fontWeight: 800, color: '#C2507A', letterSpacing: '2px', marginBottom: '8px' }}>아티스트 #{selectedProduct.artistId}</div>
+                    <div style={{ fontSize: '12px', fontWeight: 800, color: '#C2507A', letterSpacing: '2px', marginBottom: '8px' }}>{storeArtists.find(a => a.id === selectedProduct.artistId)?.name ?? `Artist #${selectedProduct.artistId}`}</div>
                     <h1 style={{ fontSize: '32px', fontWeight: 800, letterSpacing: '-1px', marginBottom: '16px', lineHeight: 1.2 }}>{selectedProduct.name}</h1>
                     <div style={{ fontSize: '28px', fontWeight: 800, color: '#C2507A', marginBottom: '24px' }}>₩{Number(selectedProduct.price).toLocaleString()}</div>
                     
@@ -2605,7 +2605,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
           >
             <div style={{ position: 'relative', height: '220px', background: 'var(--bg-cream)' }}>
               <div style={{ position: 'absolute', top: 12, left: 12, background: 'rgba(255,255,255,0.9)', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 800 }}>
-                아티스트 #{item.artistId}
+                {storeArtists.find(a => a.id === item.artistId)?.name ?? `Artist #${item.artistId}`}
               </div>
               {item.remainingQty > 0 && !isSoldOut && (
                 <div style={{ position: 'absolute', top: 12, right: 12, background: (item.remainingQty / Math.max(1, item.totalQty)) <= 0.3 ? '#E11D48' : '#10B981', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 800 }}>

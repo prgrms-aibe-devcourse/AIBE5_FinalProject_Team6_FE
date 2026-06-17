@@ -8,9 +8,11 @@ export async function getProducts(
   type = 'regular',
   cursor?: string,
   size = 20,
+  artistId?: number,
 ): Promise<ProductListResponse> {
   const params = new URLSearchParams({ type, size: String(size) })
   if (cursor !== undefined) params.set('cursor', String(cursor))
+  if (artistId !== undefined) params.set('artistId', String(artistId))
   const res = await fetchWithAuth(`${BASE}?${params}`, { headers: getAuthHeaders() })
   if (!res.ok) throw new Error(`getProducts failed: ${res.status}`)
   const body = await res.json()

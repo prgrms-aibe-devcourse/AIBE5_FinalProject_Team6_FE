@@ -8,6 +8,8 @@ import { useCheckout } from '../hooks/useCheckout';
 import { useQueue } from '../hooks/useQueue';
 import { getProducts, subscribeRestock, unsubscribeRestock } from '../api/products';
 import type { ProductResponse } from '../types/product';
+import { getArtists } from '../api/artist';
+import type { ArtistItem } from '../types/artist';
 import { getStoreBanners } from '../api/banners';
 import type { StoreBannerResponse } from '../types/banner';
 import { getCart, addCartItem, updateCartItem, removeCartItem } from '../api/cart';
@@ -280,6 +282,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [banners, setBanners] = useState<StoreBannerResponse[]>([]);
   const [cartItems, setCartItems] = useState<CartItemResponse[]>([]);
   const [cartLoading, setCartLoading] = useState(false);
+  const [storeArtists, setStoreArtists] = useState<ArtistItem[]>([]);
 
   useEffect(() => {
     if (activeTab !== 'STORE' || selectedProduct || banners.length === 0) return;
@@ -449,9 +452,18 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     };
   }, [activeTab, selectedArtist, boardTab, myPageTab, storeArtist, storePage, storeSearch]);
 
-  // 상품 목록 초기 로드
+  // 상품 목록 로드 — 아티스트 필터 변경 시 재fetch
   useEffect(() => {
-    getProducts('regular')
+    const artistId = storeArtist !== 'ALL' ? Number(storeArtist) : undefined;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setStoreLoading(true);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setStoreItems([]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setStoreNextCursor(null);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setStoreHasMore(false);
+    getProducts('regular', undefined, 20, artistId)
       .then(res => {
         setStoreItems(res.items ?? []);
         setStoreNextCursor(res.nextCursor ?? null);
@@ -459,7 +471,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       })
       .catch(console.error)
       .finally(() => setStoreLoading(false));
-  }, []);
+  }, [storeArtist]);
 
   // 스토어 배너 로드
   useEffect(() => {
@@ -491,6 +503,14 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       })
       .catch(console.error);
   }, []);
+
+  // 스토어 아티스트 필터 목록 로드 (GET /api/v1/artists, 팬 수 내림차순)
+  useEffect(() => {
+    getArtists(undefined, 50)
+      .then(res => setStoreArtists(res.items))
+      .catch(console.error);
+  }, []);
+
 
   // URL → state: 뒤로가기/앞으로가기 시 React 상태를 URL에 맞게 동기화
   useEffect(() => {
@@ -625,8 +645,9 @@ export default function App({ role = 'FAN' }: { role?: string }) {
 
   const handleLoadMore = () => {
     if (!storeNextCursor || storeLoading) return;
+    const artistId = storeArtist !== 'ALL' ? Number(storeArtist) : undefined;
     setStoreLoading(true);
-    getProducts('regular', storeNextCursor)
+    getProducts('regular', storeNextCursor, 20, artistId)
       .then(res => {
         setStoreItems(prev => [...prev, ...(res.items ?? [])]);
         setStoreNextCursor(res.nextCursor ?? null);
@@ -2217,7 +2238,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                   </div>
                   {/* Right: Info */}
                   <div style={{ width: '420px', flexShrink: 0 }}>
-                    <div style={{ fontSize: '12px', fontWeight: 800, color: '#C2507A', letterSpacing: '2px', marginBottom: '8px' }}>아티스트 #{selectedProduct.artistId}</div>
+                    <div style={{ fontSize: '12px', fontWeight: 800, color: '#C2507A', letterSpacing: '2px', marginBottom: '8px' }}>{storeArtists.find(a => a.id === selectedProduct.artistId)?.name ?? `Artist #${selectedProduct.artistId}`}</div>
                     <h1 style={{ fontSize: '32px', fontWeight: 800, letterSpacing: '-1px', marginBottom: '16px', lineHeight: 1.2 }}>{selectedProduct.name}</h1>
                     <div style={{ fontSize: '28px', fontWeight: 800, color: '#C2507A', marginBottom: '24px' }}>₩{Number(selectedProduct.price).toLocaleString()}</div>
                     
@@ -2493,14 +2514,18 @@ export default function App({ role = 'FAN' }: { role?: string }) {
              <span style={{ fontSize: '13px', color: '#111', fontWeight: 600 }}>전체</span>
           </div>
 
-          {favoriteArtists.map(a => (
+          {storeArtists.map(a => (
                         <div key={a.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', cursor: 'pointer', minWidth: '72px' }} onClick={() => {
                           if (activeTab === 'STORE') setStoreArtist(String(a.id));
                         }}>
                            <div style={{ position: 'relative' }}>
-                             <div style={{ width: '64px', height: '64px', borderRadius: '50%', border: (storeArtist === String(a.id)) ? '2px solid #111' : '1px solid #E5E5E5', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#FAFAFA', whiteSpace: 'nowrap', transition: 'all 0.2s', fontWeight: 800, fontSize: '14px' }}>
-                                {a.name.substring(0,3)}
-                             </div>
+                             {a.profileImageUrl ? (
+                               <img src={a.profileImageUrl} alt={a.name} style={{ width: '64px', height: '64px', borderRadius: '50%', objectFit: 'cover', border: (storeArtist === String(a.id)) ? '2px solid #111' : '1px solid #E5E5E5', transition: 'all 0.2s' }} />
+                             ) : (
+                               <div style={{ width: '64px', height: '64px', borderRadius: '50%', border: (storeArtist === String(a.id)) ? '2px solid #111' : '1px solid #E5E5E5', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#FAFAFA', whiteSpace: 'nowrap', transition: 'all 0.2s', fontWeight: 800, fontSize: '14px' }}>
+                                 {a.name.substring(0, 3)}
+                               </div>
+                             )}
                            </div>
                            <span style={{ fontSize: '13px', color: '#111', fontWeight: 600, whiteSpace: 'nowrap' }}>{a.name}</span>
                         </div>
@@ -2549,7 +2574,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '24px' }}>
         {storeArtist !== 'ALL' && (
           <span style={{ background: '#F7F3EE', border: '1px solid #EDE8E2', borderRadius: '20px', padding: '4px 12px', fontSize: '12px', color: '#111', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
-            {favoriteArtists.find(a => String(a.id) === storeArtist)?.name ?? storeArtist} <X size={12} cursor="pointer" onClick={() => setStoreArtist('ALL')} />
+            {storeArtists.find(a => String(a.id) === storeArtist)?.name ?? storeArtist} <X size={12} cursor="pointer" onClick={() => setStoreArtist('ALL')} />
           </span>
         )}
         {storeCategory !== '전체' && (
@@ -2584,7 +2609,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
           >
             <div style={{ position: 'relative', height: '220px', background: 'var(--bg-cream)' }}>
               <div style={{ position: 'absolute', top: 12, left: 12, background: 'rgba(255,255,255,0.9)', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 800 }}>
-                아티스트 #{item.artistId}
+                {storeArtists.find(a => a.id === item.artistId)?.name ?? `Artist #${item.artistId}`}
               </div>
               {item.remainingQty > 0 && !isSoldOut && (
                 <div style={{ position: 'absolute', top: 12, right: 12, background: (item.remainingQty / Math.max(1, item.totalQty)) <= 0.3 ? '#E11D48' : '#10B981', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 800 }}>

@@ -1,14 +1,10 @@
 @import "tailwindcss";
 
-@layer base {
-  html,
-  body {
-    color: #111111;
-  }
+:root {
+  color-scheme: light;
+  color: #111111;
+}
 
-  input,
-  textarea,
-  select {
-    color: #111111;
-  }
+*, *::before, *::after {
+  color: inherit;
 }

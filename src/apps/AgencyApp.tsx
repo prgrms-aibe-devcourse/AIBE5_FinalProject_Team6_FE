@@ -1220,8 +1220,8 @@ export default function AgencyApp() {
                             <h4 className="font-bold text-sm max-w-[150px] truncate">{item.name}</h4>
                             <span className={`text-[10px] font-bold px-2 py-1 rounded ${item.status === 'ON_SALE' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>{item.status}</span>
                          </div>
-                         <div className="text-sm text-[#888] font-mono mb-1">₩{item.price.toLocaleString()}</div>
-                         <div className="text-xs font-bold text-[#111]">재고 (Stock): {item.totalQty.toLocaleString()}</div>
+                         <div className="text-sm text-[#888] font-mono mb-1">₩{(item.price ?? 0).toLocaleString()}</div>
+                         <div className="text-xs font-bold text-[#111]">재고 (Stock): {(item.totalQty ?? 0).toLocaleString()}</div>
                        </div>
                      </div>
                    ))}

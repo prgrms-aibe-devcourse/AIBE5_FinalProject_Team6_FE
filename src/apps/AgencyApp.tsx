@@ -7,6 +7,25 @@ import { getCalendar, createEvent, registerLive, startLive } from '../api/schedu
 import type { ScheduleResult } from '../types/schedule';
 import { getNotices, createNotice } from '../api/notices';
 import type { NoticeResult } from '../types/notice';
+import { getAgencyBanners, createAgencyBanner, updateAgencyBanner, deleteAgencyBanner, requestAgencyPresignedUrl, uploadToS3Agency } from '../api/agencyBanners';
+import type { AgencyBannerFormData } from '../api/agencyBanners';
+import type { BannerResponse } from '../types/banner';
+import { getVotes, createVote } from '../api/votes';
+import type { GoodsVoteResult } from '../types/vote';
+import { getProducts, createProduct } from '../api/products';
+import type { CreateProductRequest, ProductResponse } from '../api/products';
+
+interface BannerForm {
+  id?: number
+  title: string
+  imageUrl: string
+  landingUrl: string
+  exposureOrder: number
+  startAt: string
+  endAt: string
+  isActive: boolean
+  _file?: File
+}
 
 const SCHEDULE_ARTISTS = [
   { id: 1, name: 'NOVA' },
@@ -50,36 +69,55 @@ export default function AgencyApp() {
   const [showBannerModal, setShowBannerModal] = useState(false);
   const [linkNoticeToggle, setLinkNoticeToggle] = useState(false);
 
-  const [votesList, setVotesList] = useState([
-    { id: 'v1', title: '에코백 디자인 결정 투표', artist: 'Starlight', totalVotes: '4,281', endDate: '2026.05.28', status: 'ONGOING' },
-    { id: 'v2', title: '공식 응원봉 실리콘 커버 컬러', artist: 'Starlight', totalVotes: '12,502', endDate: '2026.05.20', status: 'CLOSED' }
-  ]);
-  const [banners, setBanners] = useState([
-    { id: 'b1', order: 1, title: 'Summer Special Echo Drop', period: '2026.06.01 - 2026.06.15', status: 'WAITING' },
-    { id: 'b2', order: 2, title: 'Artist Starlight 2nd Anniversary', period: '2026.05.10 - 2026.05.31', status: 'ACTIVE' },
-    { id: 'b3', order: 3, title: 'FANDROPS App Launch Event', period: 'Always', status: 'ACTIVE' },
-  ]);
-  const [editingBanner, setEditingBanner] = useState<any>(null);
+  const [votesList, setVotesList] = useState<GoodsVoteResult[]>([]);
+  const [banners, setBanners] = useState<BannerResponse[]>([]);
+  const [editingBanner, setEditingBanner] = useState<BannerForm | null>(null);
 
-  const handleBannerSubmit = () => {
+  const handleBannerSubmit = async () => {
     if (!editingBanner?.title?.trim()) {
       alert('배너 제목을 입력해주세요.');
       return;
     }
-    if (editingBanner.id) {
-       setBanners(banners.map(b => b.id === editingBanner.id ? editingBanner : b));
-       alert('배너 설정이 수정되었습니다.');
-    } else {
-       setBanners([...banners, { ...editingBanner, id: 'b' + Date.now(), order: banners.length + 1 }]);
-       alert('새 배너가 등록되었습니다.');
+    try {
+      let imageUrl = editingBanner.imageUrl;
+      if (editingBanner._file) {
+        const { presignedUrl, imageUrl: uploaded } = await requestAgencyPresignedUrl(
+          editingBanner._file.type,
+          editingBanner._file.size,
+        );
+        await uploadToS3Agency(presignedUrl, editingBanner._file);
+        imageUrl = uploaded;
+      }
+      const data: AgencyBannerFormData = {
+        title: editingBanner.title,
+        imageUrl,
+        landingUrl: editingBanner.landingUrl,
+        exposureOrder: editingBanner.exposureOrder || banners.length + 1,
+        ...(editingBanner.startAt ? { startAt: editingBanner.startAt } : {}),
+        ...(editingBanner.endAt ? { endAt: editingBanner.endAt } : {}),
+      };
+      if (editingBanner.id) {
+        await updateAgencyBanner(editingBanner.id, { ...data, isActive: editingBanner.isActive });
+        alert('배너 설정이 수정되었습니다.');
+      } else {
+        await createAgencyBanner(data);
+        alert('새 배너가 등록되었습니다.');
+      }
+      setBanners(await getAgencyBanners());
+      setShowBannerModal(false);
+      setEditingBanner(null);
+    } catch {
+      alert('배너 저장에 실패했습니다.');
     }
-    setShowBannerModal(false);
-    setEditingBanner(null);
   };
 
-  const handleBannerDelete = (id: string) => {
-    if(confirm('이 배너를 삭제하시겠습니까?')) {
-        setBanners(banners.filter(b => b.id !== id));
+  const handleBannerDelete = async (id: number) => {
+    if (!confirm('이 배너를 삭제하시겠습니까?')) return;
+    try {
+      await deleteAgencyBanner(id);
+      setBanners(banners.filter(b => b.id !== id));
+    } catch {
+      alert('배너 삭제에 실패했습니다.');
     }
   };
 
@@ -121,6 +159,9 @@ export default function AgencyApp() {
   const [editingArtist, setEditingArtist] = useState<any>(null);
   const [editingMember, setEditingMember] = useState<any>(null);
   const [newNotice, setNewNotice] = useState({ title: '', tag: 'NOTICE (일반공지)', content: '' });
+
+  const [productList, setProductList] = useState<ProductResponse[]>([]);
+  const [productForm, setProductForm] = useState({ name: '', price: '', totalQty: '', isDrops: false, dropsStartAt: '', dropsEndAt: '' });
 
   // 스케줄 관리 상태
   const [agencyArtistId, setAgencyArtistId] = useState(1);
@@ -183,6 +224,26 @@ export default function AgencyApp() {
   ];
 
   useEffect(() => {
+    if (activeMenu !== 'banners') return;
+    getAgencyBanners().then(setBanners).catch(() => {});
+  }, [activeMenu]);
+
+  useEffect(() => {
+    if (activeMenu !== 'votes') return;
+    getVotes(agencyArtistId).then(res => setVotesList(res.items)).catch(() => {});
+  }, [activeMenu, agencyArtistId]);
+
+  useEffect(() => {
+    if (activeMenu !== 'products') return;
+    Promise.all([
+      getProducts('regular', undefined, 50, agencyArtistId),
+      getProducts('drops', undefined, 50, agencyArtistId),
+    ])
+      .then(([regular, drops]) => setProductList([...regular.items, ...drops.items]))
+      .catch(() => {});
+  }, [activeMenu, agencyArtistId]);
+
+  useEffect(() => {
     if (activeMenu !== 'calendar') return;
     getCalendar(agencyArtistId)
       .then(res => setAgencySchedules(res.events))
@@ -197,7 +258,7 @@ export default function AgencyApp() {
   }, [activeMenu, agencyArtistId]);
 
   return (
-    <div className="min-h-screen bg-[#F7F3EE] flex flex-col font-sans">
+    <div className="min-h-screen bg-[#F7F3EE] text-[#111] flex flex-col font-sans">
       {/* Top GNB */}
       <header className="h-[72px] bg-white/88 backdrop-blur-[10px] border-b border-[#EDE8E2] px-6 flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center gap-6">
@@ -508,31 +569,37 @@ export default function AgencyApp() {
                       <h3 className="text-xl font-black mb-1">Banner Placement Control</h3>
                       <p className="text-xs text-[#888] font-bold">노출 순서 및 기간 한정 배너 제어</p>
                     </div>
-                    <button onClick={() => { setEditingBanner({ title: '', period: '', status: 'ACTIVE' }); setShowBannerModal(true); }} className="bg-[#C2507A] text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-pink-100 flex items-center gap-2">
+                    <button onClick={() => { setEditingBanner({ title: '', imageUrl: '', landingUrl: '', exposureOrder: banners.length + 1, startAt: '', endAt: '', isActive: true }); setShowBannerModal(true); }} className="bg-[#C2507A] text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-pink-100 flex items-center gap-2">
                        <Plus size={16} /> 배너 등록
                     </button>
                   </div>
 
                   <div className="space-y-4">
-                    {banners.sort((a,b) => a.order - b.order).map((banner) => (
+                    {[...banners].sort((a, b) => a.exposureOrder - b.exposureOrder).map((banner) => (
                       <div key={banner.id} className="flex items-center gap-6 p-5 bg-[#F7F3EE] rounded-2xl border border-transparent hover:border-[#C2507A] transition-all group">
                          <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center font-black text-[#C2507A] border border-[#EDE8E2]">
-                            {banner.order}
+                            {banner.exposureOrder}
                          </div>
                          <div className="flex-1">
                             <div className="font-black text-[#111]">{banner.title}</div>
                             <div className="flex items-center gap-4 mt-1">
                                <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#888]">
-                                  <Clock size={12} /> {banner.period}
+                                  <Clock size={12} />
+                                  {banner.startAt ? banner.startAt.slice(0, 10) : '~'} - {banner.endAt ? banner.endAt.slice(0, 10) : '∞'}
                                </div>
-                               <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${banner.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`}>
-                                  {banner.status}
+                               <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${banner.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`}>
+                                  {banner.isActive ? 'ACTIVE' : 'INACTIVE'}
                                </span>
                             </div>
                          </div>
                          <div className="flex gap-2">
-                            <button onClick={() => { const ord = prompt('변경할 순서를 입력하세요', banner.order.toString()); if(ord && !isNaN(Number(ord))) { setBanners(banners.map(b => b.id === banner.id ? {...banner, order: Number(ord)} : b)); } }} className="text-[11px] font-black uppercase text-[#888] hover:text-[#111]">Move</button>
-                            <button onClick={() => { setEditingBanner(banner); setShowBannerModal(true); }} className="text-[11px] font-black uppercase text-[#C2507A] hover:opacity-70">Edit</button>
+                            <button onClick={async () => {
+                              const ord = prompt('변경할 순서를 입력하세요', String(banner.exposureOrder));
+                              if (ord && !isNaN(Number(ord))) {
+                                try { await updateAgencyBanner(banner.id, { exposureOrder: Number(ord) }); setBanners(await getAgencyBanners()); } catch { alert('순서 변경에 실패했습니다.'); }
+                              }
+                            }} className="text-[11px] font-black uppercase text-[#888] hover:text-[#111]">Move</button>
+                            <button onClick={() => { setEditingBanner({ id: banner.id, title: banner.title, imageUrl: banner.imageUrl, landingUrl: banner.landingUrl, exposureOrder: banner.exposureOrder, startAt: banner.startAt?.slice(0, 16) ?? '', endAt: banner.endAt?.slice(0, 16) ?? '', isActive: banner.isActive }); setShowBannerModal(true); }} className="text-[11px] font-black uppercase text-[#C2507A] hover:opacity-70">Edit</button>
                             <button onClick={() => handleBannerDelete(banner.id)} className="text-[11px] font-black uppercase text-red-500 hover:opacity-70">Del</button>
                          </div>
                       </div>
@@ -624,7 +691,7 @@ export default function AgencyApp() {
                           </div>
                           <div className="flex gap-4 mt-8 pt-4 border-t border-[#ede8e2]">
                              <button onClick={() => setShowVoteModal(false)} className="flex-1 p-4 bg-[#F7F3EE] rounded-2xl font-bold">취소</button>
-                             <button onClick={() => {
+                             <button onClick={async () => {
                                  const title = (document.getElementById('voteTitle') as HTMLInputElement).value;
                                  const end = (document.getElementById('voteEndDate') as HTMLInputElement).value;
                                  if (!title || !end) {
@@ -635,10 +702,20 @@ export default function AgencyApp() {
                                     alert('모든 옵션의 라벨을 입력해주세요.');
                                     return;
                                  }
-                                 setVotesList([{ id: 'v'+Date.now(), title, artist: 'Starlight', totalVotes: '0', endDate: end, status: 'ONGOING' }, ...votesList]);
-                                 setShowVoteModal(false);
-                                 setVoteOptions([{id: 1, label: '', image: ''}, {id: 2, label: '', image: ''}]); // reset
-                                 alert('투표가 등록되었습니다!');
+                                 try {
+                                   await createVote(agencyArtistId, {
+                                     title,
+                                     endsAt: new Date(end).toISOString(),
+                                     options: voteOptions.map(o => ({ label: o.label, imageUrl: '' })),
+                                   });
+                                   const res = await getVotes(agencyArtistId);
+                                   setVotesList(res.items);
+                                   setShowVoteModal(false);
+                                   setVoteOptions([{id: 1, label: '', image: ''}, {id: 2, label: '', image: ''}]);
+                                   alert('투표가 등록되었습니다!');
+                                 } catch {
+                                   alert('투표 등록에 실패했습니다.');
+                                 }
                              }} className="flex-1 p-4 bg-[#C2507A] text-white rounded-2xl font-bold">투표 등록 (생성)</button>
                           </div>
                         </div>
@@ -646,38 +723,36 @@ export default function AgencyApp() {
                     )}
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        {votesList.map((vote, i) => (
-                         <div key={i} className="bg-[#F7F3EE] p-6 rounded-3xl border border-transparent hover:border-[#C2507A] transition-all group">
+                      {votesList.length === 0 && (
+                        <p className="col-span-2 text-center py-12 text-[#888] font-bold">등록된 투표가 없습니다.</p>
+                      )}
+                      {votesList.map((vote) => {
+                        const totalVotes = vote.options.reduce((sum, o) => sum + o.voteCount, 0);
+                        const endLabel = vote.endsAt ? vote.endsAt.slice(0, 10) : '-';
+                        return (
+                          <div key={vote.id} className="bg-[#F7F3EE] p-6 rounded-3xl border border-transparent hover:border-[#C2507A] transition-all group">
                             <div className="flex justify-between items-start mb-4">
-                               <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${vote.status === 'ONGOING' ? 'bg-[#C2507A] text-white' : 'bg-gray-300 text-gray-600'}`}>
-                                  {vote.status}
+                               <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${vote.active ? 'bg-[#C2507A] text-white' : 'bg-gray-300 text-gray-600'}`}>
+                                  {vote.active ? 'ONGOING' : 'CLOSED'}
                                </span>
-                               <span className="text-xs font-bold text-[#888]">{vote.artist}</span>
                             </div>
                             <h4 className="text-lg font-black mb-4">{vote.title}</h4>
                             <div className="flex items-center justify-between py-4 border-t border-white/40">
                                <div className="text-center">
                                   <div className="text-[10px] font-black text-[#888] uppercase mb-1">Total Votes</div>
-                                  <div className="font-black text-[#C2507A]">{vote.totalVotes}</div>
+                                  <div className="font-black text-[#C2507A]">{totalVotes.toLocaleString()}</div>
                                </div>
                                <div className="text-center">
                                   <div className="text-[10px] font-black text-[#888] uppercase mb-1">End Date</div>
-                                  <div className="font-black text-[#111]">{vote.endDate}</div>
+                                  <div className="font-black text-[#111]">{endLabel}</div>
                                </div>
                             </div>
                             <div className="flex gap-2 mt-4">
                                 <button onClick={() => alert('결과 통계 보고서가 생성되었습니다.')} className="flex-1 bg-white py-3 rounded-2xl font-black text-[11px] hover:bg-[#F7F3EE] transition-all shadow-sm">결과 통계 보기</button>
-                                {vote.status === 'ONGOING' && (
-                                  <button onClick={() => {
-                                    if (confirm('이 투표를 지금 종료하시겠습니까? 종료 후 되돌릴 수 없습니다.')) {
-                                      setVotesList(votesList.map(v => v.id === vote.id ? {...v, status: 'CLOSED'} : v));
-                                      alert('투표가 종료되었습니다');
-                                    }
-                                  }} className="flex-1 bg-[#111] text-white py-3 rounded-2xl font-black text-[11px] hover:bg-black/80 transition-all shadow-sm">투표 종료</button>
-                                )}
                              </div>
-                         </div>
-                       ))}
+                          </div>
+                        );
+                      })}
                     </div>
                  </div>
               </div>
@@ -1081,23 +1156,35 @@ export default function AgencyApp() {
                           </div>
                           <div>
                             <label className="block text-sm font-bold text-[#888] mb-1">상품명 (Product Name)</label>
-                           <input type="text" className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]" />
+                           <input type="text" value={productForm.name} onChange={e => setProductForm({...productForm, name: e.target.value})} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]" />
                          </div>
                          <div className="grid grid-cols-2 gap-4">
                            <div>
                              <label className="block text-sm font-bold text-[#888] mb-1">가격 (KRW)</label>
-                             <input type="number" className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]" />
+                             <input type="number" value={productForm.price} onChange={e => setProductForm({...productForm, price: e.target.value})} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]" />
                            </div>
                            <div>
                              <label className="block text-sm font-bold text-[#888] mb-1">초기 재고 (Initial Stock)</label>
-                             <input type="number" className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]" />
+                             <input type="number" value={productForm.totalQty} onChange={e => setProductForm({...productForm, totalQty: e.target.value})} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]" />
                            </div>
                          </div>
                          <div className="flex items-center gap-2 mb-2 mt-4">
-                           <input type="checkbox" id="hot-deal" className="w-4 h-4 cursor-pointer" />
-                           <label htmlFor="hot-deal" className="text-sm font-bold text-[#111] cursor-pointer">핫딜 대기열 활성화 (트래픽이 많을 때)</label>
+                           <input type="checkbox" id="hot-deal" checked={productForm.isDrops} onChange={e => setProductForm({...productForm, isDrops: e.target.checked})} className="w-4 h-4 cursor-pointer" />
+                           <label htmlFor="hot-deal" className="text-sm font-bold text-[#111] cursor-pointer">드롭스 판매 (Drops)</label>
                          </div>
                          <div className="text-xs text-[#888] ml-6 mb-4">트래픽 급증 시 사용자들은 대기열에 진입하게 됩니다.</div>
+                         {productForm.isDrops && (
+                           <div className="grid grid-cols-2 gap-4 ml-6">
+                             <div>
+                               <label className="block text-sm font-bold text-[#888] mb-1">드롭스 시작 일시</label>
+                               <input type="datetime-local" value={productForm.dropsStartAt} onChange={e => setProductForm({...productForm, dropsStartAt: e.target.value})} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]" />
+                             </div>
+                             <div>
+                               <label className="block text-sm font-bold text-[#888] mb-1">드롭스 종료 일시</label>
+                               <input type="datetime-local" value={productForm.dropsEndAt} onChange={e => setProductForm({...productForm, dropsEndAt: e.target.value})} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]" />
+                             </div>
+                           </div>
+                         )}
                          
                          <div>
                            <label className="block text-sm font-bold text-[#888] mb-1">상세 설명</label>
@@ -1106,28 +1193,56 @@ export default function AgencyApp() {
                        </div>
                        <div className="flex gap-2 mt-6">
                          <button className="flex-1 bg-[#F7F3EE] text-[#111] py-3 rounded-xl font-bold" onClick={() => setShowProductModal(false)}>취소</button>
-                         <button className="flex-1 bg-[#C2507A] text-white py-3 rounded-xl font-bold" onClick={() => { setShowProductModal(false); alert('드롭이 스케줄되었습니다!'); }}>드롭 시작하기</button>
+                         <button className="flex-1 bg-[#C2507A] text-white py-3 rounded-xl font-bold" onClick={async () => {
+                           if (!productForm.name.trim() || !productForm.price || !productForm.totalQty) {
+                             alert('상품명, 가격, 재고를 모두 입력해주세요.');
+                             return;
+                           }
+                           try {
+                             const req: CreateProductRequest = {
+                               artistId: agencyArtistId,
+                               name: productForm.name.trim(),
+                               price: Number(productForm.price),
+                               totalQty: Number(productForm.totalQty),
+                               type: productForm.isDrops ? 'drops' : 'regular',
+                               ...(productForm.isDrops && productForm.dropsStartAt ? { dropsStartAt: `${productForm.dropsStartAt}:00` } : {}),
+                               ...(productForm.isDrops && productForm.dropsEndAt ? { dropsEndAt: `${productForm.dropsEndAt}:00` } : {}),
+                             };
+                             await createProduct(req);
+                             const [regular, drops] = await Promise.all([
+                               getProducts('regular', undefined, 50, agencyArtistId),
+                               getProducts('drops', undefined, 50, agencyArtistId),
+                             ]);
+                             const refreshed = { items: [...regular.items, ...drops.items] };
+                             setProductList(refreshed.items);
+                             setShowProductModal(false);
+                             setProductForm({ name: '', price: '', totalQty: '', isDrops: false, dropsStartAt: '', dropsEndAt: '' });
+                             alert('드롭이 스케줄되었습니다!');
+                           } catch {
+                             alert('상품 등록에 실패했습니다.');
+                           }
+                         }}>드롭 시작하기</button>
                        </div>
                      </div>
                    </div>
                  )}
 
+                 {productList.length === 0 && (
+                   <p className="text-center py-12 text-[#888] font-bold">등록된 상품이 없습니다.</p>
+                 )}
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                   {[
-                     { name: 'Starlight Official Lightstick', price: '₩45,000', stock: '2,400', status: 'ACTIVE' },
-                     { name: 'Summer Photo Book', price: '₩28,000', stock: '850', status: 'LOW STOCK' }
-                   ].map((item, i) => (
-                     <div key={i} className="bg-white rounded-2xl border border-[#EDE8E2] p-6 flex gap-4 items-center cursor-pointer hover:border-[#111] transition-colors">
+                   {productList.map((item) => (
+                     <div key={item.id} className="bg-white rounded-2xl border border-[#EDE8E2] p-6 flex gap-4 items-center cursor-pointer hover:border-[#111] transition-colors">
                        <div className="w-20 h-20 bg-[#F7F3EE] rounded-xl flex items-center justify-center shrink-0">
                          <Package className="text-[#ccc] w-8 h-8" />
                        </div>
                        <div className="flex-1">
                          <div className="flex justify-between items-start mb-2">
                             <h4 className="font-bold text-sm max-w-[150px] truncate">{item.name}</h4>
-                            <span className={`text-[10px] font-bold px-2 py-1 rounded ${item.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>{item.status}</span>
+                            <span className={`text-[10px] font-bold px-2 py-1 rounded ${item.status === 'ON_SALE' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>{item.status}</span>
                          </div>
-                         <div className="text-sm text-[#888] font-mono mb-1">{item.price}</div>
-                         <div className="text-xs font-bold text-[#111]">재고 (Stock): {item.stock}</div>
+                         <div className="text-sm text-[#888] font-mono mb-1">₩{(item.price ?? 0).toLocaleString()}</div>
+                         <div className="text-xs font-bold text-[#111]">재고 (Stock): {(item.totalQty ?? 0).toLocaleString()}</div>
                        </div>
                      </div>
                    ))}
@@ -1214,41 +1329,53 @@ export default function AgencyApp() {
                     <div>
                       <label className="block text-xs font-black text-[#888] uppercase tracking-wider mb-2">배너 이미지</label>
                       <div className="flex flex-col gap-3 mb-4">
-                        {editingBanner?.image && (
+                        {(editingBanner?.imageUrl || editingBanner?._file) && (
                           <div className="w-full h-32 rounded-xl border border-[#ede8e2] overflow-hidden shrink-0 relative group">
-                            <img src={editingBanner.image} alt="banner" className="w-full h-full object-cover" />
+                            {editingBanner._file
+                              ? <div className="w-full h-full bg-[#F7F3EE] flex items-center justify-center text-xs text-[#888] font-bold">{editingBanner._file.name}</div>
+                              : <img src={editingBanner.imageUrl} alt="banner" className="w-full h-full object-cover" />
+                            }
                             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                              <span className="text-white text-xs font-bold bg-black/50 px-3 py-1.5 rounded-lg cursor-pointer" onClick={(e) => { e.preventDefault(); setEditingBanner({...editingBanner, image: undefined}); }}>이미지 삭제</span>
+                              <span className="text-white text-xs font-bold bg-black/50 px-3 py-1.5 rounded-lg cursor-pointer" onClick={(e) => { e.preventDefault(); setEditingBanner({...editingBanner!, imageUrl: '', _file: undefined}); }}>이미지 삭제</span>
                             </div>
                           </div>
                         )}
                         <label className="cursor-pointer bg-[#F7F3EE] px-4 py-3 rounded-xl border border-dashed border-[#ede8e2] text-sm font-bold text-[#888] hover:text-[#C2507A] hover:border-[#C2507A] transition-colors flex justify-center items-center gap-2">
-                          <Upload size={16} /> {editingBanner?.image ? '이미지 변경' : '이미지 파일(.jpg, .png) 첨부'}
+                          <Upload size={16} /> {editingBanner?._file || editingBanner?.imageUrl ? '이미지 변경' : '이미지 파일(.jpg, .png) 첨부'}
                           <input type="file" accept="image/*" className="hidden" onChange={(e) => {
                             const file = e.target.files?.[0];
-                            if (file) {
-                              const reader = new FileReader();
-                              reader.onload = (ev) => setEditingBanner({...editingBanner, image: ev.target?.result as string});
-                              reader.readAsDataURL(file);
-                            }
+                            if (file) setEditingBanner({...editingBanner!, _file: file});
                           }} />
                         </label>
                       </div>
                     </div>
                     <div>
                       <label className="block text-xs font-black text-[#888] uppercase tracking-wider mb-2">배너 제목</label>
-                      <input type="text" value={editingBanner?.title || ''} onChange={(e) => setEditingBanner({...editingBanner, title: e.target.value})} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-3 rounded-xl focus:outline-none focus:border-[#C2507A]" />
+                      <input type="text" value={editingBanner?.title || ''} onChange={(e) => setEditingBanner({...editingBanner!, title: e.target.value})} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-3 rounded-xl focus:outline-none focus:border-[#C2507A]" />
                     </div>
                     <div>
-                      <label className="block text-xs font-black text-[#888] uppercase tracking-wider mb-2">진행 기간</label>
-                      <input type="text" placeholder="YYYY.MM.DD - YYYY.MM.DD 또는 Always" value={editingBanner?.period || ''} onChange={(e) => setEditingBanner({...editingBanner, period: e.target.value})} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-3 rounded-xl focus:outline-none focus:border-[#C2507A]" />
+                      <label className="block text-xs font-black text-[#888] uppercase tracking-wider mb-2">랜딩 URL</label>
+                      <input type="text" placeholder="https://..." value={editingBanner?.landingUrl || ''} onChange={(e) => setEditingBanner({...editingBanner!, landingUrl: e.target.value})} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-3 rounded-xl focus:outline-none focus:border-[#C2507A]" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-black text-[#888] uppercase tracking-wider mb-2">시작일</label>
+                        <input type="datetime-local" value={editingBanner?.startAt || ''} onChange={(e) => setEditingBanner({...editingBanner!, startAt: e.target.value})} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-3 rounded-xl focus:outline-none focus:border-[#C2507A]" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-black text-[#888] uppercase tracking-wider mb-2">종료일</label>
+                        <input type="datetime-local" value={editingBanner?.endAt || ''} onChange={(e) => setEditingBanner({...editingBanner!, endAt: e.target.value})} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-3 rounded-xl focus:outline-none focus:border-[#C2507A]" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-black text-[#888] uppercase tracking-wider mb-2">노출 순서</label>
+                      <input type="number" min={1} value={editingBanner?.exposureOrder || ''} onChange={(e) => setEditingBanner({...editingBanner!, exposureOrder: Number(e.target.value)})} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-3 rounded-xl focus:outline-none focus:border-[#C2507A]" />
                     </div>
                     <div>
                       <label className="block text-xs font-black text-[#888] uppercase tracking-wider mb-2">상태</label>
-                      <select value={editingBanner?.status || 'ACTIVE'} onChange={(e) => setEditingBanner({...editingBanner, status: e.target.value})} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-3 rounded-xl focus:outline-none focus:border-[#C2507A]">
-                        <option value="ACTIVE">ACTIVE</option>
-                        <option value="WAITING">WAITING</option>
-                        <option value="INACTIVE">INACTIVE</option>
+                      <select value={editingBanner?.isActive ? 'ACTIVE' : 'INACTIVE'} onChange={(e) => setEditingBanner({...editingBanner!, isActive: e.target.value === 'ACTIVE'})} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-3 rounded-xl focus:outline-none focus:border-[#C2507A]">
+                        <option value="ACTIVE">ACTIVE (노출)</option>
+                        <option value="INACTIVE">INACTIVE (비노출)</option>
                       </select>
                     </div>
                   </div>

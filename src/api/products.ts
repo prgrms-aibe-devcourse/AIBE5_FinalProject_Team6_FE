@@ -2,6 +2,18 @@ import type { ProductListResponse, ProductResponse } from '../types/product'
 import { getAuthHeaders, getFanIdHeader } from './auth'
 import { fetchWithAuth } from '../lib/fetchWithAuth'
 
+export interface CreateProductRequest {
+  artistId: number
+  name: string
+  price: number
+  totalQty: number
+  type: 'regular' | 'drops'
+  dropsStartAt?: string
+  dropsEndAt?: string
+}
+
+export type { ProductResponse }
+
 const BASE = '/api/v1/products'
 
 export async function getProducts(
@@ -32,6 +44,17 @@ export async function subscribeRestock(productId: number): Promise<void> {
     headers: { ...getAuthHeaders(), 'X-Fan-Id': getFanIdHeader() },
   })
   if (!res.ok) throw new Error(`subscribeRestock failed: ${res.status}`)
+}
+
+export async function createProduct(data: CreateProductRequest): Promise<{ productId: number }> {
+  const res = await fetchWithAuth(BASE, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) throw new Error(`createProduct failed: ${res.status}`)
+  const body = await res.json()
+  return body.data as { productId: number }
 }
 
 export async function unsubscribeRestock(productId: number): Promise<void> {

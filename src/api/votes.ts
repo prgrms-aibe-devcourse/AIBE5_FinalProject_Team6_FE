@@ -1,6 +1,12 @@
 import { getAuthHeaders, getFanIdHeader } from './auth'
 import type { GoodsVoteListResponse } from '../types/vote'
 
+export interface CreateVoteRequest {
+  title: string
+  endsAt: string
+  options: { label: string; imageUrl: string }[]
+}
+
 export async function getVotes(
   artistId: number,
   cursor?: string,
@@ -14,6 +20,20 @@ export async function getVotes(
   if (!res.ok) throw new Error(`getVotes failed: ${res.status}`)
   const body = await res.json()
   return body.data as GoodsVoteListResponse
+}
+
+export async function createVote(
+  artistId: number,
+  data: CreateVoteRequest,
+): Promise<{ voteId: number }> {
+  const res = await fetch(`/api/v1/artists/${artistId}/goods-votes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) throw new Error(`createVote failed: ${res.status}`)
+  const body = await res.json()
+  return body.data as { voteId: number }
 }
 
 export async function castBallot(

@@ -1,15 +1,6 @@
 @import "tailwindcss";
 
-@layer base {
-  :root {
-    color-scheme: light;
-  }
-  html {
-    color: #111111;
-  }
-  input,
-  textarea,
-  select {
-    color: #111111;
-  }
+:root {
+  color-scheme: light;
+  color: #111111;
 }

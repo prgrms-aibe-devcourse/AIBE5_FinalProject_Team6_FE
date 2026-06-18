@@ -1205,8 +1205,8 @@ export default function AgencyApp() {
                                price: Number(productForm.price),
                                totalQty: Number(productForm.totalQty),
                                type: productForm.isDrops ? 'drops' : 'regular',
-                               ...(productForm.isDrops && productForm.dropsStartAt ? { dropsStartAt: new Date(productForm.dropsStartAt).toISOString() } : {}),
-                               ...(productForm.isDrops && productForm.dropsEndAt ? { dropsEndAt: new Date(productForm.dropsEndAt).toISOString() } : {}),
+                               ...(productForm.isDrops && productForm.dropsStartAt ? { dropsStartAt: `${productForm.dropsStartAt}:00` } : {}),
+                               ...(productForm.isDrops && productForm.dropsEndAt ? { dropsEndAt: `${productForm.dropsEndAt}:00` } : {}),
                              };
                              await createProduct(req);
                              const [regular, drops] = await Promise.all([

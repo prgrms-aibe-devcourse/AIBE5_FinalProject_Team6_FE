@@ -1,6 +1,11 @@
 @import "tailwindcss";
 
 @layer base {
+  html,
+  body {
+    color: #111111;
+  }
+
   input,
   textarea,
   select {

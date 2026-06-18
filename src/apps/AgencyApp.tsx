@@ -218,8 +218,18 @@ export default function AgencyApp() {
       .catch(console.error);
   }, [activeMenu, agencyArtistId]);
 
+  useEffect(() => {
+    if (activeMenu !== 'products') return;
+    Promise.all([
+      getProducts('regular', undefined, 50, agencyArtistId),
+      getProducts('drops', undefined, 50, agencyArtistId),
+    ])
+      .then(([regular, drops]) => setProductList([...regular.items, ...drops.items]))
+      .catch(() => {});
+  }, [activeMenu, agencyArtistId]);
+
   return (
-    <div className="min-h-screen bg-[#F7F3EE] flex flex-col font-sans">
+    <div className="min-h-screen bg-[#F7F3EE] text-[#111] flex flex-col font-sans">
       {/* Top GNB */}
       <header className="h-[72px] bg-white/88 backdrop-blur-[10px] border-b border-[#EDE8E2] px-6 flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center gap-6">
@@ -1103,24 +1113,35 @@ export default function AgencyApp() {
                           </div>
                           <div>
                             <label className="block text-sm font-bold text-[#888] mb-1">상품명 (Product Name)</label>
-                           <input type="text" className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]" />
+                           <input type="text" value={productForm.name} onChange={e => setProductForm({...productForm, name: e.target.value})} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]" />
                          </div>
                          <div className="grid grid-cols-2 gap-4">
                            <div>
                              <label className="block text-sm font-bold text-[#888] mb-1">가격 (KRW)</label>
-                             <input type="number" className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]" />
+                             <input type="number" value={productForm.price} onChange={e => setProductForm({...productForm, price: e.target.value})} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]" />
                            </div>
                            <div>
                              <label className="block text-sm font-bold text-[#888] mb-1">초기 재고 (Initial Stock)</label>
-                             <input type="number" className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]" />
+                             <input type="number" value={productForm.totalQty} onChange={e => setProductForm({...productForm, totalQty: e.target.value})} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]" />
                            </div>
                          </div>
                          <div className="flex items-center gap-2 mb-2 mt-4">
-                           <input type="checkbox" id="hot-deal" className="w-4 h-4 cursor-pointer" />
-                           <label htmlFor="hot-deal" className="text-sm font-bold text-[#111] cursor-pointer">핫딜 대기열 활성화 (트래픽이 많을 때)</label>
+                           <input type="checkbox" id="hot-deal" checked={productForm.isDrops} onChange={e => setProductForm({...productForm, isDrops: e.target.checked})} className="w-4 h-4 cursor-pointer" />
+                           <label htmlFor="hot-deal" className="text-sm font-bold text-[#111] cursor-pointer">드롭스 판매 (Drops)</label>
                          </div>
                          <div className="text-xs text-[#888] ml-6 mb-4">트래픽 급증 시 사용자들은 대기열에 진입하게 됩니다.</div>
-                         
+                         {productForm.isDrops && (
+                           <div className="grid grid-cols-2 gap-4 ml-6">
+                             <div>
+                               <label className="block text-sm font-bold text-[#888] mb-1">드롭스 시작 일시</label>
+                               <input type="datetime-local" value={productForm.dropsStartAt} onChange={e => setProductForm({...productForm, dropsStartAt: e.target.value})} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]" />
+                             </div>
+                             <div>
+                               <label className="block text-sm font-bold text-[#888] mb-1">드롭스 종료 일시</label>
+                               <input type="datetime-local" value={productForm.dropsEndAt} onChange={e => setProductForm({...productForm, dropsEndAt: e.target.value})} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]" />
+                             </div>
+                           </div>
+                         )}
                          <div>
                            <label className="block text-sm font-bold text-[#888] mb-1">상세 설명</label>
                            <textarea className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A] h-20 resize-none"></textarea>
@@ -1128,7 +1149,34 @@ export default function AgencyApp() {
                        </div>
                        <div className="flex gap-2 mt-6">
                          <button className="flex-1 bg-[#F7F3EE] text-[#111] py-3 rounded-xl font-bold" onClick={() => setShowProductModal(false)}>취소</button>
-                         <button className="flex-1 bg-[#C2507A] text-white py-3 rounded-xl font-bold" onClick={() => { setShowProductModal(false); alert('드롭이 스케줄되었습니다!'); }}>드롭 시작하기</button>
+                         <button className="flex-1 bg-[#C2507A] text-white py-3 rounded-xl font-bold" onClick={async () => {
+                           if (!productForm.name.trim() || !productForm.price || !productForm.totalQty) {
+                             alert('상품명, 가격, 재고를 모두 입력해주세요.');
+                             return;
+                           }
+                           try {
+                             const req: CreateProductRequest = {
+                               artistId: agencyArtistId,
+                               name: productForm.name.trim(),
+                               price: Number(productForm.price),
+                               totalQty: Number(productForm.totalQty),
+                               type: productForm.isDrops ? 'drops' : 'regular',
+                               ...(productForm.isDrops && productForm.dropsStartAt ? { dropsStartAt: `${productForm.dropsStartAt}:00` } : {}),
+                               ...(productForm.isDrops && productForm.dropsEndAt ? { dropsEndAt: `${productForm.dropsEndAt}:00` } : {}),
+                             };
+                             await createProduct(req);
+                             const [regular, drops] = await Promise.all([
+                               getProducts('regular', undefined, 50, agencyArtistId),
+                               getProducts('drops', undefined, 50, agencyArtistId),
+                             ]);
+                             setProductList([...regular.items, ...drops.items]);
+                             setShowProductModal(false);
+                             setProductForm({ name: '', price: '', totalQty: '', isDrops: false, dropsStartAt: '', dropsEndAt: '' });
+                             alert('드롭이 스케줄되었습니다!');
+                           } catch {
+                             alert('상품 등록에 실패했습니다.');
+                           }
+                         }}>드롭 시작하기</button>
                        </div>
                      </div>
                    </div>

@@ -221,7 +221,7 @@ export default function AdminApp() {
   };
 
   return (
-    <div className="flex h-screen bg-[#F7F3EE] overflow-hidden font-sans relative">
+    <div className="flex h-screen bg-[#F7F3EE] text-[#111] overflow-hidden font-sans relative">
       {/* Toast */}
       {toast && (
         <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[100] bg-[#111] text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4">

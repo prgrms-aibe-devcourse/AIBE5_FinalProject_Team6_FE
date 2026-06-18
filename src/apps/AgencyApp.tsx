@@ -255,7 +255,7 @@ export default function AgencyApp() {
   }, [activeMenu, agencyArtistId]);
 
   return (
-    <div className="min-h-screen bg-[#F7F3EE] flex flex-col font-sans">
+    <div className="min-h-screen bg-[#F7F3EE] text-[#111] flex flex-col font-sans">
       {/* Top GNB */}
       <header className="h-[72px] bg-white/88 backdrop-blur-[10px] border-b border-[#EDE8E2] px-6 flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center gap-6">

@@ -7,7 +7,7 @@ import { Plus, Search, Calendar, Heart, Share2, Filter, Image as ImageIcon, Smil
 import { useCheckout } from '../hooks/useCheckout';
 import { useQueue } from '../hooks/useQueue';
 import { getProducts, subscribeRestock, unsubscribeRestock } from '../api/products';
-import type { ProductResponse } from '../types/product';
+import type { ProductListItem, ProductResponse } from '../types/product';
 import { getArtists } from '../api/artist';
 import type { ArtistItem } from '../types/artist';
 import { getStoreBanners } from '../api/banners';
@@ -35,7 +35,7 @@ import type { NoticeResult } from '../types/notice';
 
 const SORT_OPTIONS = ['낮은가격순', '높은가격순'];
 
-function getSortedItems(items: ProductResponse[], sortKey: string) {
+function getSortedItems(items: ProductListItem[], sortKey: string) {
   return [...items].sort((a, b) => {
     if (sortKey === '낮은가격순') return a.price - b.price;
     if (sortKey === '높은가격순') return b.price - a.price;
@@ -275,7 +275,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [storePage, setStorePage] = useState(1);
   const [isStoreSortDropdownOpen, setIsStoreSortDropdownOpen] = useState(false);
   const [storeBannerIdx, setStoreBannerIdx] = useState(0);
-  const [storeItems, setStoreItems] = useState<ProductResponse[]>([]);
+  const [storeItems, setStoreItems] = useState<ProductListItem[]>([]);
   const [storeNextCursor, setStoreNextCursor] = useState<string | null>(null);
   const [storeHasMore, setStoreHasMore] = useState(false);
   const [storeLoading, setStoreLoading] = useState(true);
@@ -2267,12 +2267,12 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                         <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
                           <button onClick={() => setProductQty(Math.max(1, productQty - 1))} style={{ padding: '12px 16px', background: 'var(--bg-cream)', fontWeight: 800 }}>-</button>
                           <span style={{ padding: '0 24px', fontWeight: 800 }}>{productQty}</span>
-                          <button onClick={() => setProductQty(Math.min(selectedProduct.remainingQty, productQty + 1))} style={{ padding: '12px 16px', background: 'var(--bg-cream)', fontWeight: 800 }}>+</button>
+                          <button onClick={() => setProductQty(Math.min(selectedProduct.availableQty, productQty + 1))} style={{ padding: '12px 16px', background: 'var(--bg-cream)', fontWeight: 800 }}>+</button>
                         </div>
                         <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-sub)', marginBottom: '4px' }}>{selectedProduct.remainingQty}개 남음</div>
+                          <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-sub)', marginBottom: '4px' }}>{selectedProduct.availableQty}개 남음</div>
                           <div style={{ width: '100px', height: '6px', background: 'var(--bg-cream)', borderRadius: '3px', overflow: 'hidden' }}>
-                            <div style={{ width: `${selectedProduct.totalQty > 0 ? (selectedProduct.remainingQty / selectedProduct.totalQty) * 100 : 0}%`, height: '100%', background: 'linear-gradient(90deg, #C2507A, #7F77DD)' }}></div>
+                            <div style={{ width: `${selectedProduct.totalQty > 0 ? (selectedProduct.availableQty / selectedProduct.totalQty) * 100 : 0}%`, height: '100%', background: 'linear-gradient(90deg, #C2507A, #7F77DD)' }}></div>
                           </div>
                         </div>
                       </div>
@@ -2597,9 +2597,9 @@ export default function App({ role = 'FAN' }: { role?: string }) {
         storeSort,
       );
 
-      const renderGridCard = (item: ProductResponse) => {
+      const renderGridCard = (item: ProductListItem) => {
         const isSoldOut = item.status === 'SOLD_OUT';
-        const progress = isSoldOut ? 100 : item.totalQty > 0 ? (item.remainingQty / item.totalQty) * 100 : 0;
+        const progress = isSoldOut ? 100 : item.totalQty > 0 ? (item.availableQty / item.totalQty) * 100 : 0;
         return (
           <div
             key={item.id}
@@ -2611,9 +2611,9 @@ export default function App({ role = 'FAN' }: { role?: string }) {
               <div style={{ position: 'absolute', top: 12, left: 12, background: 'rgba(255,255,255,0.9)', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 800 }}>
                 {storeArtists.find(a => a.id === item.artistId)?.name ?? `Artist #${item.artistId}`}
               </div>
-              {item.remainingQty > 0 && !isSoldOut && (
-                <div style={{ position: 'absolute', top: 12, right: 12, background: (item.remainingQty / Math.max(1, item.totalQty)) <= 0.3 ? '#E11D48' : '#10B981', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 800 }}>
-                  {item.remainingQty}개 남음
+              {item.availableQty > 0 && !isSoldOut && (
+                <div style={{ position: 'absolute', top: 12, right: 12, background: (item.availableQty / Math.max(1, item.totalQty)) <= 0.3 ? '#E11D48' : '#10B981', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 800 }}>
+                  {item.availableQty}개 남음
                 </div>
               )}
               {isSoldOut && (

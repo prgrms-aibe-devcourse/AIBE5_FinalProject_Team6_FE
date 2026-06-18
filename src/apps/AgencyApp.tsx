@@ -7,6 +7,25 @@ import { getCalendar, createEvent, registerLive, startLive } from '../api/schedu
 import type { ScheduleResult } from '../types/schedule';
 import { getNotices, createNotice } from '../api/notices';
 import type { NoticeResult } from '../types/notice';
+import { getAgencyBanners, createAgencyBanner, updateAgencyBanner, deleteAgencyBanner, requestAgencyPresignedUrl, uploadToS3Agency } from '../api/agencyBanners';
+import type { AgencyBannerFormData } from '../api/agencyBanners';
+import type { BannerResponse } from '../types/banner';
+import { getVotes, createVote } from '../api/votes';
+import type { GoodsVoteResult } from '../types/vote';
+import { getProducts, createProduct } from '../api/products';
+import type { CreateProductRequest, ProductListItem } from '../api/products';
+
+interface BannerForm {
+  id?: number
+  title: string
+  imageUrl: string
+  landingUrl: string
+  exposureOrder: number
+  startAt: string
+  endAt: string
+  isActive: boolean
+  _file?: File
+}
 
 const SCHEDULE_ARTISTS = [
   { id: 1, name: 'NOVA' },
@@ -121,6 +140,9 @@ export default function AgencyApp() {
   const [editingArtist, setEditingArtist] = useState<any>(null);
   const [editingMember, setEditingMember] = useState<any>(null);
   const [newNotice, setNewNotice] = useState({ title: '', tag: 'NOTICE (일반공지)', content: '' });
+
+  const [productList, setProductList] = useState<ProductListItem[]>([]);
+  const [productForm, setProductForm] = useState({ name: '', price: '', totalQty: '', isDrops: false, dropsStartAt: '', dropsEndAt: '' });
 
   // 스케줄 관리 상태
   const [agencyArtistId, setAgencyArtistId] = useState(1);
@@ -1113,10 +1135,7 @@ export default function AgencyApp() {
                  )}
 
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                   {[
-                     { name: 'Starlight Official Lightstick', price: '₩45,000', stock: '2,400', status: 'ACTIVE' },
-                     { name: 'Summer Photo Book', price: '₩28,000', stock: '850', status: 'LOW STOCK' }
-                   ].map((item, i) => (
+                   {productList.map((item, i) => (
                      <div key={i} className="bg-white rounded-2xl border border-[#EDE8E2] p-6 flex gap-4 items-center cursor-pointer hover:border-[#111] transition-colors">
                        <div className="w-20 h-20 bg-[#F7F3EE] rounded-xl flex items-center justify-center shrink-0">
                          <Package className="text-[#ccc] w-8 h-8" />
@@ -1126,8 +1145,8 @@ export default function AgencyApp() {
                             <h4 className="font-bold text-sm max-w-[150px] truncate">{item.name}</h4>
                             <span className={`text-[10px] font-bold px-2 py-1 rounded ${item.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>{item.status}</span>
                          </div>
-                         <div className="text-sm text-[#888] font-mono mb-1">{item.price}</div>
-                         <div className="text-xs font-bold text-[#111]">재고 (Stock): {item.stock}</div>
+                         <div className="text-sm text-[#888] font-mono mb-1">₩{(item.price ?? 0).toLocaleString()}</div>
+                         <div className="text-xs font-bold text-[#111]">재고 (Stock): {item.totalQty.toLocaleString()}</div>
                        </div>
                      </div>
                    ))}

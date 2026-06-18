@@ -1,15 +1,22 @@
-export interface ProductResponse {
+export interface ProductListItem {
   id: number
   artistId: number
   name: string
   price: number
-  totalQty: number
-  remainingQty: number
   status: string
+  totalQty: number
+  availableQty: number
+}
+
+export interface ProductResponse extends ProductListItem {
+  reservedQty: number
+  dropsStartAt: string | null
+  dropsEndAt: string | null
+  updatedAt: string
 }
 
 export interface ProductListResponse {
-  items: ProductResponse[]
+  items: ProductListItem[]
   nextCursor: string | null
   hasMore: boolean
 }

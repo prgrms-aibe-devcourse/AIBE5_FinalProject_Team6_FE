@@ -235,8 +235,11 @@ export default function AgencyApp() {
 
   useEffect(() => {
     if (activeMenu !== 'products') return;
-    getProducts('regular', undefined, 50, agencyArtistId)
-      .then(res => setProductList(res.items))
+    Promise.all([
+      getProducts('regular', undefined, 50, agencyArtistId),
+      getProducts('drops', undefined, 50, agencyArtistId),
+    ])
+      .then(([regular, drops]) => setProductList([...regular.items, ...drops.items]))
       .catch(() => {});
   }, [activeMenu, agencyArtistId]);
 
@@ -1167,9 +1170,21 @@ export default function AgencyApp() {
                          </div>
                          <div className="flex items-center gap-2 mb-2 mt-4">
                            <input type="checkbox" id="hot-deal" checked={productForm.isDrops} onChange={e => setProductForm({...productForm, isDrops: e.target.checked})} className="w-4 h-4 cursor-pointer" />
-                           <label htmlFor="hot-deal" className="text-sm font-bold text-[#111] cursor-pointer">핫딜 대기열 활성화 (트래픽이 많을 때)</label>
+                           <label htmlFor="hot-deal" className="text-sm font-bold text-[#111] cursor-pointer">드롭스 판매 (Drops)</label>
                          </div>
                          <div className="text-xs text-[#888] ml-6 mb-4">트래픽 급증 시 사용자들은 대기열에 진입하게 됩니다.</div>
+                         {productForm.isDrops && (
+                           <div className="grid grid-cols-2 gap-4 ml-6">
+                             <div>
+                               <label className="block text-sm font-bold text-[#888] mb-1">드롭스 시작 일시</label>
+                               <input type="datetime-local" value={productForm.dropsStartAt} onChange={e => setProductForm({...productForm, dropsStartAt: e.target.value})} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]" />
+                             </div>
+                             <div>
+                               <label className="block text-sm font-bold text-[#888] mb-1">드롭스 종료 일시</label>
+                               <input type="datetime-local" value={productForm.dropsEndAt} onChange={e => setProductForm({...productForm, dropsEndAt: e.target.value})} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]" />
+                             </div>
+                           </div>
+                         )}
                          
                          <div>
                            <label className="block text-sm font-bold text-[#888] mb-1">상세 설명</label>
@@ -1190,9 +1205,15 @@ export default function AgencyApp() {
                                price: Number(productForm.price),
                                totalQty: Number(productForm.totalQty),
                                type: productForm.isDrops ? 'drops' : 'regular',
+                               ...(productForm.isDrops && productForm.dropsStartAt ? { dropsStartAt: new Date(productForm.dropsStartAt).toISOString() } : {}),
+                               ...(productForm.isDrops && productForm.dropsEndAt ? { dropsEndAt: new Date(productForm.dropsEndAt).toISOString() } : {}),
                              };
                              await createProduct(req);
-                             const refreshed = await getProducts('regular', undefined, 50, agencyArtistId);
+                             const [regular, drops] = await Promise.all([
+                               getProducts('regular', undefined, 50, agencyArtistId),
+                               getProducts('drops', undefined, 50, agencyArtistId),
+                             ]);
+                             const refreshed = { items: [...regular.items, ...drops.items] };
                              setProductList(refreshed.items);
                              setShowProductModal(false);
                              setProductForm({ name: '', price: '', totalQty: '', isDrops: false, dropsStartAt: '', dropsEndAt: '' });

@@ -1,4 +1,4 @@
-import type { ProductListResponse, ProductResponse } from '../types/product'
+import type { ProductListItem, ProductListResponse, ProductResponse } from '../types/product'
 import { getAuthHeaders, getFanIdHeader } from './auth'
 import { fetchWithAuth } from '../lib/fetchWithAuth'
 
@@ -12,7 +12,7 @@ export interface CreateProductRequest {
   dropsEndAt?: string
 }
 
-export type { ProductResponse }
+export type { ProductListItem, ProductResponse }
 
 const BASE = '/api/v1/products'
 

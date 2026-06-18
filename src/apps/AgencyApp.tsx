@@ -13,7 +13,7 @@ import type { BannerResponse } from '../types/banner';
 import { getVotes, createVote } from '../api/votes';
 import type { GoodsVoteResult } from '../types/vote';
 import { getProducts, createProduct } from '../api/products';
-import type { CreateProductRequest, ProductResponse } from '../api/products';
+import type { CreateProductRequest, ProductListItem } from '../api/products';
 
 interface BannerForm {
   id?: number
@@ -160,7 +160,7 @@ export default function AgencyApp() {
   const [editingMember, setEditingMember] = useState<any>(null);
   const [newNotice, setNewNotice] = useState({ title: '', tag: 'NOTICE (일반공지)', content: '' });
 
-  const [productList, setProductList] = useState<ProductResponse[]>([]);
+  const [productList, setProductList] = useState<ProductListItem[]>([]);
   const [productForm, setProductForm] = useState({ name: '', price: '', totalQty: '', isDrops: false, dropsStartAt: '', dropsEndAt: '' });
 
   // 스케줄 관리 상태
@@ -1242,7 +1242,7 @@ export default function AgencyApp() {
                             <span className={`text-[10px] font-bold px-2 py-1 rounded ${item.status === 'ON_SALE' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>{item.status}</span>
                          </div>
                          <div className="text-sm text-[#888] font-mono mb-1">₩{(item.price ?? 0).toLocaleString()}</div>
-                         <div className="text-xs font-bold text-[#111]">재고 (Stock): {(item.totalQty ?? 0).toLocaleString()}</div>
+                         <div className="text-xs font-bold text-[#111]">총 재고: {(item.totalQty ?? 0).toLocaleString()} / 판매 가능: {(item.availableQty ?? 0).toLocaleString()}</div>
                        </div>
                      </div>
                    ))}

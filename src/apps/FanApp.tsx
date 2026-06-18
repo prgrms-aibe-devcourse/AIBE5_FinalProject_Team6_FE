@@ -7,7 +7,7 @@ import { Plus, Search, Calendar, Heart, Share2, Filter, Image as ImageIcon, Smil
 import { useCheckout } from '../hooks/useCheckout';
 import { useQueue } from '../hooks/useQueue';
 import { getProducts, subscribeRestock, unsubscribeRestock } from '../api/products';
-import type { ProductListItem, ProductResponse } from '../types/product';
+import type { ProductListItem } from '../types/product';
 import { getArtists } from '../api/artist';
 import type { ArtistItem } from '../types/artist';
 import { getStoreBanners } from '../api/banners';

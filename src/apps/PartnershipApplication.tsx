@@ -163,7 +163,7 @@ export default function PartnershipApplication({ onBack, onSubmit }: Partnership
 
       <div className="flex-1 flex flex-col items-center p-8">
         <div className="w-full max-w-2xl text-center mb-12">
-          <h1 className="text-4xl font-black mb-4 tracking-tight">기획사 입점 신청</h1>
+          <h1 className="text-4xl font-black mb-4 tracking-tight text-[#111]">기획사 입점 신청</h1>
           <p className="text-[#555] mb-2">중소/버추얼 아티스트를 위한 전용 플랫폼</p>
           <p className="text-[#888] text-sm">FANDROPS에 입점하여 팬과 함께하세요</p>
         </div>
@@ -175,78 +175,78 @@ export default function PartnershipApplication({ onBack, onSubmit }: Partnership
             <section>
               <div className="flex items-center gap-2 mb-8">
                 <span className="w-1.5 h-6 bg-[#C2507A] rounded-full"></span>
-                <h3 className="text-lg font-bold tracking-tight">기본 정보</h3>
+                <h3 className="text-lg font-bold tracking-tight text-[#111]">기본 정보</h3>
               </div>
               <div className="space-y-6">
                 <div ref={el => { errorRefs.current.companyName = el }}>
-                  <label className="block text-sm font-bold mb-2">기획사/운영자명 *</label>
+                  <label className="block text-sm font-bold mb-2 text-[#111]">기획사/운영자명 *</label>
                   <input
                     type="text"
                     value={form.companyName}
                     onChange={e => setForm({...form, companyName: e.target.value})}
                     placeholder="기획사 또는 운영 주체 명칭"
-                    className={`w-full bg-[#fcfcfc] border ${errors.companyName ? 'border-[#FF4444]' : 'border-[#EDE8E2]'} px-4 py-3.5 rounded-xl transition-all focus:outline-none focus:border-[#C2507A] focus:ring-1 focus:ring-[#C2507A]/20`}
+                    className={`w-full bg-[#fcfcfc] border ${errors.companyName ? 'border-[#FF4444]' : 'border-[#EDE8E2]'} px-4 py-3.5 rounded-xl transition-all focus:outline-none focus:border-[#C2507A] focus:ring-1 focus:ring-[#C2507A]/20 text-[#111] placeholder:text-[#aaa]`}
                   />
                   {errors.companyName && <p className="text-[#FF4444] text-xs mt-2 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.companyName}</p>}
                 </div>
 
                 <div ref={el => { errorRefs.current.businessRegistrationNumber = el }}>
-                  <label className="block text-sm font-bold mb-2">사업자등록번호 *</label>
+                  <label className="block text-sm font-bold mb-2 text-[#111]">사업자등록번호 *</label>
                   <input
                     type="text"
                     value={form.businessRegistrationNumber}
                     onChange={e => setForm({...form, businessRegistrationNumber: e.target.value})}
                     placeholder="000-00-00000"
-                    className={`w-full bg-[#fcfcfc] border ${errors.businessRegistrationNumber ? 'border-[#FF4444]' : 'border-[#EDE8E2]'} px-4 py-3.5 rounded-xl transition-all focus:outline-none focus:border-[#C2507A] focus:ring-1 focus:ring-[#C2507A]/20`}
+                    className={`w-full bg-[#fcfcfc] border ${errors.businessRegistrationNumber ? 'border-[#FF4444]' : 'border-[#EDE8E2]'} px-4 py-3.5 rounded-xl transition-all focus:outline-none focus:border-[#C2507A] focus:ring-1 focus:ring-[#C2507A]/20 text-[#111] placeholder:text-[#aaa]`}
                   />
                   {errors.businessRegistrationNumber && <p className="text-[#FF4444] text-xs mt-2 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.businessRegistrationNumber}</p>}
                 </div>
 
                 <div ref={el => { errorRefs.current.ceoName = el }}>
-                  <label className="block text-sm font-bold mb-2">대표자명 *</label>
+                  <label className="block text-sm font-bold mb-2 text-[#111]">대표자명 *</label>
                   <input
                     type="text"
                     value={form.ceoName}
                     onChange={e => setForm({...form, ceoName: e.target.value})}
                     placeholder="대표자 실명"
-                    className={`w-full bg-[#fcfcfc] border ${errors.ceoName ? 'border-[#FF4444]' : 'border-[#EDE8E2]'} px-4 py-3.5 rounded-xl transition-all focus:outline-none focus:border-[#C2507A] focus:ring-1 focus:ring-[#C2507A]/20`}
+                    className={`w-full bg-[#fcfcfc] border ${errors.ceoName ? 'border-[#FF4444]' : 'border-[#EDE8E2]'} px-4 py-3.5 rounded-xl transition-all focus:outline-none focus:border-[#C2507A] focus:ring-1 focus:ring-[#C2507A]/20 text-[#111] placeholder:text-[#aaa]`}
                   />
                   {errors.ceoName && <p className="text-[#FF4444] text-xs mt-2 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.ceoName}</p>}
                 </div>
 
                 <div ref={el => { errorRefs.current.managerName = el }}>
-                  <label className="block text-sm font-bold mb-2">담당자 이름 *</label>
+                  <label className="block text-sm font-bold mb-2 text-[#111]">담당자 이름 *</label>
                   <input
                     type="text"
                     value={form.managerName}
                     onChange={e => setForm({...form, managerName: e.target.value})}
                     placeholder="신청서 담당자 실명"
-                    className={`w-full bg-[#fcfcfc] border ${errors.managerName ? 'border-[#FF4444]' : 'border-[#EDE8E2]'} px-4 py-3.5 rounded-xl transition-all focus:outline-none focus:border-[#C2507A] focus:ring-1 focus:ring-[#C2507A]/20`}
+                    className={`w-full bg-[#fcfcfc] border ${errors.managerName ? 'border-[#FF4444]' : 'border-[#EDE8E2]'} px-4 py-3.5 rounded-xl transition-all focus:outline-none focus:border-[#C2507A] focus:ring-1 focus:ring-[#C2507A]/20 text-[#111] placeholder:text-[#aaa]`}
                   />
                   {errors.managerName && <p className="text-[#FF4444] text-xs mt-2 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.managerName}</p>}
                 </div>
 
                 <div ref={el => { errorRefs.current.businessEmail = el }}>
-                  <label className="block text-sm font-bold mb-2">비즈니스 이메일 *</label>
+                  <label className="block text-sm font-bold mb-2 text-[#111]">비즈니스 이메일 *</label>
                   <input
                     type="email"
                     value={form.businessEmail}
                     onChange={e => setForm({...form, businessEmail: e.target.value})}
                     placeholder="example@company.com"
-                    className={`w-full bg-[#fcfcfc] border ${errors.businessEmail ? 'border-[#FF4444]' : 'border-[#C2507A]'} px-4 py-3.5 rounded-xl transition-all focus:outline-none focus:border-[#C2507A] focus:ring-1 focus:ring-[#C2507A]/20`}
+                    className={`w-full bg-[#fcfcfc] border ${errors.businessEmail ? 'border-[#FF4444]' : 'border-[#C2507A]'} px-4 py-3.5 rounded-xl transition-all focus:outline-none focus:border-[#C2507A] focus:ring-1 focus:ring-[#C2507A]/20 text-[#111] placeholder:text-[#aaa]`}
                   />
                   <p className="text-[#888] text-xs mt-2">이 이메일로 심사 결과 및 계정 정보가 발송됩니다</p>
                   {errors.businessEmail && <p className="text-[#FF4444] text-xs mt-2 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.businessEmail}</p>}
                 </div>
 
                 <div ref={el => { errorRefs.current.contactNumber = el }}>
-                  <label className="block text-sm font-bold mb-2">담당자 전화번호 *</label>
+                  <label className="block text-sm font-bold mb-2 text-[#111]">담당자 전화번호 *</label>
                   <input
                     type="tel"
                     value={form.contactNumber}
                     onChange={e => setForm({...form, contactNumber: e.target.value})}
                     placeholder="010-0000-0000"
-                    className={`w-full bg-[#fcfcfc] border ${errors.contactNumber ? 'border-[#FF4444]' : 'border-[#EDE8E2]'} px-4 py-3.5 rounded-xl transition-all focus:outline-none focus:border-[#C2507A] focus:ring-1 focus:ring-[#C2507A]/20`}
+                    className={`w-full bg-[#fcfcfc] border ${errors.contactNumber ? 'border-[#FF4444]' : 'border-[#EDE8E2]'} px-4 py-3.5 rounded-xl transition-all focus:outline-none focus:border-[#C2507A] focus:ring-1 focus:ring-[#C2507A]/20 text-[#111] placeholder:text-[#aaa]`}
                   />
                   {errors.contactNumber && <p className="text-[#FF4444] text-xs mt-2 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.contactNumber}</p>}
                 </div>
@@ -257,17 +257,17 @@ export default function PartnershipApplication({ onBack, onSubmit }: Partnership
             <section>
               <div className="flex items-center gap-2 mb-8">
                 <span className="w-1.5 h-6 bg-[#C2507A] rounded-full"></span>
-                <h3 className="text-lg font-bold tracking-tight">아티스트 정보</h3>
+                <h3 className="text-lg font-bold tracking-tight text-[#111]">아티스트 정보</h3>
               </div>
               <div className="space-y-8">
                 <div ref={el => { errorRefs.current.artistName = el }}>
-                  <label className="block text-sm font-bold mb-2">아티스트/그룹명 *</label>
+                  <label className="block text-sm font-bold mb-2 text-[#111]">아티스트/그룹명 *</label>
                   <input
                     type="text"
                     value={form.artistName}
                     onChange={e => setForm({...form, artistName: e.target.value})}
                     placeholder="아티스트명 또는 팀명"
-                    className={`w-full bg-[#fcfcfc] border ${errors.artistName ? 'border-[#FF4444]' : 'border-[#EDE8E2]'} px-4 py-3.5 rounded-xl transition-all focus:outline-none focus:border-[#C2507A]`}
+                    className={`w-full bg-[#fcfcfc] border ${errors.artistName ? 'border-[#FF4444]' : 'border-[#EDE8E2]'} px-4 py-3.5 rounded-xl transition-all focus:outline-none focus:border-[#C2507A] text-[#111] placeholder:text-[#aaa]`}
                   />
                   {errors.artistName && <p className="text-[#FF4444] text-xs mt-2 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.artistName}</p>}
                 </div>
@@ -317,13 +317,13 @@ export default function PartnershipApplication({ onBack, onSubmit }: Partnership
                 </div>
 
                 <div>
-                  <label className="block text-sm font-bold mb-2">유튜브/공식 채널 URL (선택)</label>
+                  <label className="block text-sm font-bold mb-2 text-[#111]">유튜브/공식 채널 URL (선택)</label>
                   <input
                     type="url"
                     value={form.channelUrl}
                     onChange={e => setForm({...form, channelUrl: e.target.value})}
                     placeholder="https://"
-                    className="w-full bg-[#fcfcfc] border border-[#EDE8E2] px-4 py-3.5 rounded-xl transition-all focus:outline-none focus:border-[#C2507A]"
+                    className="w-full bg-[#fcfcfc] border border-[#EDE8E2] px-4 py-3.5 rounded-xl transition-all focus:outline-none focus:border-[#C2507A] text-[#111] placeholder:text-[#aaa]"
                   />
                 </div>
               </div>
@@ -333,7 +333,7 @@ export default function PartnershipApplication({ onBack, onSubmit }: Partnership
             <section>
                <div className="flex items-center gap-2 mb-8">
                 <span className="w-1.5 h-6 bg-[#C2507A] rounded-full"></span>
-                <h3 className="text-lg font-bold tracking-tight">입점 희망 서비스</h3>
+                <h3 className="text-lg font-bold tracking-tight text-[#111]">입점 희망 서비스</h3>
               </div>
               <div ref={el => { errorRefs.current.services = el }}>
                 <p className="text-sm text-[#888] mb-4">이용하고 싶은 서비스를 선택해주세요</p>
@@ -366,14 +366,14 @@ export default function PartnershipApplication({ onBack, onSubmit }: Partnership
             <section>
               <div className="flex items-center gap-2 mb-8">
                 <span className="w-1.5 h-6 bg-[#C2507A] rounded-full"></span>
-                <h3 className="text-lg font-bold tracking-tight">아티스트 소개 *</h3>
+                <h3 className="text-lg font-bold tracking-tight text-[#111]">아티스트 소개 *</h3>
               </div>
               <div ref={el => { errorRefs.current.introduction = el }}>
                 <textarea
                   value={form.introduction}
                   onChange={e => setForm({...form, introduction: e.target.value})}
                   placeholder="팬덤 규모, 활동 내역, 입점 희망 이유 등을 자유롭게 작성해주세요 (최소 50자)"
-                  className={`w-full h-48 bg-[#fcfcfc] border ${errors.introduction ? 'border-[#FF4444]' : 'border-[#EDE8E2]'} px-5 py-4 rounded-2xl transition-all focus:outline-none focus:border-[#C2507A] resize-none text-[15px] leading-relaxed`}
+                  className={`w-full h-48 bg-[#fcfcfc] border ${errors.introduction ? 'border-[#FF4444]' : 'border-[#EDE8E2]'} px-5 py-4 rounded-2xl transition-all focus:outline-none focus:border-[#C2507A] resize-none text-[15px] leading-relaxed text-[#111] placeholder:text-[#aaa]`}
                 ></textarea>
                 <div className="flex justify-between mt-2 px-1">
                   {errors.introduction && <p className="text-[#FF4444] text-xs flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.introduction}</p>}

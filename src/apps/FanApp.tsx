@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { logout } from '../api/auth';
 import { ROLE_KEY } from '../App';
 import { AnimatePresence, motion } from 'motion/react';
-import { Plus, Search, Calendar, Heart, Share2, Filter, Image as ImageIcon, Smile, MoreHorizontal, MessageSquare, Bell, Pin, Play, Youtube, ChevronLeft, ChevronRight, X, User, ShoppingBag, LogOut, Ticket, Settings, ThumbsUp, CheckCircle2, Gift } from 'lucide-react';
+import { Plus, Search, Calendar, Heart, Share2, Image as ImageIcon, Smile, MoreHorizontal, MessageSquare, Bell, Pin, Play, Youtube, ChevronLeft, ChevronRight, X, User, ShoppingBag, LogOut, Ticket, Settings, ThumbsUp, CheckCircle2, Gift } from 'lucide-react';
 import { useCheckout } from '../hooks/useCheckout';
 import { useQueue } from '../hooks/useQueue';
 import { getProducts, subscribeRestock, unsubscribeRestock } from '../api/products';
@@ -110,11 +110,7 @@ const TRANSIENT_TABS = new Set(['CHECKOUT', 'QUEUE_WAIT', 'ORDER_COMPLETE']);
 export default function App({ role = 'FAN' }: { role?: string }) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [favoriteArtists, setFavoriteArtists] = useState<{ id: number; name: string; bg: string }[]>([
-    { id: 1, name: 'NOVA', bg: 'linear-gradient(135deg, #FF9A9E, #FECFEF)' },
-    { id: 2, name: 'LUNA', bg: 'linear-gradient(135deg, #a1c4fd, #c2e9fb)' },
-    { id: 3, name: 'ECHO', bg: 'linear-gradient(135deg, #84fab0, #8fd3f4)' },
-  ]);
+  const [favoriteArtists, setFavoriteArtists] = useState<{ id: number; name: string; bg: string }[]>([]);
   const [selectedArtist, setSelectedArtist] = useState<any>(null);
   const [boardTab, setBoardTab] = useState<string>(() => {
     const b = searchParams.get('board');
@@ -283,6 +279,13 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [cartItems, setCartItems] = useState<CartItemResponse[]>([]);
   const [cartLoading, setCartLoading] = useState(false);
   const [storeArtists, setStoreArtists] = useState<ArtistItem[]>([]);
+  const [recommendedProducts, setRecommendedProducts] = useState<ProductListItem[]>([]);
+  const [artistSearchQuery, setArtistSearchQuery] = useState('');
+  const [fanToast, setFanToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
+    setFanToast({ msg, type });
+    setTimeout(() => setFanToast(null), 3000);
+  };
 
   useEffect(() => {
     if (activeTab !== 'STORE' || selectedProduct || banners.length === 0) return;
@@ -503,6 +506,15 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       })
       .catch(console.error);
   }, []);
+
+  // 팔로우 첫 번째 아티스트 상품 추천
+  useEffect(() => {
+    const id = favoriteArtists[0]?.id;
+    if (!id) return;
+    getProducts('regular', undefined, 4, id)
+      .then(res => setRecommendedProducts(res.items.slice(0, 4)))
+      .catch(() => setRecommendedProducts([]));
+  }, [favoriteArtists]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 스토어 아티스트 필터 목록 로드 (GET /api/v1/artists, 팬 수 내림차순)
   useEffect(() => {
@@ -1225,7 +1237,6 @@ export default function App({ role = 'FAN' }: { role?: string }) {
         <div className="h-icons">
           {role !== 'ARTIST' && (
             <>
-              <Search size={20} color="var(--text-main)" style={{cursor:'pointer'}} />
               <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => setActiveTab('NOTIFICATIONS')}>
                 <Bell size={20} color="var(--text-main)" />
                 {notifications.filter(n => !n.isRead).length > 0 && (
@@ -1417,35 +1428,64 @@ export default function App({ role = 'FAN' }: { role?: string }) {
         {showArtistSearch && (
           <div className="cart-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowArtistSearch(false)}>
             <div style={{ width: '100%', maxWidth: '500px', background: 'white', borderRadius: '32px', padding: '40px', position: 'relative' }} onClick={e => e.stopPropagation()}>
-               <X size={24} style={{ position: 'absolute', top: 32, right: 32, cursor: 'pointer', color: '#888' }} onClick={() => setShowArtistSearch(false)} />
+               <X size={24} style={{ position: 'absolute', top: 32, right: 32, cursor: 'pointer', color: '#888' }} onClick={() => { setShowArtistSearch(false); setArtistSearchQuery(''); }} />
                <h2 style={{ fontSize: '24px', fontWeight: 800, marginBottom: '24px' }}>아티스트 검색</h2>
-               <div style={{ position: 'relative', marginBottom: '32px' }}>
+               <div style={{ position: 'relative', marginBottom: '24px' }}>
                  <Search size={20} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#ccc' }} />
-                 <input 
-                   type="text" 
+                 <input
+                   type="text"
                    autoFocus
-                   placeholder="아티스트 이름을 입력하세요" 
-                   style={{ width: '100%', padding: '16px 16px 16px 52px', borderRadius: '16px', border: '1px solid var(--border)', fontSize: '16px', outline: 'none', background: 'var(--bg-cream)' }} 
+                   placeholder="아티스트 이름을 입력하세요"
+                   value={artistSearchQuery}
+                   onChange={e => setArtistSearchQuery(e.target.value)}
+                   style={{ width: '100%', padding: '16px 16px 16px 52px', borderRadius: '16px', border: '1px solid var(--border)', fontSize: '16px', outline: 'none', background: 'var(--bg-cream)' }}
                  />
                </div>
-               
-               <div style={{ marginBottom: '32px' }}>
-                 <p style={{ fontSize: '13px', fontWeight: 800, color: '#888', marginBottom: '16px', letterSpacing: '1px' }}>팔로우 중인 아티스트</p>
-                 {favoriteArtists.length === 0 ? (
-                   <p style={{ fontSize: '13px', color: '#bbb', textAlign: 'center', padding: '24px 0' }}>팔로우한 아티스트가 없습니다.</p>
-                 ) : (
-                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
-                     {favoriteArtists.map(a => (
-                       <div key={a.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={() => setShowArtistSearch(false)}>
-                         <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: a.bg ?? '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '14px' }}>
-                           {a.name.substring(0, 3)}
+
+               {artistSearchQuery.trim() ? (
+                 <div style={{ marginBottom: '32px' }}>
+                   <p style={{ fontSize: '13px', fontWeight: 800, color: '#888', marginBottom: '16px', letterSpacing: '1px' }}>검색 결과</p>
+                   {storeArtists.filter(a => a.name.toLowerCase().includes(artistSearchQuery.toLowerCase())).length === 0 ? (
+                     <p style={{ fontSize: '13px', color: '#bbb', textAlign: 'center', padding: '24px 0' }}>검색 결과가 없습니다</p>
+                   ) : (
+                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+                       {storeArtists.filter(a => a.name.toLowerCase().includes(artistSearchQuery.toLowerCase())).map(a => (
+                         <div key={a.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
+                           onClick={() => { setSelectedArtist(a); setBoardTab('FEED'); setShowArtistSearch(false); setArtistSearchQuery(''); }}>
+                           <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: artistGradient(a.id), display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '14px' }}>
+                             {a.name.substring(0, 2)}
+                           </div>
+                           <span style={{ fontSize: '13px', fontWeight: 700 }}>{a.name}</span>
                          </div>
-                         <span style={{ fontSize: '13px', fontWeight: 700 }}>{a.name}</span>
-                       </div>
-                     ))}
-                   </div>
-                 )}
-               </div>
+                       ))}
+                     </div>
+                   )}
+                 </div>
+               ) : (
+                 <div style={{ marginBottom: '32px' }}>
+                   <p style={{ fontSize: '13px', fontWeight: 800, color: '#888', marginBottom: '16px', letterSpacing: '1px' }}>팔로우 중인 아티스트</p>
+                   {favoriteArtists.length === 0 ? (
+                     <p style={{ fontSize: '13px', color: '#bbb', textAlign: 'center', padding: '24px 0' }}>팔로우한 아티스트가 없습니다.</p>
+                   ) : (
+                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+                       {favoriteArtists.map(a => (
+                         <div key={a.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
+                           onClick={() => { setSelectedArtist(a); setBoardTab('FEED'); setShowArtistSearch(false); setArtistSearchQuery(''); }}>
+                           <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: a.bg ?? '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '14px' }}>
+                             {(storeArtists.find(s => s.id === a.id)?.name ?? a.name).substring(0, 3)}
+                           </div>
+                           <span style={{ fontSize: '13px', fontWeight: 700 }}>{storeArtists.find(s => s.id === a.id)?.name ?? a.name}</span>
+                         </div>
+                       ))}
+                     </div>
+                   )}
+                   <button
+                     style={{ marginTop: '20px', width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-cream)', fontSize: '13px', fontWeight: 700, cursor: 'pointer', color: 'var(--point-rose)' }}
+                     onClick={() => { setActiveTab('ARTISTS'); setShowArtistSearch(false); setArtistSearchQuery(''); }}>
+                     전체 아티스트 보기 →
+                   </button>
+                 </div>
+               )}
             </div>
           </div>
         )}
@@ -2049,7 +2089,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                     <div style={{ position: 'relative' }}>
                       <div className="c-artist-avatar" style={{ background: artist.bg }}></div>
                     </div>
-                    <span>{artist.name}</span>
+                    <span>{storeArtists.find(s => s.id === artist.id)?.name ?? artist.name}</span>
                   </div>
                 ))}
               </div>
@@ -2131,46 +2171,38 @@ export default function App({ role = 'FAN' }: { role?: string }) {
               </div>
             </section>
 
-            {/* My Artists' Drops Grid */}
-            <section className="section" style={{ paddingTop: '60px' }}>
-              <div className="section-header reveal">
-                <div className="s-title-group">
-                  <h2>마이 아티스트 추천</h2>
-                  <p>즐겨찾기한 아티스트의 특별한 굿즈를 확인하세요.</p>
-                </div>
-                <div className="view-all" onClick={() => setActiveTab('STORE')} style={{ fontSize: '13px', fontWeight: 700, color: 'var(--point-rose)', cursor: 'pointer' }}>전체 보기 →</div>
-              </div>
-
-              <div className="grid-3">
-                <div className="card reveal delay-100">
-                  <div className="c-img" style={{background:'linear-gradient(135deg, #E8E0D8, #D5CCC2)'}}>
-                    <span className="c-tag">NOVA</span>
-                    <span className="c-status">NEW</span>
+            {/* My Artists' Drops Grid — 팔로우한 아티스트 있을 때만 표시 */}
+            {favoriteArtists.length > 0 && (
+              <section className="section" style={{ paddingTop: '60px' }}>
+                <div className="section-header reveal">
+                  <div className="s-title-group">
+                    <h2>마이 아티스트 추천</h2>
+                    <p>즐겨찾기한 아티스트의 특별한 굿즈를 확인하세요.</p>
                   </div>
-                  <div className="c-body">
-                    <h3>NOVA 2주년 기념<br/>쿠션 필로우</h3>
-                    <div className="c-footer">
-                      <span className="c-price">₩32,000</span>
-                      <button className="c-btn">구매하기</button>
+                  <div className="view-all" onClick={() => setActiveTab('STORE')} style={{ fontSize: '13px', fontWeight: 700, color: 'var(--point-rose)', cursor: 'pointer' }}>전체 보기 →</div>
+                </div>
+                <div className="grid-3">
+                  {recommendedProducts.length === 0 ? (
+                    <p style={{ color: 'var(--text-sub)', fontSize: '14px', gridColumn: '1 / -1', textAlign: 'center', padding: '32px 0' }}>등록된 상품이 없습니다.</p>
+                  ) : recommendedProducts.map((item, idx) => (
+                    <div key={item.id} className={`card reveal delay-${(idx % 3) * 100}`} style={{ cursor: 'pointer' }}
+                      onClick={() => { setSelectedProduct(item); setActiveTab('STORE'); window.scrollTo({ top: 0, behavior: 'instant' }); }}>
+                      <div className="c-img" style={{ background: `linear-gradient(135deg, hsl(${item.id * 40}, 30%, 85%), #fff)` }}>
+                        <span className="c-tag">{storeArtists.find(a => a.id === item.artistId)?.name ?? `#${item.artistId}`}</span>
+                        {item.status === 'SOLD_OUT' && <span className="c-status" style={{ background: '#888' }}>품절</span>}
+                      </div>
+                      <div className="c-body">
+                        <h3>{item.name}</h3>
+                        <div className="c-footer">
+                          <span className="c-price">₩{Number(item.price).toLocaleString()}</span>
+                          <button className="c-btn" onClick={e => { e.stopPropagation(); setSelectedProduct(item); setActiveTab('STORE'); window.scrollTo({ top: 0, behavior: 'instant' }); }}>구매하기</button>
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  ))}
                 </div>
-
-                <div className="card reveal delay-200">
-                  <div className="c-img" style={{background:'linear-gradient(135deg, #fccb90, #d57eeb)'}}>
-                    <span className="c-tag">ECHO</span>
-                    <span className="c-status" style={{background:'var(--point-violet)'}}>120 LEFT</span>
-                  </div>
-                  <div className="c-body">
-                    <h3>ECHO 1st Solo Album<br/>Limited Vinyl</h3>
-                    <div className="c-footer">
-                      <span className="c-price" style={{color:'var(--point-violet)'}}>₩45,000</span>
-                      <button className="c-btn">구매하기</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
+              </section>
+            )}
           </div>
         )}
 
@@ -2184,33 +2216,32 @@ export default function App({ role = 'FAN' }: { role?: string }) {
               </div>
             </div>
 
-            <div className="filter-bar reveal delay-100">
-              <div className="fb-tabs">
-                <span className="f-tab active">전체</span>
-                <span className="f-tab">버추얼 아이돌</span>
-                <span className="f-tab">K-팝</span>
-                <span className="f-tab">인디 크리에이터</span>
-              </div>
-              <div>
-                <button style={{background:'var(--bg-white)', border:'1px solid var(--border)', padding:'8px 16px', borderRadius:'12px', fontSize:'12px', fontWeight:700, display:'flex', alignItems:'center', gap:8, cursor:'pointer'}}>
-                  <Filter size={14} /> 필터
-                </button>
-              </div>
-            </div>
-
             <div className="grid-4">
-              {[
-                { id: 1, name: 'NOVA', type: '버추얼 아이돌 그룹', followers: '-', bg: 'linear-gradient(135deg, #FF9A9E, #FECFEF)' },
-                { id: 2, name: 'LUNA', type: 'K-Pop 걸그룹', followers: '-', bg: 'linear-gradient(135deg, #a1c4fd, #c2e9fb)' },
-                { id: 3, name: 'ECHO', type: '솔로 아티스트', followers: '-', bg: 'linear-gradient(135deg, #84fab0, #8fd3f4)' },
-              ].map((artist, idx) => (
-                <div className={`artist-card reveal delay-${(idx % 4) * 100}`} key={artist.id} onClick={() => { setSelectedArtist(artist); setBoardTab('FEED'); }}>
-                  <div className="ac-avatar" style={{ background: artist.bg }}></div>
-                  <div className="ac-name">{artist.name}</div>
-                  <div className="ac-desc">{artist.type}<br/>{artist.followers} 팔로워</div>
-                  <button className="ac-btn">+ 팔로우</button>
-                </div>
-              ))}
+              {storeArtists.map((artist, idx) => {
+                const isFollowing = favoriteArtists.some(a => a.id === artist.id);
+                return (
+                  <div className={`artist-card reveal delay-${(idx % 4) * 100}`} key={artist.id}
+                    onClick={() => { setSelectedArtist(artist); setBoardTab('FEED'); }}>
+                    <div className="ac-avatar" style={{ background: artistGradient(artist.id) }}></div>
+                    <div className="ac-name">{artist.name}</div>
+                    <div className="ac-desc">{(artist.fanCount ?? 0).toLocaleString()} 팔로워</div>
+                    <button className="ac-btn" onClick={async e => {
+                      e.stopPropagation();
+                      if (isFollowing) {
+                        setFavoriteArtists(prev => prev.filter(a => a.id !== artist.id));
+                        try { await unfollowArtist(artist.id); }
+                        catch { setFavoriteArtists(prev => [...prev, { id: artist.id, name: artist.name, bg: artistGradient(artist.id) }]); }
+                      } else {
+                        setFavoriteArtists(prev => [...prev, { id: artist.id, name: artist.name, bg: artistGradient(artist.id) }]);
+                        try { await followArtist(artist.id); }
+                        catch { setFavoriteArtists(prev => prev.filter(a => a.id !== artist.id)); }
+                      }
+                    }}>
+                      {isFollowing ? '✓ 팔로우 중' : '+ 팔로우'}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -2221,8 +2252,8 @@ export default function App({ role = 'FAN' }: { role?: string }) {
             {selectedProduct ? (
               
               <div className="store-detail" style={{ maxWidth: '1000px', margin: '0 auto' }}>
-                <button className="c-btn" style={{ background: 'var(--bg-white)', border: '1px solid var(--border)', marginBottom: '32px' }} onClick={() => setSelectedProduct(null)}>
-                  <ChevronLeft size={16} /> 스토어로 돌아가기
+                <button className="c-btn" style={{ background: 'var(--bg-white)', border: '1px solid var(--border)', marginBottom: '32px', whiteSpace: 'nowrap' }} onClick={() => setSelectedProduct(null)}>
+                  <ChevronLeft size={16} /> 스토어
                 </button>
                 <div style={{ display: 'flex', gap: '48px', alignItems: 'flex-start', marginBottom: '64px' }}>
                   {/* Left: Images */}
@@ -2309,7 +2340,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                             await addCartItem(selectedProduct.id, productQty);
                             setShowCart(true);
                           } catch {
-                            alert('장바구니 담기에 실패했습니다.');
+                            showToast('장바구니 담기에 실패했습니다.', 'error');
                           }
                         }}
                         style={{ flex: 1, padding: '16px', borderRadius: '12px', border: '1px solid #C2507A', color: '#C2507A', fontWeight: 800, textAlign: 'center', cursor: 'pointer' }}
@@ -2605,7 +2636,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
             key={item.id}
             className="card reveal"
             style={{ opacity: isSoldOut ? 0.6 : 1, cursor: 'pointer' }}
-            onClick={() => { setSelectedProduct(item); }}
+            onClick={() => { setSelectedProduct(item); window.scrollTo({ top: 0, behavior: 'instant' }); }}
           >
             <div style={{ position: 'relative', height: '220px', background: 'var(--bg-cream)' }}>
               <div style={{ position: 'absolute', top: 12, left: 12, background: 'rgba(255,255,255,0.9)', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 800 }}>
@@ -2641,7 +2672,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                           await addCartItem(item.id, 1);
                           setShowCart(true);
                         } catch {
-                          alert('장바구니 담기에 실패했습니다.');
+                          showToast('장바구니 담기에 실패했습니다.', 'error');
                         }
                       }}
                       style={{ background: 'white', color: '#111', border: '1px solid #EDE8E2', padding: '8px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -3106,7 +3137,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                                         await cancelOrder(order.orderId);
                                         setMyOrders(prev => prev.map(o => o.orderId === order.orderId ? { ...o, status: 'CANCELLED' } : o));
                                       } catch {
-                                        alert('주문 취소에 실패했습니다.');
+                                        showToast('주문 취소에 실패했습니다.', 'error');
                                       } finally {
                                         setCancellingOrderId(null);
                                       }
@@ -3675,6 +3706,12 @@ export default function App({ role = 'FAN' }: { role?: string }) {
         </div>
       </footer>
 
+      {/* Toast */}
+      {fanToast && (
+        <div style={{ position: 'fixed', bottom: '32px', right: '32px', zIndex: 9999, background: fanToast.type === 'error' ? '#FF4444' : '#22c55e', color: 'white', padding: '14px 22px', borderRadius: '14px', fontWeight: 700, fontSize: '14px', boxShadow: '0 4px 20px rgba(0,0,0,0.18)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {fanToast.type === 'error' ? '✕' : '✓'} {fanToast.msg}
+        </div>
+      )}
     </div>
   );
 }

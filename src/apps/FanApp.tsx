@@ -453,7 +453,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       observer.disconnect();
       clearTimeout(timer);
     };
-  }, [activeTab, selectedArtist, boardTab, myPageTab, storeArtist, storePage, storeSearch]);
+  }, [activeTab, selectedArtist, boardTab, myPageTab, storeArtist, storePage]);
 
   // 상품 목록 로드 — 아티스트 필터 변경 시 재fetch
   useEffect(() => {

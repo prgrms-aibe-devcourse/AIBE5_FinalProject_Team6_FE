@@ -468,7 +468,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   // 카운트다운 타이머 — 다음 드롭 상품의 dropsStartAt 기준
   useEffect(() => {
     const next = homeDrops.find(p => p.dropsStartAt && new Date(p.dropsStartAt) > new Date()) ?? null;
-    if (!next?.dropsStartAt) { setCountdown(''); return; }
+    if (!next?.dropsStartAt) return;
     const target = new Date(next.dropsStartAt).getTime();
     const tick = () => {
       const diff = target - Date.now();

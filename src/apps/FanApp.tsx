@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { logout } from '../api/auth';
 import { ROLE_KEY } from '../App';
 import { AnimatePresence, motion } from 'motion/react';
-import { Plus, Search, Calendar, Heart, Share2, Filter, Image as ImageIcon, Smile, MoreHorizontal, MessageSquare, Bell, Pin, Play, Youtube, ChevronLeft, ChevronRight, X, User, ShoppingBag, LogOut, Ticket, Settings, ThumbsUp, CheckCircle2, Gift } from 'lucide-react';
+import { Plus, Search, Calendar, Heart, Share2, Image as ImageIcon, Smile, MoreHorizontal, MessageSquare, Bell, Pin, Play, Youtube, ChevronLeft, ChevronRight, X, User, ShoppingBag, LogOut, Ticket, Settings, ThumbsUp, CheckCircle2, Gift } from 'lucide-react';
 import { useCheckout } from '../hooks/useCheckout';
 import { useQueue } from '../hooks/useQueue';
 import { getProducts, subscribeRestock, unsubscribeRestock } from '../api/products';
@@ -507,19 +507,10 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       .catch(console.error);
   }, []);
 
-  // storeArtists 로드 완료 후 favoriteArtists 이름 보정
-  useEffect(() => {
-    if (storeArtists.length === 0) return;
-    setFavoriteArtists(prev => prev.map(a => ({
-      ...a,
-      name: storeArtists.find(s => s.id === a.id)?.name ?? a.name,
-    })));
-  }, [storeArtists]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // 팔로우 첫 번째 아티스트 상품 추천
   useEffect(() => {
     const id = favoriteArtists[0]?.id;
-    if (!id) { setRecommendedProducts([]); return; }
+    if (!id) return;
     getProducts('regular', undefined, 4, id)
       .then(res => setRecommendedProducts(res.items.slice(0, 4)))
       .catch(() => setRecommendedProducts([]));
@@ -1481,9 +1472,9 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                          <div key={a.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
                            onClick={() => { setSelectedArtist(a); setBoardTab('FEED'); setShowArtistSearch(false); setArtistSearchQuery(''); }}>
                            <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: a.bg ?? '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '14px' }}>
-                             {a.name.substring(0, 3)}
+                             {(storeArtists.find(s => s.id === a.id)?.name ?? a.name).substring(0, 3)}
                            </div>
-                           <span style={{ fontSize: '13px', fontWeight: 700 }}>{a.name}</span>
+                           <span style={{ fontSize: '13px', fontWeight: 700 }}>{storeArtists.find(s => s.id === a.id)?.name ?? a.name}</span>
                          </div>
                        ))}
                      </div>
@@ -2098,7 +2089,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                     <div style={{ position: 'relative' }}>
                       <div className="c-artist-avatar" style={{ background: artist.bg }}></div>
                     </div>
-                    <span>{artist.name}</span>
+                    <span>{storeArtists.find(s => s.id === artist.id)?.name ?? artist.name}</span>
                   </div>
                 ))}
               </div>

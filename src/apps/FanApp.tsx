@@ -310,7 +310,11 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   
   const [goodsVotes, setGoodsVotes] = useState<GoodsVoteResult[]>([]);
   const [hasVoted, setHasVoted] = useState<number[]>([]);
-  const [collectedCards, setCollectedCards] = useState<any[]>([]);
+  const [collectedCards, setCollectedCards] = useState<any[]>(() => {
+    try { return JSON.parse(localStorage.getItem('fd_collected_cards') ?? '[]'); } catch { return []; }
+  });
+  const [homeDrops, setHomeDrops] = useState<ProductListItem[]>([]);
+  const [countdown, setCountdown] = useState<string>('');
 
   // Attendance Event State
   const [showAttendance, setShowAttendance] = useState(false);
@@ -458,6 +462,36 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       clearTimeout(timer);
     };
   }, [activeTab, selectedArtist, boardTab, myPageTab, storeArtist, storePage]);
+
+  // HOME 드롭 상품 로드
+  useEffect(() => {
+    if (activeTab !== 'HOME') return;
+    getProducts('drops', undefined, 6).then(res => setHomeDrops(res.items)).catch(() => {});
+  }, [activeTab]);
+
+  // 카운트다운 타이머 — 다음 드롭 상품의 dropsStartAt 기준
+  useEffect(() => {
+    const next = homeDrops.find(p => p.dropsStartAt && new Date(p.dropsStartAt) > new Date()) ?? null;
+    if (!next?.dropsStartAt) return;
+    const target = new Date(next.dropsStartAt).getTime();
+    const tick = () => {
+      const diff = target - Date.now();
+      if (diff <= 0) { setCountdown('00:00:00:00'); return; }
+      const d = Math.floor(diff / 86400000);
+      const h = Math.floor((diff % 86400000) / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setCountdown(`${String(d).padStart(2, '0')}:${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [homeDrops]);
+
+  // collectedCards → localStorage 동기화
+  useEffect(() => {
+    localStorage.setItem('fd_collected_cards', JSON.stringify(collectedCards));
+  }, [collectedCards]);
 
   // 상품 목록 로드 — 아티스트 필터 변경 시 재fetch
   useEffect(() => {
@@ -2069,26 +2103,42 @@ export default function App({ role = 'FAN' }: { role?: string }) {
               </div>
             </section>
 
-            {/* Countdown Divider */}
-            <div className="countdown-divider reveal">
-              <div className="cd-info">
-                <div className="label" style={{ fontSize: '12px', fontWeight: 800, letterSpacing: '4px', opacity: 0.9, marginBottom: 12 }}>공식 드롭 오픈까지</div>
-                <div className="cd-timer" style={{ 
-                  fontFamily: '"JetBrains Mono", monospace', 
-                  fontSize: '56px', 
-                  fontWeight: 900, 
-                  letterSpacing: '2px', 
-                  lineHeight: 1,
-                  color: 'white',
-                  filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.2))'
-                }}>
-                  01 <span style={{ color: 'rgba(255, 255, 255, 0.4)', fontSize: '24px', verticalAlign: 'middle' }}>:</span> 22 <span style={{ color: 'rgba(255, 255, 255, 0.4)', fontSize: '24px', verticalAlign: 'middle' }}>:</span> 47 <span style={{ color: 'rgba(255, 255, 255, 0.4)', fontSize: '24px', verticalAlign: 'middle' }}>:</span> 13
+            {/* Countdown Divider — 다음 드롭이 있을 때만 표시 */}
+            {(() => {
+              const nextDrop = homeDrops.find(p => p.dropsStartAt && new Date(p.dropsStartAt) > new Date()) ?? null;
+              if (!nextDrop) return null;
+              const parts = countdown.split(':');
+              const fmt = (v: string, label: string) => (
+                <span key={label} style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', minWidth: '60px' }}>
+                  <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '56px', fontWeight: 900, letterSpacing: '2px', lineHeight: 1, color: 'white', filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.2))' }}>{v ?? '00'}</span>
+                  <span style={{ fontSize: '10px', fontWeight: 800, letterSpacing: '2px', opacity: 0.7, marginTop: 4 }}>{label}</span>
+                </span>
+              );
+              return (
+                <div className="countdown-divider reveal">
+                  <div className="cd-info">
+                    <div className="label" style={{ fontSize: '12px', fontWeight: 800, letterSpacing: '4px', opacity: 0.9, marginBottom: 12 }}>공식 드롭 오픈까지 — {nextDrop.name}</div>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                      {fmt(parts[0], 'DAYS')}
+                      <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '48px', lineHeight: 1 }}>:</span>
+                      {fmt(parts[1], 'HRS')}
+                      <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '48px', lineHeight: 1 }}>:</span>
+                      {fmt(parts[2], 'MIN')}
+                      <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '48px', lineHeight: 1 }}>:</span>
+                      {fmt(parts[3], 'SEC')}
+                    </div>
+                  </div>
+                  <div className="cd-action">
+                    <button
+                      style={{ background: 'white', color: 'var(--point-rose)', border: 'none', padding: '16px 32px', borderRadius: '12px', fontSize: '14px', fontWeight: 800, cursor: 'pointer', transition: 'transform 0.25s', boxShadow: '0 8px 16px rgba(0,0,0,0.1)' }}
+                      onClick={() => {
+                        subscribeRestock(nextDrop.id).then(() => showToast('알림 신청 완료')).catch(() => showToast('알림 신청 실패', 'error'));
+                      }}
+                    >알림 받기</button>
+                  </div>
                 </div>
-              </div>
-              <div className="cd-action">
-                <button style={{ background: 'white', color: 'var(--point-rose)', border: 'none', padding: '16px 32px', borderRadius: '12px', fontSize: '14px', fontWeight: 800, cursor: 'pointer', transition: 'transform 0.25s', boxShadow: '0 8px 16px rgba(0,0,0,0.1)' }}>알림 받기</button>
-              </div>
-            </div>
+              );
+            })()}
 
             {/* My Artist Section */}
             <section className="community-bar reveal">
@@ -2125,68 +2175,45 @@ export default function App({ role = 'FAN' }: { role?: string }) {
               </div>
 
               <div className="grid-3">
-                <div className="card reveal delay-100">
-                  <div className="c-img" style={{background:'linear-gradient(135deg, #E8E0D8, #D5CCC2)'}}>
-                    <span className="c-tag">NOVA</span>
-                    <span className="c-status">40 LEFT</span>
-                  </div>
-                  <div className="c-body">
-                    <h3>NOVA 특별판<br/>3D 아트 포토북</h3>
-                    <div style={{display:'flex', justifyContent:'space-between', fontSize:'12px', fontWeight:'700', marginBottom:'8px'}}>
-                      <span style={{color:'var(--text-sub)'}}>진행률</span>
-                      <span>80%</span>
+                {homeDrops.length === 0 ? (
+                  <p style={{ color: 'var(--text-sub)', fontSize: '14px', gridColumn: '1 / -1', textAlign: 'center', padding: '32px 0' }}>등록된 드롭스 상품이 없습니다.</p>
+                ) : homeDrops.map((item, idx) => {
+                  const isSoldOut = item.status === 'SOLD_OUT' || item.availableQty === 0;
+                  const soldRatio = item.totalQty > 0 ? Math.round(((item.totalQty - item.availableQty) / item.totalQty) * 100) : 0;
+                  const artistName = storeArtists.find(a => a.id === item.artistId)?.name ?? `Artist #${item.artistId}`;
+                  return (
+                    <div key={item.id} className={`card reveal delay-${(idx % 3) * 100}${isSoldOut ? ' sold-out' : ''}`}
+                      style={{ cursor: isSoldOut ? 'default' : 'pointer', opacity: isSoldOut ? 0.7 : 1 }}
+                      onClick={() => { if (!isSoldOut) { setSelectedProduct(item); setActiveTab('STORE'); window.scrollTo({ top: 0, behavior: 'instant' }); } }}>
+                      <div className="c-img" style={{ background: `linear-gradient(135deg, hsl(${item.id * 40}, 30%, 85%), hsl(${item.id * 40 + 20}, 30%, 78%))` }}>
+                        <span className="c-tag">{artistName}</span>
+                        {isSoldOut ? (
+                          <span className="c-status" style={{ background: '#555' }}>SOLD OUT</span>
+                        ) : (
+                          <span className="c-status">{item.availableQty} LEFT</span>
+                        )}
+                      </div>
+                      <div className="c-body">
+                        <h3>{item.name}</h3>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', fontWeight: '700', marginBottom: '8px' }}>
+                          <span style={{ color: 'var(--text-sub)' }}>진행률</span>
+                          <span>{soldRatio}%</span>
+                        </div>
+                        <div style={{ height: '6px', background: 'rgba(237, 232, 226, 0.8)', borderRadius: '3px', overflow: 'hidden', marginBottom: '12px' }}>
+                          <div style={{ height: '100%', borderRadius: '3px', width: `${soldRatio}%`, background: 'linear-gradient(90deg, var(--point-rose), var(--point-violet))' }}></div>
+                        </div>
+                        <div className="c-footer">
+                          <span className="c-price">₩{Number(item.price).toLocaleString()}</span>
+                          {isSoldOut ? (
+                            <button className="c-btn" style={{ background: '#E0E0E0', color: '#888', cursor: 'not-allowed' }}>품절</button>
+                          ) : (
+                            <button className="c-btn" onClick={e => { e.stopPropagation(); setSelectedProduct(item); setActiveTab('STORE'); window.scrollTo({ top: 0, behavior: 'instant' }); }}>구매하기</button>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <div style={{height:'6px', background:'rgba(237, 232, 226, 0.8)', borderRadius:'3px', overflow:'hidden', marginBottom:'12px'}}>
-                      <div style={{height:'100%', borderRadius:'3px', width:'80%', background:'linear-gradient(90deg, var(--point-rose), var(--point-violet))'}}></div>
-                    </div>
-                    <div className="c-footer">
-                      <span className="c-price">₩49,000</span>
-                      <button className="c-btn">구매하기</button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="card reveal delay-200">
-                  <div className="c-img" style={{background:'linear-gradient(135deg, #DDD8F0, #D0CAEC)'}}>
-                    <span className="c-tag">LUNA</span>
-                    <span className="c-status" style={{background:'var(--point-violet)'}}>275 LEFT</span>
-                  </div>
-                  <div className="c-body">
-                    <h3>LUNA 1주년 기념<br/>베스트 포토카드 세트</h3>
-                    <div style={{display:'flex', justifyContent:'space-between', fontSize:'12px', fontWeight:'700', marginBottom:'8px'}}>
-                      <span style={{color:'var(--text-sub)'}}>진행률</span>
-                      <span>45%</span>
-                    </div>
-                    <div style={{height:'6px', background:'rgba(237, 232, 226, 0.8)', borderRadius:'3px', overflow:'hidden', marginBottom:'12px'}}>
-                      <div style={{height:'100%', borderRadius:'3px', width:'45%', background:'var(--point-violet)'}}></div>
-                    </div>
-                    <div className="c-footer">
-                      <span className="c-price" style={{color:'var(--point-violet)'}}>₩29,000</span>
-                      <button className="c-btn">구매하기</button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="card sold-out reveal delay-300">
-                  <div className="c-img" style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', background:'#1A1A1A'}}>
-                    <span style={{color:'var(--point-rose)', fontWeight:900, fontSize:'28px', letterSpacing:'2px'}}>SOLD OUT</span>
-                    <span style={{color:'white', opacity:0.6, fontSize:'12px', marginTop:'8px', fontWeight:600}}>Sold in 23s</span>
-                  </div>
-                  <div className="c-body" style={{opacity:0.6}}>
-                    <h3>NOVA 1주년 콘서트<br/>멤버십 얼리버드 티켓</h3>
-                    <div style={{display:'flex', justifyContent:'space-between', fontSize:'12px', fontWeight:'700', marginBottom:'8px'}}>
-                      <span style={{color:'var(--text-sub)'}}>진행률</span>
-                      <span>100%</span>
-                    </div>
-                    <div style={{height:'6px', background:'rgba(237, 232, 226, 0.8)', borderRadius:'3px', overflow:'hidden', marginBottom:'12px'}}>
-                      <div style={{height:'100%', borderRadius:'3px', width:'100%', background:'#555'}}></div>
-                    </div>
-                    <div className="c-footer">
-                      <span className="c-price" style={{color:'#888'}}>₩0</span>
-                      <button className="c-btn" style={{background:'#E0E0E0', color:'#888', cursor:'not-allowed'}}>품절</button>
-                    </div>
-                  </div>
-                </div>
+                  );
+                })}
               </div>
             </section>
 

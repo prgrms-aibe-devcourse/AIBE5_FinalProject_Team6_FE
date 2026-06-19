@@ -6,6 +6,8 @@ export interface ProductListItem {
   status: string
   totalQty: number
   availableQty: number
+  dropsStartAt?: string | null
+  dropsEndAt?: string | null
 }
 
 export interface ProductResponse extends ProductListItem {

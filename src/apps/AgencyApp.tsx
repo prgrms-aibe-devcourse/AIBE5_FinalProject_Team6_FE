@@ -14,7 +14,11 @@ import { getVotes, createVote } from '../api/votes';
 import type { GoodsVoteResult } from '../types/vote';
 import { getProducts, createProduct } from '../api/products';
 import type { CreateProductRequest, ProductListItem } from '../api/products';
-import { getAgencyArtists } from '../api/agencyArtists';
+import { getAgencyArtists } from '../api/agencyArtists'
+import { getAgencyOrders } from '../api/agencyOrders'
+import type { AgencyOrderItem } from '../api/agencyOrders'
+import { getAgencyInventoryHistory } from '../api/agencyInventory'
+import type { InventoryHistoryItem } from '../api/agencyInventory';
 
 interface ArtistProfile {
   id: number
@@ -150,6 +154,8 @@ export default function AgencyApp() {
   // 스케줄 관리 상태
   const [agencyArtistId, setAgencyArtistId] = useState<number | null>(null);
   const [agencySchedules, setAgencySchedules] = useState<ScheduleResult[]>([]);
+  const [agencyOrders, setAgencyOrders] = useState<AgencyOrderItem[]>([]);
+  const [inventoryHistory, setInventoryHistory] = useState<InventoryHistoryItem[]>([]);
   const [eventForm, setEventForm] = useState({ title: '', type: 'EVENT', date: '', time: '' });
   const [liveForm, setLiveForm] = useState({ title: '', date: '', time: '', liveUrl: '' });
   const [showLiveModal, setShowLiveModal] = useState(false);
@@ -254,6 +260,20 @@ export default function AgencyApp() {
     getNotices(agencyArtistId)
       .then(res => setNotices(res.items))
       .catch(console.error);
+  }, [activeMenu, agencyArtistId]);
+
+  useEffect(() => {
+    if (activeMenu !== 'orders') return;
+    getAgencyOrders(agencyArtistId ?? undefined)
+      .then(res => setAgencyOrders(res.items))
+      .catch(() => {});
+  }, [activeMenu, agencyArtistId]);
+
+  useEffect(() => {
+    if (activeMenu !== 'inventory') return;
+    getAgencyInventoryHistory(agencyArtistId ?? undefined)
+      .then(res => setInventoryHistory(res.items))
+      .catch(() => {});
   }, [activeMenu, agencyArtistId]);
 
   return (
@@ -784,32 +804,42 @@ export default function AgencyApp() {
                           </tr>
                        </thead>
                        <tbody>
-                          {[
-                            { type: 'RELEASE', icon: ArrowUpRight, color: 'text-blue-500', bg: 'bg-blue-50', prod: 'Echo Season Photobook', qty: '-12', user: 'Order System', time: '2026.05.21 14:12' },
-                            { type: 'RESERVE', icon: Clock, color: 'text-amber-500', bg: 'bg-amber-50', prod: 'Starlight Lightstick', qty: '-1', user: 'Order #241A', time: '2026.05.21 13:55' },
-                            { type: 'COMPENSATE', icon: Activity, color: 'text-purple-500', bg: 'bg-purple-50', prod: 'Summer Tee (XL)', qty: '+50', user: 'Admin (Lee)', time: '2026.05.20 18:02' },
-                            { type: 'CANCEL', icon: ArrowDownRight, color: 'text-green-500', bg: 'bg-green-50', prod: 'Echo Photobook', qty: '+1', user: 'Order Canceled', time: '2026.05.20 17:45' },
-                          ].map((row, i) => (
-                            <tr key={i} className="border-b border-[#F7F3EE] hover:bg-[#fafafa] transition-colors group">
+                          {inventoryHistory.length === 0 ? (
+                            <tr>
+                              <td colSpan={5} className="px-8 py-8 text-center text-sm text-[#888]">재고 이력이 없습니다.</td>
+                            </tr>
+                          ) : inventoryHistory.map(row => {
+                            const typeStyle: Record<string, { color: string; bg: string }> = {
+                              RELEASE:    { color: 'text-blue-500',   bg: 'bg-blue-50' },
+                              RESERVE:    { color: 'text-amber-500',  bg: 'bg-amber-50' },
+                              COMPENSATE: { color: 'text-purple-500', bg: 'bg-purple-50' },
+                              INCREASE:   { color: 'text-green-600',  bg: 'bg-green-50' },
+                              DECREASE:   { color: 'text-red-500',    bg: 'bg-red-50' },
+                            };
+                            const { color, bg } = typeStyle[row.changeType] ?? { color: 'text-gray-500', bg: 'bg-gray-50' };
+                            const TypeIcon = row.deltaQty >= 0 ? ArrowUpRight : ArrowDownRight;
+                            const refLabel = row.refType === 'ORDER' && row.referenceId ? `Order #${row.referenceId}` : row.refType;
+                            return (
+                            <tr key={row.historyId} className="border-b border-[#F7F3EE] hover:bg-[#fafafa] transition-colors group">
                                <td className="px-8 py-5">
-                                  <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl font-black text-[10px] ${row.bg} ${row.color}`}>
-                                     <row.icon size={12} />
-                                     {row.type}
+                                  <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl font-black text-[10px] ${bg} ${color}`}>
+                                     <TypeIcon size={12} />
+                                     {row.changeType}
                                   </div>
                                </td>
                                <td className="px-8 py-5">
-                                  <div className="font-bold text-sm text-[#111]">{row.prod}</div>
-                                  <div className="text-[10px] text-[#888] font-bold">Category: Merch</div>
+                                  <div className="font-bold text-sm text-[#111]">{row.productName}</div>
                                </td>
                                <td className="px-8 py-5">
-                                  <span className={`font-mono font-black text-sm ${row.qty.startsWith('-') ? 'text-red-500' : 'text-green-600'}`}>
-                                     {row.qty}
+                                  <span className={`font-mono font-black text-sm ${row.deltaQty < 0 ? 'text-red-500' : 'text-green-600'}`}>
+                                     {row.deltaQty > 0 ? '+' : ''}{row.deltaQty}
                                   </span>
                                </td>
-                               <td className="px-8 py-5 text-sm font-medium text-[#555]">{row.user}</td>
-                               <td className="px-8 py-5 text-right text-xs font-mono text-[#888]">{row.time}</td>
+                               <td className="px-8 py-5 text-sm font-medium text-[#555]">{refLabel}</td>
+                               <td className="px-8 py-5 text-right text-xs font-mono text-[#888]">{new Date(row.changedAt).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
                             </tr>
-                          ))}
+                          );
+                          })}
                        </tbody>
                     </table>
                  </div>
@@ -1253,17 +1283,20 @@ export default function AgencyApp() {
                     </tr>
                   </thead>
                   <tbody>
-                    {[
-                      { id: '#ORD-001', prod: '응원봉 (Lightstick)', date: '오늘, 14:20', status: '처리중' },
-                      { id: '#ORD-002', prod: '포토북 (Photo Book)', date: '오늘, 12:45', status: '배송중' },
-                      { id: '#ORD-003', prod: '콘서트 티켓 (Concert Ticket)', date: '어제', status: '완료' },
-                    ].map((row, i) => (
-                      <tr key={i} className="border-b border-[#EDE8E2] last:border-0 hover:bg-[#fafafa]">
-                        <td className="p-4 text-sm font-mono font-bold text-[#111]">{row.id}</td>
-                        <td className="p-4 text-sm text-[#333]">{row.prod}</td>
-                        <td className="p-4 text-sm text-[#888]">{row.date}</td>
+                    {agencyOrders.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="p-8 text-center text-sm text-[#888]">주문 내역이 없습니다.</td>
+                      </tr>
+                    ) : agencyOrders.map(order => (
+                      <tr key={order.orderId} className="border-b border-[#EDE8E2] last:border-0 hover:bg-[#fafafa]">
+                        <td className="p-4 text-sm font-mono font-bold text-[#111]">#{order.orderId}</td>
+                        <td className="p-4 text-sm text-[#333]">
+                          <div className="font-medium">{order.productSummary}</div>
+                          <div className="text-xs text-[#888]">{order.artistName}</div>
+                        </td>
+                        <td className="p-4 text-sm text-[#888]">{new Date(order.createdAt).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
                         <td className="p-4 text-sm">
-                          <span className="font-bold text-xs px-2 py-1 bg-gray-100 rounded">{row.status}</span>
+                          <span className="font-bold text-xs px-2 py-1 bg-gray-100 rounded">{order.status}</span>
                         </td>
                       </tr>
                     ))}

@@ -256,6 +256,10 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [showCart, setShowCart] = useState(false);
   const [showNotifications] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
+  const [editNickname, setEditNickname] = useState('');
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [agreeOrder, setAgreeOrder] = useState(false);
+  const [agreePrivacy, setAgreePrivacy] = useState(false);
 
   const [myPageTab, setMyPageTab] = useState<string>(() => {
     const s = searchParams.get('sub');
@@ -1247,7 +1251,9 @@ export default function App({ role = 'FAN' }: { role?: string }) {
               </div>
               <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => setShowCart(true)}>
                 <ShoppingBag size={20} color="var(--text-main)" />
-                <div style={{ position: 'absolute', top: '-4px', right: '-4px', background: 'var(--point-rose)', color: 'white', fontSize: '10px', fontWeight: 800, width: '16px', height: '16px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>2</div>
+                {cartItems.length > 0 && (
+                  <div style={{ position: 'absolute', top: '-4px', right: '-4px', background: 'var(--point-rose)', color: 'white', fontSize: '10px', fontWeight: 800, width: '16px', height: '16px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{cartItems.length}</div>
+                )}
               </div>
             </>
           )}
@@ -1451,7 +1457,10 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
                        {storeArtists.filter(a => a.name.toLowerCase().includes(artistSearchQuery.toLowerCase())).map(a => (
                          <div key={a.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
-                           onClick={() => { setSelectedArtist(a); setBoardTab('FEED'); setShowArtistSearch(false); setArtistSearchQuery(''); }}>
+                           onClick={() => {
+                             if (activeTab === 'STORE') { setStoreArtist(String(a.id)); setShowArtistSearch(false); setArtistSearchQuery(''); }
+                             else { setSelectedArtist(a); setBoardTab('FEED'); setShowArtistSearch(false); setArtistSearchQuery(''); }
+                           }}>
                            <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: artistGradient(a.id), display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '14px' }}>
                              {a.name.substring(0, 2)}
                            </div>
@@ -1470,7 +1479,10 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
                        {favoriteArtists.map(a => (
                          <div key={a.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
-                           onClick={() => { setSelectedArtist(a); setBoardTab('FEED'); setShowArtistSearch(false); setArtistSearchQuery(''); }}>
+                           onClick={() => {
+                             if (activeTab === 'STORE') { setStoreArtist(String(a.id)); setShowArtistSearch(false); setArtistSearchQuery(''); }
+                             else { setSelectedArtist(a); setBoardTab('FEED'); setShowArtistSearch(false); setArtistSearchQuery(''); }
+                           }}>
                            <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: a.bg ?? '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '14px' }}>
                              {(storeArtists.find(s => s.id === a.id)?.name ?? a.name).substring(0, 3)}
                            </div>
@@ -1496,25 +1508,32 @@ export default function App({ role = 'FAN' }: { role?: string }) {
             <div style={{ width: '100%', maxWidth: '440px', background: 'white', borderRadius: '32px', padding: '40px', position: 'relative' }} onClick={e => e.stopPropagation()}>
                <X size={24} style={{ position: 'absolute', top: 32, right: 32, cursor: 'pointer', color: '#888' }} onClick={() => setShowEditProfile(false)} />
                <h2 style={{ fontSize: '24px', fontWeight: 800, marginBottom: '32px' }}>프로필 수정</h2>
-               
-               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '32px' }}>
-                 <div style={{ width: '100px', height: '100px', borderRadius: '50%', background: 'linear-gradient(135deg, #E8E0D8, #D5CCC2)', marginBottom: '16px', border: '4px solid white', boxShadow: '0 8px 24px rgba(0,0,0,0.08)' }}></div>
-                 <button className="c-btn" style={{ background: 'var(--bg-cream)', padding: '8px 16px', borderRadius: '20px' }}>사진 변경</button>
-               </div>
 
-               <div className="form-group" style={{ marginBottom: '20px' }}>
-                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px', color: 'var(--text-sub)' }}>닉네임</label>
-                 <input type="text" defaultValue="Dreamer99" className="form-input" style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--bg-cream)', padding: '14px 16px', borderRadius: '12px', fontSize: '15px' }} />
-               </div>
-               
                <div className="form-group" style={{ marginBottom: '32px' }}>
-                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px', color: 'var(--text-sub)' }}>소개말</label>
-                 <textarea rows={3} placeholder="자신을 소개해 보세요!" className="form-input" style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--bg-cream)', padding: '14px 16px', borderRadius: '12px', fontSize: '15px', resize: 'none' }}></textarea>
+                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px', color: 'var(--text-sub)' }}>닉네임</label>
+                 <input type="text" value={editNickname} onChange={e => setEditNickname(e.target.value)} className="form-input" style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--bg-cream)', padding: '14px 16px', borderRadius: '12px', fontSize: '15px' }} />
                </div>
 
                <button className="btn-primary" onClick={() => {
-                 setShowEditProfile(false);
+                 updateMyProfile({ nickname: editNickname })
+                   .then(updated => { setFanProfile(updated); setShowEditProfile(false); })
+                   .catch(() => {});
                }} style={{ width: '100%', background: 'var(--text-main)', color: 'white', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 800 }}>저장하기</button>
+            </div>
+          </div>
+        )}
+
+        {/* --- LOGOUT CONFIRM MODAL --- */}
+        {showLogoutModal && (
+          <div className="cart-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowLogoutModal(false)}>
+            <div style={{ width: '100%', maxWidth: '400px', background: 'white', borderRadius: '32px', padding: '40px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+              <div style={{ fontSize: '40px', marginBottom: '16px' }}>🥺</div>
+              <h2 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '8px' }}>떠나신다니 아쉬워요</h2>
+              <p style={{ fontSize: '14px', color: 'var(--text-sub)', marginBottom: '32px' }}>정말 로그아웃하시겠어요?</p>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button onClick={() => setShowLogoutModal(false)} style={{ flex: 1, padding: '14px', border: '1px solid var(--border)', borderRadius: '12px', background: 'white', fontSize: '15px', fontWeight: 700, cursor: 'pointer' }}>취소</button>
+                <button onClick={() => { setShowLogoutModal(false); logout(); localStorage.removeItem(ROLE_KEY); navigate('/login', { replace: true }); }} style={{ flex: 1, padding: '14px', border: 'none', borderRadius: '12px', background: 'var(--text-main)', color: 'white', fontSize: '15px', fontWeight: 700, cursor: 'pointer' }}>나가기</button>
+              </div>
             </div>
           </div>
         )}
@@ -2528,13 +2547,6 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     <div style={{ background: 'white', border: '1px solid #E5E5E5', borderRadius: '16px', padding: '24px', marginBottom: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
          <h3 style={{ fontSize: '18px', fontWeight: '800', color: '#111', margin: 0 }}>마이 아티스트</h3>
-         <button 
-           onClick={() => setShowArtistSearch(true)}
-           style={{ background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', color: '#888', fontSize: '13px', fontWeight: 600 }}
-         >
-           <Search size={14} />
-           아티스트 검색
-         </button>
        </div>
        <div style={{ display: 'flex', gap: '20px', overflowX: 'auto', paddingBottom: '40px', marginTop: '-15px', alignItems: 'flex-start', paddingTop: '20px' }} className="hide-scrollbar">
           {/* ALL option */}
@@ -2886,11 +2898,17 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', border: '1px solid var(--border)', borderRadius: '8px', cursor: 'pointer' }}>
                       <input type="radio" checked={payMethod === 'toss'} onChange={() => setPayMethod('toss')} name="pay" style={{ width: '18px', height: '18px' }} />
-                      <span style={{ fontWeight: 700 }}>● 토스페이먼츠 (파란 로고)</span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}>
+                        <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="22" height="22" rx="5" fill="#0064FF"/><text x="11" y="16" textAnchor="middle" fill="white" fontSize="12" fontWeight="bold" fontFamily="sans-serif">T</text></svg>
+                        토스페이먼츠
+                      </span>
                     </label>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', border: '1px solid var(--border)', borderRadius: '8px', cursor: 'pointer' }}>
                       <input type="radio" checked={payMethod === 'kakao'} onChange={() => setPayMethod('kakao')} name="pay" style={{ width: '18px', height: '18px' }} />
-                      <span style={{ fontWeight: 700 }}>○ 카카오페이 (노란 로고)</span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}>
+                        <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="22" height="22" rx="5" fill="#FFE100"/><text x="11" y="16" textAnchor="middle" fill="#3A1D1D" fontSize="11" fontWeight="bold" fontFamily="sans-serif">K</text></svg>
+                        카카오페이
+                      </span>
                     </label>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', border: '1px solid var(--border)', borderRadius: '8px', cursor: 'pointer' }}>
                       <input type="radio" checked={payMethod === 'card'} onChange={() => setPayMethod('card')} name="pay" style={{ width: '18px', height: '18px' }} />
@@ -2906,23 +2924,8 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                 {/* Section 4: Coupons */}
                 <section style={{ marginBottom: '48px' }}>
                   <h3 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '16px', borderBottom: '2px solid #111', paddingBottom: '12px' }}>할인 혜택</h3>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                      <span style={{ width: '80px', fontSize: '14px', fontWeight: 700 }}>쿠폰</span>
-                      <select style={{ flex: 1, padding: '12px', border: '1px solid var(--border)', borderRadius: '8px', appearance: 'none', background: 'url("data:image/svg+xml;utf8,<svg viewBox=\'0 0 140 140\' width=\'12\' height=\'12\' xmlns=\'http://www.w3.org/2000/svg\'><path d=\'M30 40 L70 90 L110 40\' stroke=\'black\' stroke-width=\'10\' fill=\'none\'/></svg>") no-repeat right 16px center' }}>
-                        <option>쿠폰을 선택하세요</option>
-                      </select>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                      <span style={{ width: '80px', fontSize: '14px', fontWeight: 700 }}>포인트</span>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '12px', color: 'var(--text-sub)', marginBottom: '8px' }}>보유 12,450P</div>
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                          <input type="text" placeholder="0" style={{ flex: 1, padding: '12px', border: '1px solid var(--border)', borderRadius: '8px', textAlign: 'right' }} />
-                          <button style={{ padding: '0 24px', background: 'var(--text-main)', color: 'white', borderRadius: '8px', fontWeight: 700, fontSize: '13px' }}>전액 사용</button>
-                        </div>
-                      </div>
-                    </div>
+                  <div style={{ padding: '16px 20px', background: 'var(--bg-cream)', borderRadius: '12px', fontSize: '14px', color: 'var(--text-sub)', fontWeight: 600, textAlign: 'center' }}>
+                    준비 중입니다
                   </div>
                 </section>
 
@@ -2930,16 +2933,21 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                 <section style={{ marginBottom: '48px' }}>
                   <div style={{ padding: '24px', background: 'var(--bg-cream)', borderRadius: '12px' }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 800, fontSize: '16px', marginBottom: '16px', cursor: 'pointer' }}>
-                      <input type="checkbox" style={{ width: '20px', height: '20px' }} />
+                      <input
+                        type="checkbox"
+                        style={{ width: '20px', height: '20px' }}
+                        checked={agreeOrder && agreePrivacy}
+                        onChange={e => { setAgreeOrder(e.target.checked); setAgreePrivacy(e.target.checked); }}
+                      />
                       전체 동의
                     </label>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingLeft: '12px' }}>
                       <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', cursor: 'pointer' }}>
-                        <input type="checkbox" style={{ width: '16px', height: '16px' }} />
+                        <input type="checkbox" style={{ width: '16px', height: '16px' }} checked={agreeOrder} onChange={e => setAgreeOrder(e.target.checked)} />
                         주문 내용 확인 및 결제 동의 (필수)
                       </label>
                       <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', cursor: 'pointer' }}>
-                        <input type="checkbox" style={{ width: '16px', height: '16px' }} />
+                        <input type="checkbox" style={{ width: '16px', height: '16px' }} checked={agreePrivacy} onChange={e => setAgreePrivacy(e.target.checked)} />
                         개인정보 제3자 제공 동의 (필수)
                       </label>
                     </div>
@@ -3037,10 +3045,10 @@ export default function App({ role = 'FAN' }: { role?: string }) {
               <div className="bh-info">
                 <div className="bh-name" style={{ fontSize: '40px' }}>{fanProfile?.nickname ?? '—'}</div>
                 <div className="bh-stats" style={{ fontSize: '16px', opacity: 1, color: '#DDD' }}>
-                  <span style={{ color: 'var(--point-rose)', fontWeight: 800 }}>VIP 멤버</span> · {fanProfile ? `${new Date(fanProfile.createdAt).getFullYear()}년 가입` : '—'}
+                  {fanProfile ? (() => { const d = new Date(fanProfile.createdAt); return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 가입`; })() : '—'}
                 </div>
               </div>
-              <button className="c-btn" onClick={() => setShowEditProfile(true)} style={{background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)'}}>프로필 수정</button>
+              <button className="c-btn" onClick={() => { setEditNickname(fanProfile?.nickname ?? ''); setShowEditProfile(true); }} style={{background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)'}}>프로필 수정</button>
             </div>
           </div>
 
@@ -3049,22 +3057,13 @@ export default function App({ role = 'FAN' }: { role?: string }) {
               <div style={{ marginBottom: '32px' }}>
                 <div className={`mp-nav-item ${myPageTab === 'OVERVIEW' ? 'active' : ''}`} onClick={() => setMyPageTab('OVERVIEW')}><User size={18} /> 전체 개요</div>
                 <div className={`mp-nav-item ${myPageTab === 'ORDERS' ? 'active' : ''}`} onClick={() => setMyPageTab('ORDERS')}><ShoppingBag size={18} /> 주문 내역</div>
-                <div className={`mp-nav-item ${myPageTab === 'TICKETS' ? 'active' : ''}`} onClick={() => setMyPageTab('TICKETS')}><Ticket size={18} /> 나의 티켓</div>
                 <div className={`mp-nav-item ${myPageTab === 'COLLECTION' ? 'active' : ''}`} onClick={() => setMyPageTab('COLLECTION')}><ImageIcon size={18} /> 나의 컬렉션</div>
                 <div className={`mp-nav-item ${myPageTab === 'SETTINGS' ? 'active' : ''}`} onClick={() => setMyPageTab('SETTINGS')}><Settings size={18} /> 설정</div>
-                <div className="mp-nav-item" style={{ color: '#FF4444', marginTop: '20px' }} onClick={() => { logout(); localStorage.removeItem(ROLE_KEY); navigate('/login', { replace: true }); }}><LogOut size={18} /> 로그아웃</div>
+                <div className="mp-nav-item" style={{ color: '#FF4444', marginTop: '20px' }} onClick={() => setShowLogoutModal(true)}><LogOut size={18} /> 로그아웃</div>
               </div>
               
               <div style={{ background: 'var(--bg-cream)', borderRadius: '16px', padding: '24px' }}>
                 <h4 style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-sub)', marginBottom: '16px', letterSpacing: '1px' }}>계정 정보</h4>
-                <div className="mp-stat">
-                  <span style={{ fontSize: '14px', fontWeight: 600 }}>포인트</span>
-                  <span style={{ fontSize: '16px', fontWeight: 800, color: 'var(--point-rose)' }}>12,450 P</span>
-                </div>
-                <div className="mp-stat">
-                  <span style={{ fontSize: '14px', fontWeight: 600 }}>쿠폰</span>
-                  <span style={{ fontSize: '16px', fontWeight: 800 }}>3</span>
-                </div>
               </div>
             </div>
 
@@ -3212,15 +3211,6 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                         })}
                       </div>
                     )}
-                  </div>
-                </div>
-              )}
-
-              {myPageTab === 'TICKETS' && (
-                <div className="reveal">
-                  <h3 style={{fontSize: '24px', fontWeight: 800, marginBottom: '24px'}}>나의 티켓</h3>
-                  <div className="card" style={{padding: '32px'}}>
-                    <p style={{ color: 'var(--text-sub)', fontSize: '15px' }}>보유한 티켓이 없습니다.</p>
                   </div>
                 </div>
               )}

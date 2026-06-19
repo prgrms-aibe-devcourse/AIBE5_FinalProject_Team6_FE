@@ -66,7 +66,6 @@ export function useCheckout(setActiveTab: (tab: string) => void) {
             const msg = '결제 확인 중 오류가 발생했습니다. 고객센터에 문의해 주세요.'
             setPaymentStatus('failed')
             setPaymentError(msg)
-            alert(msg)
           })
       }, 0)
     } else if (code && code !== 'PAY_PROCESS_CANCELED' && code !== 'USER_CANCEL') {
@@ -80,11 +79,11 @@ export function useCheckout(setActiveTab: (tab: string) => void) {
 
   const handlePay = async () => {
     if (!checkoutForm.name || !checkoutForm.phone2 || !checkoutForm.zipcode) {
-      alert('필수 정보를 모두 입력해주세요.')
+      setPaymentError('필수 정보를 모두 입력해주세요.')
       return
     }
     if (!checkoutData?.productId) {
-      alert('상품 정보를 확인할 수 없습니다.')
+      setPaymentError('상품 정보를 확인할 수 없습니다.')
       return
     }
     const btn = document.getElementById('checkout-btn')

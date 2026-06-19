@@ -14,6 +14,16 @@ import { getVotes, createVote } from '../api/votes';
 import type { GoodsVoteResult } from '../types/vote';
 import { getProducts, createProduct } from '../api/products';
 import type { CreateProductRequest, ProductListItem } from '../api/products';
+import { getAgencyArtists } from '../api/agencyArtists';
+
+interface ArtistProfile {
+  id: number
+  name: string
+  desc: string
+  profileImg: string
+  sns: { instagram: string; youtube: string; twitter: string }
+  members: { id: string; name: string; role: string; img: string }[]
+}
 
 interface BannerForm {
   id?: number
@@ -26,12 +36,6 @@ interface BannerForm {
   isActive: boolean
   _file?: File
 }
-
-const SCHEDULE_ARTISTS = [
-  { id: 1, name: 'NOVA' },
-  { id: 2, name: 'LUNA' },
-  { id: 3, name: 'ECHO' },
-]
 
 function fmtSchedule(iso: string) {
   const d = new Date(iso)
@@ -68,14 +72,32 @@ export default function AgencyApp() {
   const [voteOptions, setVoteOptions] = useState<any[]>([{id: 1, label: '', image: ''}, {id: 2, label: '', image: ''}]);
   const [showBannerModal, setShowBannerModal] = useState(false);
   const [linkNoticeToggle, setLinkNoticeToggle] = useState(false);
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
 
   const [votesList, setVotesList] = useState<GoodsVoteResult[]>([]);
   const [banners, setBanners] = useState<BannerResponse[]>([]);
   const [editingBanner, setEditingBanner] = useState<BannerForm | null>(null);
 
+  const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const doDeleteBanner = async (id: number) => {
+    try {
+      await deleteAgencyBanner(id);
+      setBanners(prev => prev.filter(b => b.id !== id));
+      showToast('배너가 삭제되었습니다.');
+    } catch {
+      showToast('배너 삭제에 실패했습니다.', 'error');
+    }
+    setConfirmDelete(null);
+  };
+
   const handleBannerSubmit = async () => {
     if (!editingBanner?.title?.trim()) {
-      alert('배너 제목을 입력해주세요.');
+      showToast('배너 제목을 입력해주세요.', 'error');
       return;
     }
     try {
@@ -98,64 +120,26 @@ export default function AgencyApp() {
       };
       if (editingBanner.id) {
         await updateAgencyBanner(editingBanner.id, { ...data, isActive: editingBanner.isActive });
-        alert('배너 설정이 수정되었습니다.');
+        showToast('배너 설정이 수정되었습니다.');
       } else {
         await createAgencyBanner(data);
-        alert('새 배너가 등록되었습니다.');
+        showToast('새 배너가 등록되었습니다.');
       }
       setBanners(await getAgencyBanners());
       setShowBannerModal(false);
       setEditingBanner(null);
     } catch {
-      alert('배너 저장에 실패했습니다.');
+      showToast('배너 저장에 실패했습니다.', 'error');
     }
   };
 
-  const handleBannerDelete = async (id: number) => {
-    if (!confirm('이 배너를 삭제하시겠습니까?')) return;
-    try {
-      await deleteAgencyBanner(id);
-      setBanners(banners.filter(b => b.id !== id));
-    } catch {
-      alert('배너 삭제에 실패했습니다.');
-    }
+  const handleBannerDelete = (id: number) => {
+    setConfirmDelete(id);
   };
 
   const [notices, setNotices] = useState<NoticeResult[]>([]);
 
-  const [artists, setArtists] = useState([
-    { 
-      id: 'starlight', 
-      name: 'Starlight', 
-      desc: 'Shining like stars in the night sky.',
-      profileImg: 'https://images.unsplash.com/photo-1516280440502-6134b281f626?w=200&q=80',
-      sns: {
-        instagram: '@official_starlight',
-        youtube: 'Starlight Official',
-        twitter: '@starlight_official'
-      },
-      members: [
-        { id: 'm1', name: 'Luna', role: 'Main Vocal', img: 'https://images.unsplash.com/photo-1516575334481-f85287c2c82d?auto=format&fit=crop&q=80&w=200' },
-        { id: 'm2', name: 'Mina', role: 'Main Dancer', img: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&q=80&w=200' }
-      ]
-    },
-    { 
-      id: 'rose', 
-      name: 'ROSE', 
-      desc: 'Elegant and powerful performance group.',
-      profileImg: 'https://images.unsplash.com/photo-1514525253361-b83f859b73c0?w=200&q=80',
-      sns: {
-        instagram: '@official_rose',
-        youtube: 'ROSE Official',
-        twitter: '@rose_official'
-      },
-      members: [
-        { id: 'm3', name: 'Rose', role: 'Leader', img: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200' }
-      ]
-    }
-  ]);
-
-  const [selectedProfileArtist, setSelectedProfileArtist] = useState(artists[0].id);
+  const [artists, setArtists] = useState<ArtistProfile[]>([]);
   const [editingArtist, setEditingArtist] = useState<any>(null);
   const [editingMember, setEditingMember] = useState<any>(null);
   const [newNotice, setNewNotice] = useState({ title: '', tag: 'NOTICE (일반공지)', content: '' });
@@ -164,7 +148,7 @@ export default function AgencyApp() {
   const [productForm, setProductForm] = useState({ name: '', price: '', totalQty: '', isDrops: false, dropsStartAt: '', dropsEndAt: '' });
 
   // 스케줄 관리 상태
-  const [agencyArtistId, setAgencyArtistId] = useState(1);
+  const [agencyArtistId, setAgencyArtistId] = useState<number | null>(null);
   const [agencySchedules, setAgencySchedules] = useState<ScheduleResult[]>([]);
   const [eventForm, setEventForm] = useState({ title: '', type: 'EVENT', date: '', time: '' });
   const [liveForm, setLiveForm] = useState({ title: '', date: '', time: '', liveUrl: '' });
@@ -174,10 +158,10 @@ export default function AgencyApp() {
   const updateArtist = (updated: any) => {
     setArtists(artists.map(a => a.id === updated.id ? updated : a));
     setEditingArtist(null);
-    alert('아티스트 정보가 성공적으로 반영되었습니다.');
+    showToast('아티스트 정보가 성공적으로 반영되었습니다.');
   };
 
-  const updateMember = (artistId: string, updatedMember: any) => {
+  const updateMember = (artistId: number | null, updatedMember: any) => {
     setArtists(artists.map(a => {
       if (a.id === artistId) {
         let newMembers = [...a.members];
@@ -194,20 +178,20 @@ export default function AgencyApp() {
       return a;
     }));
     setEditingMember(null);
-    alert('멤버 정보가 성공적으로 반영되었습니다.');
+    showToast('멤버 정보가 성공적으로 반영되었습니다.');
   };
 
   const addNotice = async () => {
-    if (!newNotice.title.trim()) return;
+    if (!newNotice.title.trim() || !agencyArtistId) return;
     try {
       await createNotice(agencyArtistId, newNotice.title, newNotice.content);
       const res = await getNotices(agencyArtistId);
       setNotices(res.items);
       setNewNotice({ title: '', tag: 'NOTICE (일반공지)', content: '' });
       setShowNoticeModal(false);
-      alert('새 공지사항이 등록되었습니다!');
+      showToast('새 공지사항이 등록되었습니다!');
     } catch {
-      alert('공지 등록에 실패했습니다.');
+      showToast('공지 등록에 실패했습니다.', 'error');
     }
   };
 
@@ -224,17 +208,32 @@ export default function AgencyApp() {
   ];
 
   useEffect(() => {
+    getAgencyArtists().then(res => {
+      const profiles: ArtistProfile[] = res.items.map(a => ({
+        id: a.id,
+        name: a.name,
+        desc: '',
+        profileImg: a.profileImageUrl ?? '',
+        sns: { instagram: '', youtube: '', twitter: '' },
+        members: [],
+      }));
+      setArtists(profiles);
+      if (profiles.length > 0) setAgencyArtistId(profiles[0].id);
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     if (activeMenu !== 'banners') return;
     getAgencyBanners().then(setBanners).catch(() => {});
   }, [activeMenu]);
 
   useEffect(() => {
-    if (activeMenu !== 'votes') return;
+    if (activeMenu !== 'votes' || !agencyArtistId) return;
     getVotes(agencyArtistId).then(res => setVotesList(res.items)).catch(() => {});
   }, [activeMenu, agencyArtistId]);
 
   useEffect(() => {
-    if (activeMenu !== 'products') return;
+    if (activeMenu !== 'products' || !agencyArtistId) return;
     Promise.all([
       getProducts('regular', undefined, 50, agencyArtistId),
       getProducts('drops', undefined, 50, agencyArtistId),
@@ -244,14 +243,14 @@ export default function AgencyApp() {
   }, [activeMenu, agencyArtistId]);
 
   useEffect(() => {
-    if (activeMenu !== 'calendar') return;
+    if (activeMenu !== 'calendar' || !agencyArtistId) return;
     getCalendar(agencyArtistId)
       .then(res => setAgencySchedules(res.events))
       .catch(() => {});
   }, [activeMenu, agencyArtistId]);
 
   useEffect(() => {
-    if (activeMenu !== 'notices') return;
+    if (activeMenu !== 'notices' || !agencyArtistId) return;
     getNotices(agencyArtistId)
       .then(res => setNotices(res.items))
       .catch(console.error);
@@ -351,9 +350,9 @@ export default function AgencyApp() {
                   {artists.map(artist => (
                     <button 
                       key={artist.id}
-                      onClick={() => setSelectedProfileArtist(artist.id)}
+                      onClick={() => setAgencyArtistId(artist.id)}
                       className={`px-6 py-2 rounded-full font-black text-sm whitespace-nowrap transition-all ${
-                        selectedProfileArtist === artist.id ? 'bg-[#C2507A] text-white' : 'bg-[#F7F3EE] text-[#888]'
+                        agencyArtistId === artist.id ? 'bg-[#C2507A] text-white' : 'bg-[#F7F3EE] text-[#888]'
                       }`}
                     >
                       {artist.name} 프로필
@@ -362,7 +361,7 @@ export default function AgencyApp() {
                   <button className="px-6 py-2 rounded-full font-black text-sm whitespace-nowrap bg-[#EDE8E2] text-[#111] hover:bg-[#D7D0CA] transition-colors">+ 아티스트 추가</button>
                 </div>
 
-                {artists.filter(a => a.id === selectedProfileArtist).map(artist => (
+ㄱ                {artists.filter(a => a.id === agencyArtistId).map(artist => (
                   <div key={artist.id} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     <div className="lg:col-span-1 space-y-6">
                       <div className="bg-white p-6 rounded-2xl border border-[#EDE8E2] text-center shadow-sm">
@@ -553,7 +552,7 @@ export default function AgencyApp() {
 
                       <div className="flex gap-3 mt-10">
                         <button className="flex-1 bg-[#F7F3EE] text-[#111] py-4 rounded-2xl font-black text-sm" onClick={() => setEditingMember(null)}>취소</button>
-                        <button className="flex-1 bg-[#C2507A] text-white py-4 rounded-2xl font-black text-sm shadow-lg shadow-pink-100" onClick={() => updateMember(selectedProfileArtist, editingMember)}>반영하기</button>
+                        <button className="flex-1 bg-[#C2507A] text-white py-4 rounded-2xl font-black text-sm shadow-lg shadow-pink-100" onClick={() => updateMember(agencyArtistId, editingMember)}>반영하기</button>
                       </div>
                     </div>
                   </div>
@@ -596,7 +595,7 @@ export default function AgencyApp() {
                             <button onClick={async () => {
                               const ord = prompt('변경할 순서를 입력하세요', String(banner.exposureOrder));
                               if (ord && !isNaN(Number(ord))) {
-                                try { await updateAgencyBanner(banner.id, { exposureOrder: Number(ord) }); setBanners(await getAgencyBanners()); } catch { alert('순서 변경에 실패했습니다.'); }
+                                try { await updateAgencyBanner(banner.id, { exposureOrder: Number(ord) }); setBanners(await getAgencyBanners()); } catch { showToast('순서 변경에 실패했습니다.', 'error'); }
                               }
                             }} className="text-[11px] font-black uppercase text-[#888] hover:text-[#111]">Move</button>
                             <button onClick={() => { setEditingBanner({ id: banner.id, title: banner.title, imageUrl: banner.imageUrl, landingUrl: banner.landingUrl, exposureOrder: banner.exposureOrder, startAt: banner.startAt?.slice(0, 16) ?? '', endAt: banner.endAt?.slice(0, 16) ?? '', isActive: banner.isActive }); setShowBannerModal(true); }} className="text-[11px] font-black uppercase text-[#C2507A] hover:opacity-70">Edit</button>
@@ -694,12 +693,13 @@ export default function AgencyApp() {
                              <button onClick={async () => {
                                  const title = (document.getElementById('voteTitle') as HTMLInputElement).value;
                                  const end = (document.getElementById('voteEndDate') as HTMLInputElement).value;
+                                 if (!agencyArtistId) { showToast('아티스트를 먼저 선택해주세요.', 'error'); return; }
                                  if (!title || !end) {
-                                   alert('제목과 종료 기한을 입력해주세요.');
+                                   showToast('제목과 종료 기한을 입력해주세요.', 'error');
                                    return;
                                  }
                                  if (voteOptions.some(o => !o.label.trim())) {
-                                    alert('모든 옵션의 라벨을 입력해주세요.');
+                                    showToast('모든 옵션의 라벨을 입력해주세요.', 'error');
                                     return;
                                  }
                                  try {
@@ -712,9 +712,9 @@ export default function AgencyApp() {
                                    setVotesList(res.items);
                                    setShowVoteModal(false);
                                    setVoteOptions([{id: 1, label: '', image: ''}, {id: 2, label: '', image: ''}]);
-                                   alert('투표가 등록되었습니다!');
+                                   showToast('투표가 등록되었습니다!');
                                  } catch {
-                                   alert('투표 등록에 실패했습니다.');
+                                   showToast('투표 등록에 실패했습니다.', 'error');
                                  }
                              }} className="flex-1 p-4 bg-[#C2507A] text-white rounded-2xl font-bold">투표 등록 (생성)</button>
                           </div>
@@ -766,7 +766,7 @@ export default function AgencyApp() {
                        <p className="text-xs text-[#888] font-bold">재고 예약, 출고, 보정 등 정교한 흐름 기록</p>
                     </div>
                     <div className="flex gap-2">
-                       <button onClick={() => { const adjust = prompt('증감할 재고 수량을 입력하세요. (예: 50, -20)'); if(adjust) alert('재고 보정이 완료되었습니다.'); }} className="px-4 py-2 bg-[#C2507A] text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-pink-100">
+                       <button onClick={() => { const adjust = prompt('증감할 재고 수량을 입력하세요. (예: 50, -20)'); if(adjust) showToast('재고 보정이 완료되었습니다.'); }} className="px-4 py-2 bg-[#C2507A] text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-pink-100">
                           <Plus size={14} /> 재고 보정 (Adjust)
                        </button>
                     </div>
@@ -822,11 +822,11 @@ export default function AgencyApp() {
                   <h3 className="text-xl font-black">예정된 스케줄 (Upcoming Schedule)</h3>
                   <div className="flex items-center gap-3">
                     <select
-                      value={agencyArtistId}
+                      value={agencyArtistId ?? ''}
                       onChange={e => setAgencyArtistId(Number(e.target.value))}
                       className="bg-[#F7F3EE] border border-[#ede8e2] px-3 py-2 rounded-xl text-sm font-bold focus:outline-none focus:border-[#C2507A]"
                     >
-                      {SCHEDULE_ARTISTS.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                      {artists.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                     </select>
                     <button className="bg-[#F7F3EE] border border-[#ede8e2] text-[#111] px-4 py-2 rounded-xl text-sm font-bold" onClick={() => setShowLiveModal(true)}>라이브 등록</button>
                     <button className="bg-[#C2507A] text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg shadow-pink-100" onClick={() => setShowEventModal(true)}>일정 추가</button>
@@ -865,14 +865,14 @@ export default function AgencyApp() {
                       <div className="flex gap-2 mt-6">
                         <button className="flex-1 bg-[#F7F3EE] text-[#111] py-3 rounded-xl font-bold" onClick={() => { setShowEventModal(false); setEventForm({ title: '', type: 'EVENT', date: '', time: '' }); }}>취소</button>
                         <button className="flex-1 bg-[#C2507A] text-white py-3 rounded-xl font-bold" onClick={async () => {
-                          if (!eventForm.title.trim() || !eventForm.date || !eventForm.time) { alert('모든 필드를 입력해주세요.'); return; }
+                          if (!agencyArtistId || !eventForm.title.trim() || !eventForm.date || !eventForm.time) { showToast('모든 필드를 입력해주세요.', 'error'); return; }
                           try {
                             await createEvent(agencyArtistId, eventForm.title.trim(), eventForm.type, `${eventForm.date}T${eventForm.time}:00+09:00`);
                             setShowEventModal(false);
                             setEventForm({ title: '', type: 'EVENT', date: '', time: '' });
                             getCalendar(agencyArtistId).then(res => setAgencySchedules(res.events)).catch(() => {});
-                            alert('일정이 등록되었습니다.');
-                          } catch { alert('일정 등록에 실패했습니다.'); }
+                            showToast('일정이 등록되었습니다.');
+                          } catch { showToast('일정 등록에 실패했습니다.', 'error'); }
                         }}>저장</button>
                       </div>
                     </div>
@@ -908,15 +908,15 @@ export default function AgencyApp() {
                       <div className="flex gap-2 mt-6">
                         <button className="flex-1 bg-[#F7F3EE] text-[#111] py-3 rounded-xl font-bold" onClick={() => { setShowLiveModal(false); setLiveForm({ title: '', date: '', time: '', liveUrl: '' }); }}>취소</button>
                         <button className="flex-1 bg-[#FF4444] text-white py-3 rounded-xl font-bold" onClick={async () => {
-                          if (!liveForm.title.trim() || !liveForm.date || !liveForm.time || !liveForm.liveUrl.trim()) { alert('모든 필드를 입력해주세요.'); return; }
-                          if (!/^https:\/\/www\.youtube\.com\/embed\/[^/?#]+$/.test(liveForm.liveUrl.trim())) { alert('YouTube 임베드 URL 형식이 올바르지 않습니다.\n예: https://www.youtube.com/embed/VIDEO_ID'); return; }
+                          if (!agencyArtistId || !liveForm.title.trim() || !liveForm.date || !liveForm.time || !liveForm.liveUrl.trim()) { showToast('모든 필드를 입력해주세요.', 'error'); return; }
+                          if (!/^https:\/\/www\.youtube\.com\/embed\/[^/?#]+$/.test(liveForm.liveUrl.trim())) { showToast('YouTube 임베드 URL 형식이 올바르지 않습니다. (예: https://www.youtube.com/embed/VIDEO_ID)', 'error'); return; }
                           try {
                             await registerLive(agencyArtistId, liveForm.title.trim(), `${liveForm.date}T${liveForm.time}:00+09:00`, liveForm.liveUrl.trim());
                             setShowLiveModal(false);
                             setLiveForm({ title: '', date: '', time: '', liveUrl: '' });
                             getCalendar(agencyArtistId).then(res => setAgencySchedules(res.events)).catch(() => {});
-                            alert('라이브가 등록되었습니다.');
-                          } catch { alert('라이브 등록에 실패했습니다.'); }
+                            showToast('라이브가 등록되었습니다.');
+                          } catch { showToast('라이브 등록에 실패했습니다.', 'error'); }
                         }}>등록</button>
                       </div>
                     </div>
@@ -947,9 +947,9 @@ export default function AgencyApp() {
                                 setStartingLiveId(s.id);
                                 try {
                                   await startLive(s.id);
-                                  getCalendar(agencyArtistId).then(res => setAgencySchedules(res.events)).catch(() => {});
-                                  alert('라이브가 시작되었습니다!');
-                                } catch { alert('라이브 시작에 실패했습니다.'); }
+                                  if (agencyArtistId) getCalendar(agencyArtistId).then(res => setAgencySchedules(res.events)).catch(() => {});
+                                  showToast('라이브가 시작되었습니다!');
+                                } catch { showToast('라이브 시작에 실패했습니다.', 'error'); }
                                 finally { setStartingLiveId(null); }
                               }}
                               className="text-sm font-bold text-white bg-[#FF4444] px-3 py-1.5 rounded-lg disabled:opacity-50"
@@ -1115,15 +1115,7 @@ export default function AgencyApp() {
                                 input.type = 'file';
                                 input.multiple = true;
                                 input.accept = 'image/*';
-                                input.onchange = (e) => {
-                                  const files = (e.target as HTMLInputElement).files;
-                                  if (files) {
-                                    Array.from(files).forEach((f: any) => {
-                                       // Simple dummy handling for mock
-                                       alert('선택된 이미지: ' + f.name);
-                                    });
-                                  }
-                                };
+                                input.onchange = () => {};
                                 input.click();
                               }}>+ 이미지 업로드 (Upload)</span>
                             </label>
@@ -1137,12 +1129,7 @@ export default function AgencyApp() {
                                 className="hidden" 
                                 multiple 
                                 accept="image/*"
-                                onChange={(e) => {
-                                  const files = e.target.files;
-                                  if (files) {
-                                    alert('최대 5장 업로드 로직 시작: ' + Array.from(files).map((f: any) => f.name).join(', '));
-                                  }
-                                }}
+                                onChange={() => {}}
                               />
                             </label>
                             <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
@@ -1194,8 +1181,8 @@ export default function AgencyApp() {
                        <div className="flex gap-2 mt-6">
                          <button className="flex-1 bg-[#F7F3EE] text-[#111] py-3 rounded-xl font-bold" onClick={() => setShowProductModal(false)}>취소</button>
                          <button className="flex-1 bg-[#C2507A] text-white py-3 rounded-xl font-bold" onClick={async () => {
-                           if (!productForm.name.trim() || !productForm.price || !productForm.totalQty) {
-                             alert('상품명, 가격, 재고를 모두 입력해주세요.');
+                           if (!agencyArtistId || !productForm.name.trim() || !productForm.price || !productForm.totalQty) {
+                             showToast('상품명, 가격, 재고를 모두 입력해주세요.', 'error');
                              return;
                            }
                            try {
@@ -1217,9 +1204,9 @@ export default function AgencyApp() {
                              setProductList(refreshed.items);
                              setShowProductModal(false);
                              setProductForm({ name: '', price: '', totalQty: '', isDrops: false, dropsStartAt: '', dropsEndAt: '' });
-                             alert('드롭이 스케줄되었습니다!');
+                             showToast('드롭이 스케줄되었습니다!');
                            } catch {
-                             alert('상품 등록에 실패했습니다.');
+                             showToast('상품 등록에 실패했습니다.', 'error');
                            }
                          }}>드롭 시작하기</button>
                        </div>
@@ -1389,6 +1376,26 @@ export default function AgencyApp() {
           </div>
         </div>
       </div>
+
+    {toast && (
+      <div role="alert" className={`fixed bottom-6 right-6 z-[200] px-6 py-4 rounded-2xl shadow-2xl text-white text-sm font-bold flex items-center gap-3 transition-all ${toast.type === 'error' ? 'bg-red-500' : 'bg-[#111]'}`}>
+        <span>{toast.type === 'error' ? '✕' : '✓'}</span>
+        {toast.msg}
+      </div>
+    )}
+
+    {confirmDelete !== null && (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[150] flex items-center justify-center p-6">
+        <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl">
+          <h3 className="text-lg font-black mb-2">배너를 삭제하시겠습니까?</h3>
+          <p className="text-sm text-[#888] mb-6">삭제 후에는 복구할 수 없습니다.</p>
+          <div className="flex gap-3">
+            <button className="flex-1 bg-[#F7F3EE] text-[#111] py-3 rounded-xl font-bold" onClick={() => setConfirmDelete(null)}>취소</button>
+            <button className="flex-1 bg-red-500 text-white py-3 rounded-xl font-bold" onClick={() => doDeleteBanner(confirmDelete)}>삭제</button>
+          </div>
+        </div>
+      </div>
+    )}
     </div>
   );
 }

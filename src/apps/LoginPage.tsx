@@ -4,7 +4,7 @@ import { login, setToken } from '../api/auth';
 import { ROLE_KEY } from '../App';
 import type { Role } from '../App';
 
-const REDIRECT_URI = 'http://localhost:5173/oauth/callback';
+const REDIRECT_URI = import.meta.env.VITE_OAUTH_REDIRECT_URI ?? 'http://localhost:5173/oauth/callback';
 const PROVIDER_KEY = 'oauth_provider';
 
 function redirectToKakao() {

@@ -10,8 +10,8 @@ import { getProducts, subscribeRestock, unsubscribeRestock } from '../api/produc
 import type { ProductListItem } from '../types/product';
 import { getArtists } from '../api/artist';
 import type { ArtistItem } from '../types/artist';
-import { getStoreBanners } from '../api/banners';
-import type { StoreBannerResponse } from '../types/banner';
+import { getStoreBanners, getMainBanners } from '../api/banners';
+import type { StoreBannerResponse, BannerResponse } from '../types/banner';
 import { getCart, addCartItem, updateCartItem, removeCartItem } from '../api/cart';
 import type { CartItemResponse } from '../types/cart';
 import { getFeeds, createFeed, createComment, likeFeed, unlikeFeed, followArtist, unfollowArtist, getJoinedArtists, likeComment, unlikeComment } from '../api/community';
@@ -280,6 +280,8 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [storeHasMore, setStoreHasMore] = useState(false);
   const [storeLoading, setStoreLoading] = useState(true);
   const [banners, setBanners] = useState<StoreBannerResponse[]>([]);
+  const [mainBanners, setMainBanners] = useState<BannerResponse[]>([]);
+  const [mainBannerIdx, setMainBannerIdx] = useState(0);
   const [cartItems, setCartItems] = useState<CartItemResponse[]>([]);
   const [cartLoading, setCartLoading] = useState(false);
   const [storeArtists, setStoreArtists] = useState<ArtistItem[]>([]);
@@ -520,6 +522,24 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       .then(setBanners)
       .catch(console.error);
   }, []);
+
+  // HOME 메인 배너 로드
+  useEffect(() => {
+    if (activeTab !== 'HOME') return;
+    getMainBanners().then(data => {
+      setMainBanners(data);
+      setMainBannerIdx(0);
+    }).catch(() => {});
+  }, [activeTab]);
+
+  // HOME 배너 자동 슬라이드
+  useEffect(() => {
+    if (mainBanners.length <= 1) return;
+    const id = setInterval(() => {
+      setMainBannerIdx(idx => (idx + 1) % mainBanners.length);
+    }, 4000);
+    return () => clearInterval(id);
+  }, [mainBanners.length]);
 
   // 장바구니 열릴 때 항목 로드
   useEffect(() => {
@@ -2089,17 +2109,86 @@ export default function App({ role = 'FAN' }: { role?: string }) {
         {!selectedArtist && activeTab === 'HOME' && (
           <div className="page-content reveal wrapper">
             <section className="hero" style={{ paddingTop: 0, minHeight: 'auto', marginBottom: 60 }}>
-              <div className="hero-date reveal">UPCOMING DROP // 06.01 KST</div>
               <h1 className="reveal delay-100" style={{ fontSize: '64px', fontWeight: 800, letterSpacing: '-2px', lineHeight: 1.1, marginBottom: 32, textAlign:'center' }}>
                 Limited Editions.<br/>Exclusive Artist Merch.
               </h1>
-              
-              <div className="reveal delay-200" style={{ width: '100%', height: '400px', borderRadius: '24px', background: 'linear-gradient(135deg, #C8BEB6, #A89890)', position: 'relative', overflow: 'hidden', boxShadow: '0 24px 48px rgba(0,0,0,0.08)' }}>
-                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(26,26,26,0.5) 0%, transparent 50%)' }}></div>
-                <div style={{ position: 'absolute', bottom: '40px', left: '40px', textAlign: 'left', color: 'white' }}>
-                  <span style={{ background: 'white', color: 'var(--text-main)', padding: '6px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: 800, letterSpacing: '2px', display: 'inline-block', marginBottom: '16px' }}>FANDROPS</span>
-                  <h2 style={{fontSize: '32px', fontWeight: 800, letterSpacing: '-1px'}}>Echo 특별판 포토북</h2>
-                </div>
+
+              <div className="reveal delay-200" style={{ position: 'relative', width: '100%', height: '400px', borderRadius: '24px', overflow: 'hidden', boxShadow: '0 24px 48px rgba(0,0,0,0.08)' }}>
+                {mainBanners.length === 0 ? (
+                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, #C8BEB6, #A89890)' }}>
+                    <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(26,26,26,0.5) 0%, transparent 50%)' }} />
+                    <div style={{ position: 'absolute', bottom: '40px', left: '40px', textAlign: 'left', color: 'white' }}>
+                      <span style={{ background: 'white', color: 'var(--text-main)', padding: '6px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: 800, letterSpacing: '2px', display: 'inline-block', marginBottom: '16px' }}>FANDROPS</span>
+                      <h2 style={{ fontSize: '32px', fontWeight: 800, letterSpacing: '-1px' }}>공식 드롭스 스토어</h2>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {mainBanners.map((banner, i) => (
+                      <div
+                        key={banner.id}
+                        onClick={() => { if (banner.landingUrl) window.open(banner.landingUrl, '_blank'); }}
+                        style={{
+                          position: 'absolute',
+                          inset: 0,
+                          background: banner.imageUrl
+                            ? `url(${banner.imageUrl}) center/cover no-repeat`
+                            : 'linear-gradient(135deg, #C8BEB6, #A89890)',
+                          opacity: mainBannerIdx === i ? 1 : 0,
+                          transition: 'opacity 0.55s ease',
+                          pointerEvents: mainBannerIdx === i ? 'auto' : 'none',
+                          cursor: banner.landingUrl ? 'pointer' : 'default',
+                        }}
+                      >
+                        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(26,26,26,0.5) 0%, transparent 50%)' }} />
+                        <div style={{ position: 'absolute', bottom: '40px', left: '40px', textAlign: 'left', color: 'white' }}>
+                          <span style={{ background: 'white', color: 'var(--text-main)', padding: '6px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: 800, letterSpacing: '2px', display: 'inline-block', marginBottom: '16px' }}>FANDROPS</span>
+                          <h2 style={{ fontSize: '32px', fontWeight: 800, letterSpacing: '-1px' }}>{banner.title}</h2>
+                        </div>
+                      </div>
+                    ))}
+                    {mainBanners.length > 1 && (
+                      <>
+                        <div style={{ position: 'absolute', bottom: '16px', left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: '6px', zIndex: 2 }}>
+                          {mainBanners.map((_, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              aria-label={`배너 ${i + 1}`}
+                              onClick={() => setMainBannerIdx(i)}
+                              style={{
+                                width: mainBannerIdx === i ? 22 : 7,
+                                height: 7,
+                                borderRadius: 4,
+                                border: 'none',
+                                background: mainBannerIdx === i ? 'white' : 'rgba(255,255,255,0.45)',
+                                cursor: 'pointer',
+                                padding: 0,
+                                transition: 'all 0.25s ease',
+                              }}
+                            />
+                          ))}
+                        </div>
+                        <button
+                          type="button"
+                          aria-label="이전 배너"
+                          onClick={() => setMainBannerIdx(idx => (idx - 1 + mainBanners.length) % mainBanners.length)}
+                          style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', zIndex: 2, width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#111', boxShadow: '0 4px 12px rgba(0,0,0,0.12)' }}
+                        >
+                          <ChevronLeft size={18} />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="다음 배너"
+                          onClick={() => setMainBannerIdx(idx => (idx + 1) % mainBanners.length)}
+                          style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', zIndex: 2, width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#111', boxShadow: '0 4px 12px rgba(0,0,0,0.12)' }}
+                        >
+                          <ChevronRight size={18} />
+                        </button>
+                      </>
+                    )}
+                  </>
+                )}
               </div>
             </section>
 

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import type { ReactElement } from 'react';
-import { getToken } from './api/auth';
+import { getToken, getAppRole, getRoleHomePath, ROLE_KEY } from './api/auth';
+import type { AppRole } from './api/auth';
 import FanApp from './apps/FanApp';
 import AgencyApp from './apps/AgencyApp';
 import AdminApp from './apps/AdminApp';
@@ -11,21 +12,22 @@ import OAuthCallbackPage from './apps/OAuthCallbackPage';
 import PartnershipApplication from './apps/PartnershipApplication';
 import DevSwitcher from './components/DevSwitcher';
 
-export type Role = 'FAN' | 'ARTIST' | 'ADMIN' | 'AGENCY';
-export const ROLE_KEY = 'fd_role';
+export type Role = AppRole;
+export { ROLE_KEY };
 
-function RequireAuth({ children }: { children: ReactElement }) {
+function RequireRole({ allowed, children }: { allowed: Role[]; children: ReactElement }) {
   if (!getToken()) return <Navigate to="/login" replace />;
+  const role = getAppRole();
+  if (!role || !allowed.includes(role)) {
+    return <Navigate to={role ? getRoleHomePath(role) : '/login'} replace />;
+  }
   return children;
 }
 
 function RootRedirect() {
   if (!getToken()) return <Navigate to="/login" replace />;
-  const role = localStorage.getItem(ROLE_KEY) as Role | null;
-  if (role === 'AGENCY') return <Navigate to="/agency" replace />;
-  if (role === 'ADMIN') return <Navigate to="/admin" replace />;
-  if (role === 'ARTIST') return <Navigate to="/artist" replace />;
-  return <Navigate to="/fan" replace />;
+  const role = getAppRole();
+  return <Navigate to={role ? getRoleHomePath(role) : '/login'} replace />;
 }
 
 function ApplyWrapper() {
@@ -49,10 +51,10 @@ export default function App() {
         <Route path="/reset-password" element={<PasswordResetPage />} />
         <Route path="/oauth/callback" element={<OAuthCallbackPage />} />
         <Route path="/apply" element={<ApplyWrapper />} />
-        <Route path="/fan" element={<RequireAuth><FanApp role="FAN" /></RequireAuth>} />
-        <Route path="/artist" element={<RequireAuth><FanApp role="ARTIST" /></RequireAuth>} />
-        <Route path="/agency" element={<RequireAuth><AgencyApp /></RequireAuth>} />
-        <Route path="/admin" element={<RequireAuth><AdminApp /></RequireAuth>} />
+        <Route path="/fan" element={<RequireRole allowed={['FAN']}><FanApp role="FAN" /></RequireRole>} />
+        <Route path="/artist" element={<RequireRole allowed={['ARTIST']}><FanApp role="ARTIST" /></RequireRole>} />
+        <Route path="/agency" element={<RequireRole allowed={['AGENCY']}><AgencyApp /></RequireRole>} />
+        <Route path="/admin" element={<RequireRole allowed={['ADMIN']}><AdminApp /></RequireRole>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

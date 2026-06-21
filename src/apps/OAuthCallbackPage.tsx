@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { socialLogin, setToken } from '../api/auth';
-import { ROLE_KEY } from '../App';
+import { socialLogin, setToken, syncAppRole, getRoleHomePath } from '../api/auth';
 
 const PROVIDER_KEY = 'oauth_provider';
 
@@ -28,8 +27,8 @@ export default function OAuthCallbackPage() {
     socialLogin(provider, code)
       .then(token => {
         setToken(token);
-        localStorage.setItem(ROLE_KEY, 'FAN');
-        navigate('/fan', { replace: true });
+        const role = syncAppRole(token.accessToken);
+        navigate(getRoleHomePath(role), { replace: true });
       })
       .catch(() => setError('소셜 로그인에 실패했습니다. 다시 시도해주세요.'));
   }, [searchParams, navigate]);

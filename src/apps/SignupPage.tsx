@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signup, setToken } from '../api/auth';
-import { ROLE_KEY } from '../App';
+import { signup, setToken, syncAppRole, getRoleHomePath } from '../api/auth';
 
 export default function SignupPage() {
   const navigate = useNavigate();
@@ -23,8 +22,8 @@ export default function SignupPage() {
     try {
       const token = await signup(email, password, nickname);
       setToken(token);
-      localStorage.setItem(ROLE_KEY, 'FAN');
-      navigate('/fan', { replace: true });
+      const role = syncAppRole(token.accessToken);
+      navigate(getRoleHomePath(role), { replace: true });
     } catch {
       setError('회원가입에 실패했습니다. 이미 사용 중인 이메일일 수 있습니다.');
     } finally {

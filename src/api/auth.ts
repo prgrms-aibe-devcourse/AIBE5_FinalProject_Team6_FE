@@ -3,6 +3,55 @@ import type { AuthToken } from '../types/auth'
 const BASE = '/api/v1/auth'
 const TOKEN_KEY = 'fd_access_token'
 const REFRESH_KEY = 'fd_refresh_token'
+export const ROLE_KEY = 'fd_role'
+
+export type AppRole = 'FAN' | 'ARTIST' | 'ADMIN' | 'AGENCY'
+
+const VALID_ROLES: AppRole[] = ['FAN', 'ARTIST', 'ADMIN', 'AGENCY']
+
+export function getRoleFromAccessToken(accessToken: string): AppRole | null {
+  try {
+    const b64 = accessToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    const payload = JSON.parse(atob(b64)) as { role?: string }
+    const role = payload.role
+    return VALID_ROLES.includes(role as AppRole) ? (role as AppRole) : null
+  } catch {
+    return null
+  }
+}
+
+/** JWT role claim을 localStorage에 동기화하고 반환한다. */
+export function syncAppRole(accessToken: string): AppRole {
+  const role = getRoleFromAccessToken(accessToken) ?? 'FAN'
+  localStorage.setItem(ROLE_KEY, role)
+  return role
+}
+
+export function getAppRole(): AppRole | null {
+  const token = getToken()
+  if (token) {
+    const role = getRoleFromAccessToken(token)
+    if (role) {
+      localStorage.setItem(ROLE_KEY, role)
+      return role
+    }
+  }
+  const stored = localStorage.getItem(ROLE_KEY) as AppRole | null
+  return stored && VALID_ROLES.includes(stored) ? stored : null
+}
+
+export function getRoleHomePath(role: AppRole): string {
+  switch (role) {
+    case 'ADMIN':
+      return '/admin'
+    case 'AGENCY':
+      return '/agency'
+    case 'ARTIST':
+      return '/artist'
+    default:
+      return '/fan'
+  }
+}
 
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY)
@@ -20,6 +69,7 @@ export function setToken(token: AuthToken): void {
 export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(REFRESH_KEY)
+  localStorage.removeItem(ROLE_KEY)
 }
 
 export function getAuthHeaders(): Record<string, string> {

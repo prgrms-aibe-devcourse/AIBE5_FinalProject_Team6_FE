@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { login, setToken } from '../api/auth';
-import { ROLE_KEY } from '../App';
-import type { Role } from '../App';
+import { login, setToken, syncAppRole, getRoleHomePath } from '../api/auth';
 
 const REDIRECT_URI = import.meta.env.VITE_OAUTH_REDIRECT_URI ?? 'http://localhost:5173/oauth/callback';
 const PROVIDER_KEY = 'oauth_provider';
@@ -33,11 +31,8 @@ export default function LoginPage() {
     try {
       const token = await login(email, password);
       setToken(token);
-      let role: Role = 'FAN';
-      if (email.includes('admin')) role = 'ADMIN';
-      else if (email.includes('artist')) role = 'ARTIST';
-      localStorage.setItem(ROLE_KEY, role);
-      navigate(role === 'ADMIN' ? '/admin' : role === 'ARTIST' ? '/artist' : '/fan', { replace: true });
+      const role = syncAppRole(token.accessToken);
+      navigate(getRoleHomePath(role), { replace: true });
     } catch {
       setError('이메일 또는 비밀번호가 올바르지 않습니다');
     }

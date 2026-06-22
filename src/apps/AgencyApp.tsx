@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LayoutDashboard, PenTool, Image, Calendar as CalendarIcon, Package, ShoppingCart, Users, UserCircle, LogOut, CheckCircle2, Activity, ArrowUpRight, ArrowDownRight, Clock, Plus, Upload, X } from 'lucide-react';
 import { logout } from '../api/auth';
@@ -14,19 +14,19 @@ import { getVotes, createVote } from '../api/votes';
 import type { GoodsVoteResult } from '../types/vote';
 import { getProducts, getProduct, createProduct, updateProduct, restockProduct } from '../api/products';
 import type { CreateProductRequest, ProductListItem, ProductResponse } from '../api/products';
-import { getAgencyArtists } from '../api/agencyArtists'
+import { getAgencyArtists, getArtistPublicProfile, updateArtistProfile, requestArtistProfileImagePresignedUrl, updateArtistProfileImage, getArtistMembers } from '../api/agencyArtists'
+import type { ArtistItem, ArtistPublicProfile, ArtistMember } from '../types/artist'
+import { createArtistMember, updateArtistMember, deleteArtistMember } from '../api/artistMembers'
 import { getAgencyOrders } from '../api/agencyOrders'
 import type { AgencyOrderItem } from '../api/agencyOrders'
 import { getAgencyInventoryHistory } from '../api/agencyInventory'
 import type { InventoryHistoryItem } from '../api/agencyInventory';
 
-interface ArtistProfile {
-  id: number
-  name: string
-  desc: string
-  profileImg: string
-  sns: { instagram: string; youtube: string; twitter: string }
-  members: { id: string; name: string; role: string; img: string }[]
+interface MemberEditForm {
+  id?: number
+  memberName: string
+  profileImageUrl: string
+  _file?: File
 }
 
 interface BannerForm {
@@ -152,9 +152,13 @@ export default function AgencyApp() {
 
   const [notices, setNotices] = useState<NoticeResult[]>([]);
 
-  const [artists, setArtists] = useState<ArtistProfile[]>([]);
-  const [editingArtist, setEditingArtist] = useState<any>(null);
-  const [editingMember, setEditingMember] = useState<any>(null);
+  const [artists, setArtists] = useState<ArtistItem[]>([]);
+  const [artistProfile, setArtistProfile] = useState<ArtistPublicProfile | null>(null);
+  const [artistMembers, setArtistMembers] = useState<ArtistMember[]>([]);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileEditForm, setProfileEditForm] = useState({ bio: '', instagramUrl: '', youtubeUrl: '', twitterUrl: '', officialUrl: '' });
+  const [editingMemberForm, setEditingMemberForm] = useState<MemberEditForm | null>(null);
+  const profileImageInputRef = useRef<HTMLInputElement>(null);
   const [newNotice, setNewNotice] = useState({ title: '', tag: 'NOTICE (일반공지)', content: '' });
 
   const [productList, setProductList] = useState<ProductListItem[]>([]);
@@ -252,30 +256,87 @@ export default function AgencyApp() {
     </select>
   );
 
-  const updateArtist = (updated: any) => {
-    setArtists(artists.map(a => a.id === updated.id ? updated : a));
-    setEditingArtist(null);
-    showToast('아티스트 정보가 성공적으로 반영되었습니다.');
+  const openProfileEdit = () => {
+    if (!artistProfile) return;
+    setProfileEditForm({
+      bio: artistProfile.bio ?? '',
+      instagramUrl: artistProfile.instagramUrl ?? '',
+      youtubeUrl: artistProfile.youtubeUrl ?? '',
+      twitterUrl: artistProfile.twitterUrl ?? '',
+      officialUrl: artistProfile.officialUrl ?? '',
+    });
+    setShowProfileModal(true);
   };
 
-  const updateMember = (artistId: number | null, updatedMember: any) => {
-    setArtists(artists.map(a => {
-      if (a.id === artistId) {
-        let newMembers = [...a.members];
-        if (updatedMember.id && newMembers.find(m => m.id === updatedMember.id)) {
-           newMembers = newMembers.map(m => m.id === updatedMember.id ? updatedMember : m);
-        } else {
-           newMembers.push({ ...updatedMember, id: 'm' + Date.now() });
-        }
-        return {
-          ...a,
-          members: newMembers
-        };
+  const handleProfileSave = async () => {
+    if (!agencyArtistId) return;
+    try {
+      await updateArtistProfile(agencyArtistId, profileEditForm);
+      setArtistProfile(prev => prev ? { ...prev, ...profileEditForm } : null);
+      setShowProfileModal(false);
+      showToast('프로필이 수정되었습니다.');
+    } catch {
+      showToast('프로필 수정에 실패했습니다.', 'error');
+    }
+  };
+
+  const handleProfileImageChange = async (file: File) => {
+    if (!agencyArtistId) return;
+    try {
+      const { presignedUrl, imageUrl } = await requestArtistProfileImagePresignedUrl(
+        agencyArtistId, file.type, file.size,
+      );
+      await uploadToS3Agency(presignedUrl, file);
+      await updateArtistProfileImage(agencyArtistId, imageUrl);
+      setArtistProfile(prev => prev ? { ...prev, profileImageUrl: imageUrl } : null);
+      showToast('프로필 이미지가 변경되었습니다.');
+    } catch {
+      showToast('이미지 변경에 실패했습니다.', 'error');
+    }
+  };
+
+  const handleMemberSave = async () => {
+    if (!agencyArtistId || !editingMemberForm) return;
+    try {
+      let profileImageUrl = editingMemberForm.profileImageUrl;
+      if (editingMemberForm._file) {
+        const { presignedUrl, imageUrl } = await requestAgencyPresignedUrl(
+          editingMemberForm._file.type, editingMemberForm._file.size,
+        );
+        await uploadToS3Agency(presignedUrl, editingMemberForm._file);
+        profileImageUrl = imageUrl;
       }
-      return a;
-    }));
-    setEditingMember(null);
-    showToast('멤버 정보가 성공적으로 반영되었습니다.');
+      if (editingMemberForm.id) {
+        await updateArtistMember(editingMemberForm.id, {
+          memberName: editingMemberForm.memberName,
+          profileImageUrl: profileImageUrl || undefined,
+        });
+      } else {
+        await createArtistMember({
+          artistId: agencyArtistId,
+          memberName: editingMemberForm.memberName,
+          profileImageUrl: profileImageUrl || undefined,
+        });
+      }
+      const updated = await getArtistMembers(agencyArtistId);
+      setArtistMembers(updated);
+      setEditingMemberForm(null);
+      showToast('멤버 정보가 반영되었습니다.');
+    } catch {
+      showToast('멤버 저장에 실패했습니다.', 'error');
+    }
+  };
+
+  const handleMemberDelete = async (memberId: number) => {
+    if (!agencyArtistId) return;
+    if (!window.confirm('멤버를 삭제하시겠습니까?')) return;
+    try {
+      await deleteArtistMember(memberId);
+      setArtistMembers(prev => prev.filter(m => m.id !== memberId));
+      showToast('멤버가 삭제되었습니다.');
+    } catch {
+      showToast('멤버 삭제에 실패했습니다.', 'error');
+    }
   };
 
   const addNotice = async () => {
@@ -306,18 +367,21 @@ export default function AgencyApp() {
 
   useEffect(() => {
     getAgencyArtists().then(res => {
-      const profiles: ArtistProfile[] = res.items.map(a => ({
-        id: a.id,
-        name: a.name,
-        desc: '',
-        profileImg: a.profileImageUrl ?? '',
-        sns: { instagram: '', youtube: '', twitter: '' },
-        members: [],
-      }));
-      setArtists(profiles);
-      if (profiles.length > 0) setAgencyArtistId(profiles[0].id);
+      setArtists(res.items);
+      if (res.items.length > 0) setAgencyArtistId(res.items[0].id);
     }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (activeMenu !== 'profile' || !agencyArtistId) return;
+    Promise.all([
+      getArtistPublicProfile(agencyArtistId),
+      getArtistMembers(agencyArtistId),
+    ]).then(([profile, members]) => {
+      setArtistProfile(profile);
+      setArtistMembers(members);
+    }).catch(() => {});
+  }, [activeMenu, agencyArtistId]);
 
   useEffect(() => {
     if (activeMenu !== 'banners') return;
@@ -471,21 +535,34 @@ export default function AgencyApp() {
                   <button className="px-6 py-2 rounded-full font-black text-sm whitespace-nowrap bg-[#EDE8E2] text-[#111] hover:bg-[#D7D0CA] transition-colors">+ 아티스트 추가</button>
                 </div>
 
-ㄱ                {artists.filter(a => a.id === agencyArtistId).map(artist => (
-                  <div key={artist.id} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {artistProfile ? (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     <div className="lg:col-span-1 space-y-6">
                       <div className="bg-white p-6 rounded-2xl border border-[#EDE8E2] text-center shadow-sm">
                         <div className="w-32 h-32 bg-[#F7F3EE] rounded-full mx-auto mb-6 flex items-center justify-center border-4 border-white shadow-xl relative group overflow-hidden">
-                           <img src={artist.profileImg} alt="" className="w-full h-full object-cover" />
-                           <div className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer" onClick={() => setEditingArtist(artist)}>
-                              <span className="text-white font-bold text-xs">변경</span>
-                           </div>
+                          {artistProfile.profileImageUrl
+                            ? <img src={artistProfile.profileImageUrl} alt="" className="w-full h-full object-cover" />
+                            : <UserCircle className="w-16 h-16 text-[#ccc]" />
+                          }
+                          <div
+                            className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
+                            onClick={() => profileImageInputRef.current?.click()}
+                          >
+                            <span className="text-white font-bold text-xs">변경</span>
+                          </div>
                         </div>
-                        <h4 className="text-xl font-black mb-1">{artist.name}</h4>
-                        <p className="text-sm text-[#888] font-medium mb-6 line-clamp-2 px-4">{artist.desc}</p>
-                        <button 
+                        <input
+                          ref={profileImageInputRef}
+                          type="file"
+                          className="hidden"
+                          accept="image/*"
+                          onChange={e => { const f = e.target.files?.[0]; if (f) handleProfileImageChange(f); e.target.value = ''; }}
+                        />
+                        <h4 className="text-xl font-black mb-1">{artistProfile.name}</h4>
+                        <p className="text-sm text-[#888] font-medium mb-6 line-clamp-2 px-4">{artistProfile.bio}</p>
+                        <button
                           className="w-full bg-[#C2507A] text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-pink-100 hover:opacity-90 active:scale-[0.98] transition-all"
-                          onClick={() => setEditingArtist(artist)}
+                          onClick={openProfileEdit}
                         >
                           그룹 프로필 수정
                         </button>
@@ -494,21 +571,27 @@ export default function AgencyApp() {
                       <div className="bg-[#111] p-6 rounded-3xl text-white shadow-xl relative overflow-hidden">
                         <div className="absolute top-0 right-0 w-24 h-24 bg-[#C2507A] opacity-20 blur-[40px]" />
                         <h4 className="font-black mb-6 flex items-center gap-2 relative z-10">
-                           <Users size={18} className="text-[#C2507A]" /> SNS & Links
+                          <Users size={18} className="text-[#C2507A]" /> SNS & Links
                         </h4>
                         <div className="space-y-4 opacity-90 text-xs font-bold relative z-10">
-                           <div className="flex justify-between items-center bg-white/5 p-3 rounded-xl">
-                             <span className="text-white/60">Instagram</span>
-                             <span className="font-mono text-[#C2507A]">{artist.sns.instagram}</span>
-                           </div>
-                           <div className="flex justify-between items-center bg-white/5 p-3 rounded-xl">
-                             <span className="text-white/60">YouTube</span>
-                             <span className="font-mono text-[#C2507A]">{artist.sns.youtube}</span>
-                           </div>
-                           <div className="flex justify-between items-center bg-white/5 p-3 rounded-xl">
-                             <span className="text-white/60">Twitter/X</span>
-                             <span className="font-mono text-[#C2507A]">{artist.sns.twitter}</span>
-                           </div>
+                          <div className="flex justify-between items-center bg-white/5 p-3 rounded-xl">
+                            <span className="text-white/60">Instagram</span>
+                            <span className="font-mono text-[#C2507A] truncate ml-2">{artistProfile.instagramUrl || '-'}</span>
+                          </div>
+                          <div className="flex justify-between items-center bg-white/5 p-3 rounded-xl">
+                            <span className="text-white/60">YouTube</span>
+                            <span className="font-mono text-[#C2507A] truncate ml-2">{artistProfile.youtubeUrl || '-'}</span>
+                          </div>
+                          <div className="flex justify-between items-center bg-white/5 p-3 rounded-xl">
+                            <span className="text-white/60">Twitter/X</span>
+                            <span className="font-mono text-[#C2507A] truncate ml-2">{artistProfile.twitterUrl || '-'}</span>
+                          </div>
+                          {artistProfile.officialUrl && (
+                            <div className="flex justify-between items-center bg-white/5 p-3 rounded-xl">
+                              <span className="text-white/60">Official</span>
+                              <span className="font-mono text-[#C2507A] truncate ml-2">{artistProfile.officialUrl}</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -516,153 +599,109 @@ export default function AgencyApp() {
                     <div className="lg:col-span-2 space-y-6">
                       <div className="bg-white p-8 rounded-[32px] border border-[#EDE8E2] shadow-sm">
                         <div className="flex justify-between items-center mb-8 pb-4 border-b border-[#F7F3EE]">
-                          <h4 className="text-xl font-black">멤버 리스트 <span className="text-[#C2507A] ml-1">{artist.members.length}</span></h4>
-                          <button onClick={() => setEditingMember({ name: '', role: '', img: '' })} className="text-[#C2507A] font-black text-xs uppercase tracking-widest hover:underline">+ ADD NEW MEMBER</button>
+                          <h4 className="text-xl font-black">멤버 리스트 <span className="text-[#C2507A] ml-1">{artistMembers.length}</span></h4>
+                          <button onClick={() => setEditingMemberForm({ memberName: '', profileImageUrl: '' })} className="text-[#C2507A] font-black text-xs uppercase tracking-widest hover:underline">+ ADD NEW MEMBER</button>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {artist.members.map(member => (
-                            <div 
-                              key={member.id} 
-                              onClick={() => setEditingMember(member)}
-                              className="flex items-center gap-4 p-5 bg-[#F7F3EE] rounded-2xl group hover:bg-white border border-transparent hover:border-[#C2507A] transition-all cursor-pointer"
-                            >
-                              <img src={member.img} alt="" className="w-16 h-16 rounded-[20px] object-cover border-2 border-white shadow-md group-hover:scale-105 transition-transform" />
-                              <div className="flex-1">
-                                <div className="font-black text-[#111]">{member.name}</div>
-                                <div className="text-[10px] font-black text-[#C2507A] uppercase tracking-wider mt-0.5">{member.role}</div>
+                          {artistMembers.map(member => (
+                            <div key={member.id} className="flex items-center gap-4 p-5 bg-[#F7F3EE] rounded-2xl group hover:bg-white border border-transparent hover:border-[#C2507A] transition-all">
+                              {member.profileImageUrl
+                                ? <img src={member.profileImageUrl} alt="" className="w-16 h-16 rounded-[20px] object-cover border-2 border-white shadow-md shrink-0" />
+                                : <div className="w-16 h-16 rounded-[20px] bg-[#EDE8E2] flex items-center justify-center shrink-0"><UserCircle className="w-8 h-8 text-[#ccc]" /></div>
+                              }
+                              <div className="flex-1 min-w-0">
+                                <div className="font-black text-[#111] truncate">{member.memberName}</div>
                               </div>
-                              <div className="text-[#EDE8E2] group-hover:text-[#C2507A] transition-colors">
-                                <PenTool size={16} />
+                              <div className="flex gap-1 shrink-0">
+                                <button onClick={() => setEditingMemberForm({ id: member.id, memberName: member.memberName, profileImageUrl: member.profileImageUrl ?? '' })} className="p-2 hover:bg-[#F7F3EE] rounded-lg text-[#888] hover:text-[#C2507A] transition-colors"><PenTool size={14} /></button>
+                                <button onClick={() => handleMemberDelete(member.id)} className="p-2 hover:bg-[#F7F3EE] rounded-lg text-[#888] hover:text-red-500 transition-colors"><X size={14} /></button>
                               </div>
                             </div>
                           ))}
                         </div>
                       </div>
 
-                      {/* Info Tip */}
                       <div className="bg-[#FAF8F5] p-6 rounded-2xl border border-dashed border-[#EDE8E2]">
                         <p className="text-xs font-bold text-[#A0958C] leading-relaxed">
-                          💡 <span className="text-[#111]">Tip:</span> 멤버 카드를 클릭하여 개별 이미지를 변경하거나 역할을 수정할 수 있습니다. 
-                          변경 사항은 모든 아티스트 공간에 즉시 반영됩니다.
+                          💡 <span className="text-[#111]">Tip:</span> 멤버 카드의 수정·삭제 버튼으로 정보를 관리하세요. 변경 사항은 팬 앱에 즉시 반영됩니다.
                         </p>
                       </div>
                     </div>
                   </div>
-                ))}
+                ) : (
+                  <div className="flex items-center justify-center py-24 text-[#888] font-bold text-sm">프로필을 불러오는 중...</div>
+                )}
 
-                {/* Artist Edit Modal */}
-                {editingArtist && (
+                {/* Profile Edit Modal */}
+                {showProfileModal && (
                   <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-[100] p-6">
                     <div className="bg-white rounded-[32px] w-full max-w-xl p-10 shadow-2xl relative overflow-hidden">
                       <div className="absolute top-0 left-0 w-full h-1.5 bg-[#C2507A]" />
                       <h3 className="text-2xl font-black mb-8 text-[#111]">아티스트 프로필 수정</h3>
-                      
                       <div className="space-y-6 max-h-[60vh] overflow-y-auto px-1">
                         <div>
-                          <label className="block text-[11px] font-black text-[#888] uppercase tracking-widest mb-2">프로필 이미지 URL</label>
-                          <input 
-                            type="text" 
-                            className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-5 py-3 rounded-2xl focus:outline-none focus:border-[#C2507A] font-bold"
-                            value={editingArtist.profileImg}
-                            onChange={(e) => setEditingArtist({...editingArtist, profileImg: e.target.value})}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[11px] font-black text-[#888] uppercase tracking-widest mb-2">아티스트 이름</label>
-                          <input 
-                            type="text" 
-                            className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-5 py-3 rounded-2xl focus:outline-none focus:border-[#C2507A] font-bold"
-                            value={editingArtist.name}
-                            onChange={(e) => setEditingArtist({...editingArtist, name: e.target.value})}
-                          />
-                        </div>
-                        <div>
                           <label className="block text-[11px] font-black text-[#888] uppercase tracking-widest mb-2">소개글 (Bio)</label>
-                          <textarea 
-                            className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-5 py-3 rounded-2xl focus:outline-none focus:border-[#C2507A] font-medium h-24 resize-none"
-                            value={editingArtist.desc}
-                            onChange={(e) => setEditingArtist({...editingArtist, desc: e.target.value})}
-                          />
+                          <textarea className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-5 py-3 rounded-2xl focus:outline-none focus:border-[#C2507A] font-medium h-24 resize-none" value={profileEditForm.bio} onChange={e => setProfileEditForm({ ...profileEditForm, bio: e.target.value })} />
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
-                            <label className="block text-[11px] font-black text-[#888] uppercase tracking-widest mb-2">Instagram Handle</label>
-                            <input 
-                              type="text" 
-                              className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-5 py-3 rounded-16 focus:outline-none focus:border-[#C2507A] font-mono text-sm"
-                              value={editingArtist.sns.instagram}
-                              onChange={(e) => setEditingArtist({...editingArtist, sns: {...editingArtist.sns, instagram: e.target.value}})}
-                            />
+                            <label className="block text-[11px] font-black text-[#888] uppercase tracking-widest mb-2">Instagram URL</label>
+                            <input type="text" className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-5 py-3 rounded-2xl focus:outline-none focus:border-[#C2507A] font-mono text-sm" value={profileEditForm.instagramUrl} onChange={e => setProfileEditForm({ ...profileEditForm, instagramUrl: e.target.value })} />
                           </div>
                           <div>
-                            <label className="block text-[11px] font-black text-[#888] uppercase tracking-widest mb-2">YouTube Channel</label>
-                            <input 
-                              type="text" 
-                              className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-5 py-3 rounded-16 focus:outline-none focus:border-[#C2507A] font-mono text-sm"
-                              value={editingArtist.sns.youtube}
-                              onChange={(e) => setEditingArtist({...editingArtist, sns: {...editingArtist.sns, youtube: e.target.value}})}
-                            />
+                            <label className="block text-[11px] font-black text-[#888] uppercase tracking-widest mb-2">YouTube URL</label>
+                            <input type="text" className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-5 py-3 rounded-2xl focus:outline-none focus:border-[#C2507A] font-mono text-sm" value={profileEditForm.youtubeUrl} onChange={e => setProfileEditForm({ ...profileEditForm, youtubeUrl: e.target.value })} />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-black text-[#888] uppercase tracking-widest mb-2">Twitter/X URL</label>
+                            <input type="text" className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-5 py-3 rounded-2xl focus:outline-none focus:border-[#C2507A] font-mono text-sm" value={profileEditForm.twitterUrl} onChange={e => setProfileEditForm({ ...profileEditForm, twitterUrl: e.target.value })} />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-black text-[#888] uppercase tracking-widest mb-2">Official Site URL</label>
+                            <input type="text" className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-5 py-3 rounded-2xl focus:outline-none focus:border-[#C2507A] font-mono text-sm" value={profileEditForm.officialUrl} onChange={e => setProfileEditForm({ ...profileEditForm, officialUrl: e.target.value })} />
                           </div>
                         </div>
                       </div>
-
                       <div className="flex gap-3 mt-10">
-                        <button className="flex-1 bg-[#F7F3EE] text-[#111] py-4 rounded-2xl font-black text-sm" onClick={() => setEditingArtist(null)}>취소</button>
-                        <button className="flex-1 bg-[#C2507A] text-white py-4 rounded-2xl font-black text-sm shadow-lg shadow-pink-100" onClick={() => updateArtist(editingArtist)}>저장하기</button>
+                        <button className="flex-1 bg-[#F7F3EE] text-[#111] py-4 rounded-2xl font-black text-sm" onClick={() => setShowProfileModal(false)}>취소</button>
+                        <button className="flex-1 bg-[#C2507A] text-white py-4 rounded-2xl font-black text-sm shadow-lg shadow-pink-100" onClick={handleProfileSave}>저장하기</button>
                       </div>
                     </div>
                   </div>
                 )}
 
                 {/* Member Edit Modal */}
-                {editingMember && (
+                {editingMemberForm && (
                   <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-[110] p-6">
                     <div className="bg-white rounded-[32px] w-full max-w-md p-10 shadow-2xl relative">
-                      <h3 className="text-2xl font-black mb-8 text-[#111]">멤버 정보 수정</h3>
-                      
-                      <div className="flex justify-center mb-8">
-                        <div className="w-24 h-24 rounded-3xl overflow-hidden shadow-xl border-4 border-[#F7F3EE] relative group">
-                           <img src={editingMember.img} alt="" className="w-full h-full object-cover" />
-                           <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity cursor-pointer">
+                      <h3 className="text-2xl font-black mb-6 text-[#111]">{editingMemberForm.id ? '멤버 정보 수정' : '멤버 추가'}</h3>
+                      <div className="flex justify-center mb-6">
+                        <label className="cursor-pointer">
+                          <div className="w-24 h-24 rounded-3xl overflow-hidden shadow-xl border-4 border-[#F7F3EE] relative group bg-[#EDE8E2] flex items-center justify-center">
+                            {editingMemberForm.profileImageUrl
+                              ? <img src={editingMemberForm.profileImageUrl} alt="" className="w-full h-full object-cover" />
+                              : <Upload size={24} className="text-[#aaa]" />
+                            }
+                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                               <span className="text-white font-bold text-[10px]">사진 변경</span>
-                           </div>
-                        </div>
+                            </div>
+                          </div>
+                          <input type="file" className="hidden" accept="image/*" onChange={e => {
+                            const f = e.target.files?.[0];
+                            if (!f) return;
+                            setEditingMemberForm(prev => prev ? { ...prev, _file: f, profileImageUrl: URL.createObjectURL(f) } : null);
+                            e.target.value = '';
+                          }} />
+                        </label>
                       </div>
-
-                      <div className="space-y-6">
-                        <div>
-                          <label className="block text-[11px] font-black text-[#888] uppercase tracking-widest mb-2">이미지 URL</label>
-                          <input 
-                            type="text" 
-                            className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-5 py-3 rounded-16 focus:outline-none focus:border-[#C2507A] font-black"
-                            value={editingMember.img}
-                            onChange={(e) => setEditingMember({...editingMember, img: e.target.value})}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[11px] font-black text-[#888] uppercase tracking-widest mb-2">멤버 이름</label>
-                          <input 
-                            type="text" 
-                            className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-5 py-3 rounded-16 focus:outline-none focus:border-[#C2507A] font-black"
-                            value={editingMember.name}
-                            onChange={(e) => setEditingMember({...editingMember, name: e.target.value})}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[11px] font-black text-[#888] uppercase tracking-widest mb-2">포지션/역할</label>
-                          <input 
-                            type="text" 
-                            className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-5 py-3 rounded-16 focus:outline-none focus:border-[#C2507A] font-bold"
-                            value={editingMember.role}
-                            onChange={(e) => setEditingMember({...editingMember, role: e.target.value})}
-                          />
-                        </div>
+                      <div>
+                        <label className="block text-[11px] font-black text-[#888] uppercase tracking-widest mb-2">멤버 이름</label>
+                        <input type="text" className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-5 py-3 rounded-2xl focus:outline-none focus:border-[#C2507A] font-black" value={editingMemberForm.memberName} onChange={e => setEditingMemberForm(prev => prev ? { ...prev, memberName: e.target.value } : null)} />
                       </div>
-
-                      <div className="flex gap-3 mt-10">
-                        <button className="flex-1 bg-[#F7F3EE] text-[#111] py-4 rounded-2xl font-black text-sm" onClick={() => setEditingMember(null)}>취소</button>
-                        <button className="flex-1 bg-[#C2507A] text-white py-4 rounded-2xl font-black text-sm shadow-lg shadow-pink-100" onClick={() => updateMember(agencyArtistId, editingMember)}>반영하기</button>
+                      <div className="flex gap-3 mt-8">
+                        <button className="flex-1 bg-[#F7F3EE] text-[#111] py-4 rounded-2xl font-black text-sm" onClick={() => setEditingMemberForm(null)}>취소</button>
+                        <button className="flex-1 bg-[#C2507A] text-white py-4 rounded-2xl font-black text-sm shadow-lg shadow-pink-100" onClick={handleMemberSave}>반영하기</button>
                       </div>
                     </div>
                   </div>

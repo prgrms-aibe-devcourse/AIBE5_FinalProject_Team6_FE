@@ -1,6 +1,15 @@
 import { fetchWithAuth } from '../lib/fetchWithAuth'
 import { getAuthHeaders } from './auth'
-import type { ArtistMember } from '../types/artist'
+import type { ArtistMember, MyArtistMemberResult } from '../types/artist'
+
+export async function getMyArtistMember(): Promise<MyArtistMemberResult> {
+  const res = await fetchWithAuth('/api/v1/artist-members/me', {
+    headers: getAuthHeaders(),
+  })
+  if (!res.ok) throw new Error(`getMyArtistMember failed: ${res.status}`)
+  const body = await res.json()
+  return body.data as MyArtistMemberResult
+}
 
 export interface CreateArtistMemberRequest {
   artistId: number

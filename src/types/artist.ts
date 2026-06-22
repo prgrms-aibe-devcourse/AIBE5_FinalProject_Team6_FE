@@ -27,3 +27,12 @@ export interface ArtistMember {
   memberName: string
   profileImageUrl?: string
 }
+
+export interface MyArtistMemberResult {
+  id: number
+  artistId: number
+  memberName: string
+  loginId: string
+  profileImageUrl?: string
+  groupName: string
+}

@@ -5,15 +5,15 @@ import { logout } from '../api/auth';
 import { ROLE_KEY } from '../App';
 import { getCalendar, createEvent, registerLive, startLive } from '../api/schedule';
 import type { ScheduleResult } from '../types/schedule';
-import { getNotices, createNotice } from '../api/notices';
+import { getNotices, getNotice, createNotice } from '../api/notices';
 import type { NoticeResult } from '../types/notice';
 import { getAgencyBanners, createAgencyBanner, updateAgencyBanner, deleteAgencyBanner, requestAgencyPresignedUrl, uploadToS3Agency } from '../api/agencyBanners';
 import type { AgencyBannerFormData } from '../api/agencyBanners';
 import type { BannerResponse } from '../types/banner';
 import { getVotes, createVote } from '../api/votes';
 import type { GoodsVoteResult } from '../types/vote';
-import { getProducts, createProduct } from '../api/products';
-import type { CreateProductRequest, ProductListItem } from '../api/products';
+import { getProducts, getProduct, createProduct, updateProduct, restockProduct } from '../api/products';
+import type { CreateProductRequest, ProductListItem, ProductResponse } from '../api/products';
 import { getAgencyArtists } from '../api/agencyArtists'
 import { getAgencyOrders } from '../api/agencyOrders'
 import type { AgencyOrderItem } from '../api/agencyOrders'
@@ -53,6 +53,15 @@ function fmtSchedule(iso: string) {
 
 const TYPE_LABELS: Record<string, string> = { DROP: '발매', LIVE: 'LIVE', EVENT: '이벤트', NOTICE: '공지' }
 const TYPE_COLORS: Record<string, string> = { DROP: '#C2507A', LIVE: '#FF4444', EVENT: '#7F77DD', NOTICE: '#888' }
+const INV_CHANGE_LABELS: Record<string, string> = {
+  RESERVE: '선점', RELEASE: '해제', DECREASE: '차감', INCREASE: '입고', COMPENSATE: '보상',
+}
+
+function fmtNoticeDate(iso: string) {
+  return new Date(iso).toLocaleString('ko-KR', {
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+  })
+}
 
 export default function AgencyApp() {
   const navigate = useNavigate();
@@ -150,6 +159,7 @@ export default function AgencyApp() {
 
   const [productList, setProductList] = useState<ProductListItem[]>([]);
   const [productForm, setProductForm] = useState({ name: '', price: '', totalQty: '', isDrops: false, dropsStartAt: '', dropsEndAt: '' });
+  const [productImagePreviews, setProductImagePreviews] = useState<string[]>([]);
 
   // 스케줄 관리 상태
   const [agencyArtistId, setAgencyArtistId] = useState<number | null>(null);
@@ -160,6 +170,87 @@ export default function AgencyApp() {
   const [liveForm, setLiveForm] = useState({ title: '', date: '', time: '', liveUrl: '' });
   const [showLiveModal, setShowLiveModal] = useState(false);
   const [startingLiveId, setStartingLiveId] = useState<number | null>(null);
+
+  const [selectedNoticeDetail, setSelectedNoticeDetail] = useState<NoticeResult | null>(null);
+  const [selectedVote, setSelectedVote] = useState<GoodsVoteResult | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<ProductResponse | null>(null);
+  const [productEditForm, setProductEditForm] = useState({ name: '', price: '', dropsStartAt: '', dropsEndAt: '' });
+  const [restockQty, setRestockQty] = useState('');
+  const [showRestockModal, setShowRestockModal] = useState(false);
+  const [ordersCursor, setOrdersCursor] = useState<string | null>(null);
+  const [ordersHasMore, setOrdersHasMore] = useState(false);
+  const [orderStatusFilter, setOrderStatusFilter] = useState('');
+  const [orderSearch, setOrderSearch] = useState('');
+  const [inventoryCursor, setInventoryCursor] = useState<string | null>(null);
+  const [inventoryHasMore, setInventoryHasMore] = useState(false);
+  const [inventoryProductFilter, setInventoryProductFilter] = useState<number | ''>('');
+
+  const refreshProductList = async (artistId = agencyArtistId) => {
+    if (!artistId) return;
+    const [regular, drops] = await Promise.all([
+      getProducts('regular', undefined, 50, artistId),
+      getProducts('drops', undefined, 50, artistId),
+    ]);
+    setProductList([...regular.items, ...drops.items]);
+  };
+
+  const openNoticeDetail = async (noticeId: number) => {
+    if (!agencyArtistId) return;
+    try {
+      const detail = await getNotice(agencyArtistId, noticeId);
+      setSelectedNoticeDetail(detail);
+    } catch {
+      showToast('공지를 불러오지 못했습니다.', 'error');
+    }
+  };
+
+  const openProductDetail = async (item: ProductListItem) => {
+    try {
+      const detail = await getProduct(item.id);
+      setSelectedProduct(detail);
+      setProductEditForm({
+        name: detail.name,
+        price: String(detail.price),
+        dropsStartAt: detail.dropsStartAt ? detail.dropsStartAt.slice(0, 16) : '',
+        dropsEndAt: detail.dropsEndAt ? detail.dropsEndAt.slice(0, 16) : '',
+      });
+    } catch {
+      showToast('상품 정보를 불러오지 못했습니다.', 'error');
+    }
+  };
+
+  const loadOrders = async (cursor?: string, append = false) => {
+    try {
+      const res = await getAgencyOrders(agencyArtistId ?? undefined, cursor);
+      setAgencyOrders(prev => append ? [...prev, ...res.items] : res.items);
+      setOrdersCursor(res.nextCursor);
+      setOrdersHasMore(res.nextCursor != null);
+    } catch {
+      showToast('주문 목록을 불러오지 못했습니다.', 'error');
+    }
+  };
+
+  const loadInventory = async (cursor?: string, append = false) => {
+    try {
+      const productId = inventoryProductFilter === '' ? undefined : Number(inventoryProductFilter);
+      const res = await getAgencyInventoryHistory(agencyArtistId ?? undefined, productId, cursor);
+      setInventoryHistory(prev => append ? [...prev, ...res.items] : res.items);
+      setInventoryCursor(res.nextCursor);
+      setInventoryHasMore(res.nextCursor != null);
+    } catch {
+      showToast('재고 이력을 불러오지 못했습니다.', 'error');
+    }
+  };
+
+  const artistSelect = (
+    <select
+      value={agencyArtistId ?? ''}
+      onChange={e => setAgencyArtistId(Number(e.target.value))}
+      className="bg-[#F7F3EE] border border-[#ede8e2] px-3 py-2 rounded-xl text-sm font-bold focus:outline-none focus:border-[#C2507A]"
+    >
+      {artists.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+    </select>
+  );
 
   const updateArtist = (updated: any) => {
     setArtists(artists.map(a => a.id === updated.id ? updated : a));
@@ -264,17 +355,14 @@ export default function AgencyApp() {
 
   useEffect(() => {
     if (activeMenu !== 'orders') return;
-    getAgencyOrders(agencyArtistId ?? undefined)
-      .then(res => setAgencyOrders(res.items))
-      .catch(() => {});
-  }, [activeMenu, agencyArtistId]);
+    loadOrders();
+  }, [activeMenu, agencyArtistId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (activeMenu !== 'inventory') return;
-    getAgencyInventoryHistory(agencyArtistId ?? undefined)
-      .then(res => setInventoryHistory(res.items))
-      .catch(() => {});
-  }, [activeMenu, agencyArtistId]);
+    if (agencyArtistId) refreshProductList().catch(() => {});
+    loadInventory();
+  }, [activeMenu, agencyArtistId, inventoryProductFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="min-h-screen bg-[#F7F3EE] text-[#111] flex flex-col font-sans">
@@ -631,12 +719,15 @@ export default function AgencyApp() {
             {activeMenu === 'votes' && (
               <div className="space-y-6">
                  <div className="bg-white p-8 rounded-[32px] border border-[#EDE8E2] shadow-sm">
-                    <div className="flex justify-between items-center mb-8">
+                    <div className="flex justify-between items-center mb-8 flex-wrap gap-4">
                        <div>
                           <h3 className="text-xl font-black mb-1">Goods Voting Management</h3>
                           <p className="text-xs text-[#888] font-bold">팬들이 직접 결정하는 차기 굿즈 출시 투표 제어</p>
                        </div>
-                       <button onClick={() => setShowVoteModal(true)} className="bg-[#C2507A] text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-pink-100">새 투표 생성</button>
+                       <div className="flex items-center gap-3">
+                         {artistSelect}
+                         <button onClick={() => setShowVoteModal(true)} className="bg-[#C2507A] text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-pink-100">새 투표 생성</button>
+                       </div>
                     </div>
 
                     {showVoteModal && (
@@ -749,10 +840,17 @@ export default function AgencyApp() {
                       {votesList.map((vote) => {
                         const totalVotes = vote.options.reduce((sum, o) => sum + o.voteCount, 0);
                         const endLabel = vote.endsAt ? vote.endsAt.slice(0, 10) : '-';
+                        const isClosed = !vote.active;
                         return (
-                          <div key={vote.id} className="bg-[#F7F3EE] p-6 rounded-3xl border border-transparent hover:border-[#C2507A] transition-all group">
+                          <div
+                            key={vote.id}
+                            onClick={() => setSelectedVote(vote)}
+                            className={`p-6 rounded-3xl border border-transparent hover:border-[#C2507A] transition-all group cursor-pointer ${
+                              isClosed ? 'bg-gray-100 opacity-60 grayscale' : 'bg-[#F7F3EE]'
+                            }`}
+                          >
                             <div className="flex justify-between items-start mb-4">
-                               <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${vote.active ? 'bg-[#C2507A] text-white' : 'bg-gray-300 text-gray-600'}`}>
+                               <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${vote.active ? 'bg-[#C2507A] text-white' : 'bg-gray-400 text-white'}`}>
                                   {vote.active ? 'ONGOING' : 'CLOSED'}
                                </span>
                             </div>
@@ -767,8 +865,13 @@ export default function AgencyApp() {
                                   <div className="font-black text-[#111]">{endLabel}</div>
                                </div>
                             </div>
-                            <div className="flex gap-2 mt-4">
-                                <button onClick={() => alert('결과 통계 보고서가 생성되었습니다.')} className="flex-1 bg-white py-3 rounded-2xl font-black text-[11px] hover:bg-[#F7F3EE] transition-all shadow-sm">결과 통계 보기</button>
+                            <div className="flex gap-2 mt-4" onClick={e => e.stopPropagation()}>
+                                <button
+                                  onClick={() => setSelectedVote(vote)}
+                                  className="flex-1 bg-white py-3 rounded-2xl font-black text-[11px] hover:bg-[#F7F3EE] transition-all shadow-sm"
+                                >
+                                  투표 결과 보기
+                                </button>
                              </div>
                           </div>
                         );
@@ -780,15 +883,23 @@ export default function AgencyApp() {
 
             {activeMenu === 'inventory' && (
               <div className="bg-white rounded-[32px] border border-[#EDE8E2] overflow-hidden shadow-sm">
-                 <div className="p-8 border-b border-[#EDE8E2] bg-[#FAF8F5] flex justify-between items-center">
+                 <div className="p-8 border-b border-[#EDE8E2] bg-[#FAF8F5] flex justify-between items-center flex-wrap gap-4">
                     <div>
                        <h3 className="text-xl font-black italic mb-1 uppercase tracking-tighter">Inventory Detailed History</h3>
-                       <p className="text-xs text-[#888] font-bold">재고 예약, 출고, 보정 등 정교한 흐름 기록</p>
+                       <p className="text-xs text-[#888] font-bold">재고 변경 이력 조회 (읽기 전용)</p>
                     </div>
-                    <div className="flex gap-2">
-                       <button onClick={() => { const adjust = prompt('증감할 재고 수량을 입력하세요. (예: 50, -20)'); if(adjust) showToast('재고 보정이 완료되었습니다.'); }} className="px-4 py-2 bg-[#C2507A] text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-pink-100">
-                          <Plus size={14} /> 재고 보정 (Adjust)
-                       </button>
+                    <div className="flex gap-2 flex-wrap">
+                       {artistSelect}
+                       <select
+                         value={inventoryProductFilter}
+                         onChange={e => setInventoryProductFilter(e.target.value === '' ? '' : Number(e.target.value))}
+                         className="bg-white border border-[#ede8e2] px-3 py-2 rounded-xl text-sm font-bold focus:outline-none focus:border-[#C2507A]"
+                       >
+                         <option value="">전체 상품</option>
+                         {productList.map(p => (
+                           <option key={p.id} value={p.id}>{p.name}</option>
+                         ))}
+                       </select>
                     </div>
                  </div>
                  
@@ -796,17 +907,19 @@ export default function AgencyApp() {
                     <table className="w-full text-left">
                        <thead>
                           <tr className="bg-[#F7F3EE] text-[#888] text-[11px] uppercase tracking-[2px] font-black">
-                             <th className="px-8 py-4">Status / Type</th>
-                             <th className="px-8 py-4">Product Name</th>
-                             <th className="px-8 py-4">Quantity</th>
-                             <th className="px-8 py-4">Handled By</th>
-                             <th className="px-8 py-4 text-right">Timestamp</th>
+                             <th className="px-8 py-4">유형</th>
+                             <th className="px-8 py-4">상품명</th>
+                             <th className="px-8 py-4">변동</th>
+                             <th className="px-8 py-4">변경 전</th>
+                             <th className="px-8 py-4">변경 후</th>
+                             <th className="px-8 py-4">참조</th>
+                             <th className="px-8 py-4 text-right">일시</th>
                           </tr>
                        </thead>
                        <tbody>
                           {inventoryHistory.length === 0 ? (
                             <tr>
-                              <td colSpan={5} className="px-8 py-8 text-center text-sm text-[#888]">재고 이력이 없습니다.</td>
+                              <td colSpan={7} className="px-8 py-8 text-center text-sm text-[#888]">재고 이력이 없습니다.</td>
                             </tr>
                           ) : inventoryHistory.map(row => {
                             const typeStyle: Record<string, { color: string; bg: string }> = {
@@ -819,12 +932,13 @@ export default function AgencyApp() {
                             const { color, bg } = typeStyle[row.changeType] ?? { color: 'text-gray-500', bg: 'bg-gray-50' };
                             const TypeIcon = row.deltaQty >= 0 ? ArrowUpRight : ArrowDownRight;
                             const refLabel = row.refType === 'ORDER' && row.referenceId ? `Order #${row.referenceId}` : row.refType;
+                            const typeLabel = INV_CHANGE_LABELS[row.changeType] ?? row.changeType;
                             return (
                             <tr key={row.historyId} className="border-b border-[#F7F3EE] hover:bg-[#fafafa] transition-colors group">
                                <td className="px-8 py-5">
                                   <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl font-black text-[10px] ${bg} ${color}`}>
                                      <TypeIcon size={12} />
-                                     {row.changeType}
+                                     {typeLabel}
                                   </div>
                                </td>
                                <td className="px-8 py-5">
@@ -835,6 +949,8 @@ export default function AgencyApp() {
                                      {row.deltaQty > 0 ? '+' : ''}{row.deltaQty}
                                   </span>
                                </td>
+                               <td className="px-8 py-5 text-sm font-mono text-[#888]">{row.qtyBefore}</td>
+                               <td className="px-8 py-5 text-sm font-mono text-[#111]">{row.qtyAfter}</td>
                                <td className="px-8 py-5 text-sm font-medium text-[#555]">{refLabel}</td>
                                <td className="px-8 py-5 text-right text-xs font-mono text-[#888]">{new Date(row.changedAt).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
                             </tr>
@@ -843,6 +959,16 @@ export default function AgencyApp() {
                        </tbody>
                     </table>
                  </div>
+                 {inventoryHasMore && (
+                   <div className="p-6 text-center border-t border-[#EDE8E2]">
+                     <button
+                       onClick={() => inventoryCursor && loadInventory(inventoryCursor, true)}
+                       className="text-sm font-bold text-[#C2507A] hover:underline"
+                     >
+                       더 보기
+                     </button>
+                   </div>
+                 )}
               </div>
             )}
 
@@ -878,7 +1004,6 @@ export default function AgencyApp() {
                           <select value={eventForm.type} onChange={e => setEventForm({...eventForm, type: e.target.value})} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]">
                             <option value="EVENT">이벤트 (EVENT)</option>
                             <option value="DROP">앨범·굿즈 발매 (DROP)</option>
-                            <option value="NOTICE">공지 (NOTICE)</option>
                           </select>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
@@ -961,7 +1086,11 @@ export default function AgencyApp() {
                     {agencySchedules.map(s => {
                       const { date, time } = fmtSchedule(s.startTime);
                       return (
-                        <div key={s.id} className="flex items-center gap-6 p-4 rounded-xl border border-[#EDE8E2] hover:bg-[#F7F3EE] transition-colors">
+                        <div
+                          key={s.id}
+                          className={`flex items-center gap-6 p-4 rounded-xl border border-[#EDE8E2] hover:bg-[#F7F3EE] transition-colors ${s.type === 'NOTICE' ? 'cursor-pointer' : ''}`}
+                          onClick={() => { if (s.type === 'NOTICE') openNoticeDetail(s.id); }}
+                        >
                           <div className="text-center w-20 shrink-0 border-r border-[#EDE8E2] pr-6">
                             <div className="text-[#C2507A] font-bold text-sm">{date}</div>
                             <div className="text-[#888] text-xs font-mono">{time}</div>
@@ -997,9 +1126,12 @@ export default function AgencyApp() {
 
              {activeMenu === 'notices' && (
                <div className="bg-white p-8 rounded-[32px] border border-[#EDE8E2] shadow-sm">
-                  <div className="flex justify-between items-center mb-8">
+                  <div className="flex justify-between items-center mb-8 flex-wrap gap-4">
                     <h3 className="text-xl font-black">공지사항 관리 (Manage Notices)</h3>
-                    <button className="bg-[#C2507A] text-white px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-pink-100" onClick={() => setShowNoticeModal(true)}>+ 공지 작성</button>
+                    <div className="flex items-center gap-3">
+                      {artistSelect}
+                      <button className="bg-[#C2507A] text-white px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-pink-100" onClick={() => setShowNoticeModal(true)}>+ 공지 작성</button>
+                    </div>
                   </div>
 
                   {showNoticeModal && (
@@ -1105,19 +1237,21 @@ export default function AgencyApp() {
                   )}
 
                   <div className="space-y-4">
+                    {notices.length === 0 && (
+                      <p className="text-center py-12 text-[#888] font-bold">등록된 공지가 없습니다.</p>
+                    )}
                     {notices.map((notice) => (
-                      <div key={notice.id} className="flex items-center gap-6 p-5 rounded-xl border border-[#EDE8E2] hover:border-[#C2507A] transition-all group">
-                         <div className="w-2 cursor-grab text-[#EDE8E2] group-hover:text-[#C2507A]">⠿</div>
+                      <div
+                        key={notice.id}
+                        onClick={() => openNoticeDetail(notice.id)}
+                        className="flex items-center gap-6 p-5 rounded-xl border border-[#EDE8E2] hover:border-[#C2507A] transition-all cursor-pointer"
+                      >
                          <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
                                <span className="text-[10px] font-black px-2 py-0.5 rounded bg-[#F7F3EE] text-[#C2507A]">{notice.type}</span>
                                <span className="text-xs font-medium text-[#888]">{notice.scheduledAt ? fmtSchedule(notice.scheduledAt).date : ''}</span>
                             </div>
                             <div className="font-bold text-[#111]">{notice.title}</div>
-                         </div>
-                         <div className="flex items-center gap-2">
-                            <button className="p-2 hover:bg-[#F7F3EE] rounded-lg text-[#888] hover:text-[#111] transition-colors">수정</button>
-                            <button className="p-2 hover:bg-[#F7F3EE] rounded-lg text-[#888] hover:text-red-500 transition-colors" onClick={() => setNotices(notices.filter(n => n.id !== notice.id))}>삭제</button>
                          </div>
                       </div>
                     ))}
@@ -1127,9 +1261,12 @@ export default function AgencyApp() {
 
              {activeMenu === 'products' && (
               <div className="space-y-6">
-                <div className="flex justify-between items-center mb-8">
+                <div className="flex justify-between items-center mb-8 flex-wrap gap-4">
                    <h3 className="text-xl font-black">상품 및 드롭 관리 (Manage Drops)</h3>
-                   <button className="bg-[#C2507A] text-white px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-pink-100" onClick={() => setShowProductModal(true)}>+ 새 드롭 생성</button>
+                   <div className="flex items-center gap-3">
+                     {artistSelect}
+                     <button className="bg-[#C2507A] text-white px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-pink-100" onClick={() => setShowProductModal(true)}>+ 새 상품 생성</button>
+                   </div>
                  </div>
 
                  {showProductModal && (
@@ -1138,38 +1275,52 @@ export default function AgencyApp() {
                        <h3 className="text-xl font-bold mb-4">새 상품 / 드롭 추가</h3>
                        <div className="space-y-4">
                           <div>
-                            <label className="block text-sm font-bold text-[#888] mb-2 flex justify-between">
-                              <span>상품 썸네일/상세 이미지 (최대 5장)</span>
-                              <span className="text-xs text-[#C2507A] font-black cursor-pointer" onClick={() => {
-                                const input = document.createElement('input');
-                                input.type = 'file';
-                                input.multiple = true;
-                                input.accept = 'image/*';
-                                input.onchange = () => {};
-                                input.click();
-                              }}>+ 이미지 업로드 (Upload)</span>
+                            <label className="block text-sm font-bold text-[#888] mb-2 flex justify-between items-center">
+                              <span>상품 이미지 (최대 5장)</span>
+                              <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded">저장 API 준비 중</span>
                             </label>
                             <label className="cursor-pointer">
                               <div className="w-full h-24 border-2 border-dashed border-[#ede8e2] rounded-xl flex flex-col items-center justify-center text-[#888] bg-[#F7F3EE] hover:border-[#C2507A] hover:text-[#C2507A] transition-colors">
                                 <Upload size={20} className="mb-1" />
-                                <span className="text-xs font-bold">클릭하거나 이미지를 드래그하세요</span>
+                                <span className="text-xs font-bold">클릭하여 이미지 선택 (미리보기만, 최대 5장)</span>
                               </div>
-                              <input 
-                                type="file" 
-                                className="hidden" 
-                                multiple 
+                              <input
+                                type="file"
+                                className="hidden"
+                                multiple
                                 accept="image/*"
-                                onChange={() => {}}
+                                onChange={(e) => {
+                                  const files = Array.from(e.target.files ?? []).slice(0, 5);
+                                  const readers = files.map(file => new Promise<string>((resolve) => {
+                                    const reader = new FileReader();
+                                    reader.onload = (ev) => resolve(ev.target?.result as string);
+                                    reader.readAsDataURL(file);
+                                  }));
+                                  Promise.all(readers).then(urls => setProductImagePreviews(urls));
+                                  e.target.value = '';
+                                }}
                               />
                             </label>
-                            <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
-                               {/* Mock Previews */}
-                               <div className="w-16 h-16 rounded-lg bg-gray-200 relative border border-[#ede8e2] overflow-hidden shrink-0 group">
-                                  <div className="absolute top-1 left-1 bg-[#C2507A] text-white text-[8px] font-black px-1.5 py-0.5 rounded-sm z-10">대표</div>
-                                  <div className="w-full h-full bg-[#111] flex items-center justify-center text-white/50 text-[10px]">Mock</div>
-                                  <button className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"><X size={10} /></button>
-                               </div>
-                            </div>
+                            {productImagePreviews.length > 0 && (
+                              <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
+                                {productImagePreviews.map((src, idx) => (
+                                  <div key={idx} className="w-16 h-16 rounded-lg border border-[#ede8e2] overflow-hidden shrink-0 relative group">
+                                    {idx === 0 && (
+                                      <div className="absolute top-1 left-1 bg-[#C2507A] text-white text-[8px] font-black px-1.5 py-0.5 rounded-sm z-10">대표</div>
+                                    )}
+                                    <img src={src} alt="" className="w-full h-full object-cover" />
+                                    <button
+                                      type="button"
+                                      className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                      onClick={() => setProductImagePreviews(prev => prev.filter((_, i) => i !== idx))}
+                                    >
+                                      <X size={10} />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            <p className="text-[10px] text-[#888] mt-2">미리보기만 가능합니다. 성빈님 BE 이미지 API 연동 후 실제 저장됩니다.</p>
                           </div>
                           <div>
                             <label className="block text-sm font-bold text-[#888] mb-1">상품명 (Product Name)</label>
@@ -1202,14 +1353,9 @@ export default function AgencyApp() {
                              </div>
                            </div>
                          )}
-                         
-                         <div>
-                           <label className="block text-sm font-bold text-[#888] mb-1">상세 설명</label>
-                           <textarea className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A] h-20 resize-none"></textarea>
-                         </div>
                        </div>
                        <div className="flex gap-2 mt-6">
-                         <button className="flex-1 bg-[#F7F3EE] text-[#111] py-3 rounded-xl font-bold" onClick={() => setShowProductModal(false)}>취소</button>
+                         <button className="flex-1 bg-[#F7F3EE] text-[#111] py-3 rounded-xl font-bold" onClick={() => { setShowProductModal(false); setProductImagePreviews([]); }}>취소</button>
                          <button className="flex-1 bg-[#C2507A] text-white py-3 rounded-xl font-bold" onClick={async () => {
                            if (!agencyArtistId || !productForm.name.trim() || !productForm.price || !productForm.totalQty) {
                              showToast('상품명, 가격, 재고를 모두 입력해주세요.', 'error');
@@ -1226,19 +1372,15 @@ export default function AgencyApp() {
                                ...(productForm.isDrops && productForm.dropsEndAt ? { dropsEndAt: `${productForm.dropsEndAt}:00` } : {}),
                              };
                              await createProduct(req);
-                             const [regular, drops] = await Promise.all([
-                               getProducts('regular', undefined, 50, agencyArtistId),
-                               getProducts('drops', undefined, 50, agencyArtistId),
-                             ]);
-                             const refreshed = { items: [...regular.items, ...drops.items] };
-                             setProductList(refreshed.items);
+                             await refreshProductList();
                              setShowProductModal(false);
                              setProductForm({ name: '', price: '', totalQty: '', isDrops: false, dropsStartAt: '', dropsEndAt: '' });
-                             showToast('드롭이 스케줄되었습니다!');
+                             setProductImagePreviews([]);
+                             showToast('상품이 등록되었습니다.');
                            } catch {
                              showToast('상품 등록에 실패했습니다.', 'error');
                            }
-                         }}>드롭 시작하기</button>
+                         }}>등록하기</button>
                        </div>
                      </div>
                    </div>
@@ -1249,7 +1391,11 @@ export default function AgencyApp() {
                  )}
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                    {productList.map((item) => (
-                     <div key={item.id} className="bg-white rounded-2xl border border-[#EDE8E2] p-6 flex gap-4 items-center cursor-pointer hover:border-[#111] transition-colors">
+                     <div
+                       key={item.id}
+                       onClick={() => openProductDetail(item)}
+                       className="bg-white rounded-2xl border border-[#EDE8E2] p-6 flex gap-4 items-center cursor-pointer hover:border-[#111] transition-colors"
+                     >
                        <div className="w-20 h-20 bg-[#F7F3EE] rounded-xl flex items-center justify-center shrink-0">
                          <Package className="text-[#ccc] w-8 h-8" />
                        </div>
@@ -1269,31 +1415,60 @@ export default function AgencyApp() {
 
             {activeMenu === 'orders' && (
               <div className="bg-white rounded-[32px] border border-[#EDE8E2] overflow-hidden shadow-sm">
-                <div className="p-6 border-b border-[#EDE8E2] flex justify-between items-center bg-[#FAF8F5]">
+                <div className="p-6 border-b border-[#EDE8E2] flex justify-between items-center bg-[#FAF8F5] flex-wrap gap-4">
                   <h3 className="text-lg font-black italic">RECENT ORDERS</h3>
-                  <div className="text-xs font-black text-[#C2507A] cursor-pointer hover:underline uppercase tracking-widest">Export to CSV</div>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    {artistSelect}
+                    <input
+                      type="text"
+                      placeholder="주문번호 검색"
+                      value={orderSearch}
+                      onChange={e => setOrderSearch(e.target.value)}
+                      className="bg-white border border-[#ede8e2] px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-[#C2507A]"
+                    />
+                    <select
+                      value={orderStatusFilter}
+                      onChange={e => setOrderStatusFilter(e.target.value)}
+                      className="bg-white border border-[#ede8e2] px-3 py-2 rounded-xl text-sm font-bold focus:outline-none focus:border-[#C2507A]"
+                    >
+                      <option value="">전체 상태</option>
+                      <option value="PAID">PAID</option>
+                      <option value="RESERVED">RESERVED</option>
+                      <option value="COMPLETED">COMPLETED</option>
+                      <option value="CANCELLED">CANCELLED</option>
+                      <option value="FAILED">FAILED</option>
+                    </select>
+                  </div>
                 </div>
                 <table className="w-full text-left">
                   <thead>
                     <tr className="bg-[#F7F3EE] text-[#888] text-xs uppercase tracking-wider">
                       <th className="p-4 font-medium">주문 번호 (Order ID)</th>
                       <th className="p-4 font-medium">상품 (Product)</th>
+                      <th className="p-4 font-medium">결제 금액</th>
                       <th className="p-4 font-medium">날짜 (Date)</th>
                       <th className="p-4 font-medium">상태 (Status)</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {agencyOrders.length === 0 ? (
+                    {agencyOrders
+                      .filter(order => !orderStatusFilter || order.status === orderStatusFilter)
+                      .filter(order => !orderSearch || String(order.orderId).includes(orderSearch))
+                      .length === 0 ? (
                       <tr>
-                        <td colSpan={4} className="p-8 text-center text-sm text-[#888]">주문 내역이 없습니다.</td>
+                        <td colSpan={5} className="p-8 text-center text-sm text-[#888]">주문 내역이 없습니다.</td>
                       </tr>
-                    ) : agencyOrders.map(order => (
+                    ) : agencyOrders
+                      .filter(order => !orderStatusFilter || order.status === orderStatusFilter)
+                      .filter(order => !orderSearch || String(order.orderId).includes(orderSearch))
+                      .map(order => (
                       <tr key={order.orderId} className="border-b border-[#EDE8E2] last:border-0 hover:bg-[#fafafa]">
                         <td className="p-4 text-sm font-mono font-bold text-[#111]">#{order.orderId}</td>
                         <td className="p-4 text-sm text-[#333]">
                           <div className="font-medium">{order.productSummary}</div>
                           <div className="text-xs text-[#888]">{order.artistName}</div>
                         </td>
+                        <td className="p-4 text-sm font-mono font-bold text-[#111]">₩{(order.totalAmount ?? 0).toLocaleString()}</td>
                         <td className="p-4 text-sm text-[#888]">{new Date(order.createdAt).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
                         <td className="p-4 text-sm">
                           <span className="font-bold text-xs px-2 py-1 bg-gray-100 rounded">{order.status}</span>
@@ -1302,6 +1477,16 @@ export default function AgencyApp() {
                     ))}
                   </tbody>
                 </table>
+                {ordersHasMore && (
+                  <div className="p-6 text-center border-t border-[#EDE8E2]">
+                    <button
+                      onClick={() => ordersCursor && loadOrders(ordersCursor, true)}
+                      className="text-sm font-bold text-[#C2507A] hover:underline"
+                    >
+                      더 보기
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1409,6 +1594,210 @@ export default function AgencyApp() {
           </div>
         </div>
       </div>
+
+    {selectedNoticeDetail && (
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[120] flex items-center justify-center p-6" onClick={() => setSelectedNoticeDetail(null)}>
+        <div className="bg-white rounded-[32px] w-full max-w-2xl max-h-[85vh] overflow-y-auto p-8 shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="flex justify-between items-start mb-6">
+            <span className="text-[10px] font-black px-2 py-1 rounded bg-[#F7F3EE] text-[#C2507A]">{selectedNoticeDetail.type}</span>
+            <button onClick={() => setSelectedNoticeDetail(null)} className="p-2 hover:bg-[#F7F3EE] rounded-lg"><X size={18} /></button>
+          </div>
+          <h2 className="text-2xl font-black mb-2">{selectedNoticeDetail.title}</h2>
+          <p className="text-xs text-[#888] mb-6">{fmtNoticeDate(selectedNoticeDetail.scheduledAt)}</p>
+          {selectedNoticeDetail.imageUrls?.length > 0 && (
+            <div className="flex gap-2 mb-6 overflow-x-auto">
+              {selectedNoticeDetail.imageUrls.map((url, i) => (
+                <img key={i} src={url} alt="" className="h-32 rounded-xl object-cover" />
+              ))}
+            </div>
+          )}
+          <div className="prose prose-sm max-w-none">
+            <p className="whitespace-pre-wrap text-[#333] leading-relaxed">{selectedNoticeDetail.content || '내용이 없습니다.'}</p>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {selectedVote && (() => {
+      const total = selectedVote.options.reduce((s, o) => s + o.voteCount, 0);
+      return (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[120] flex items-center justify-center p-6" onClick={() => setSelectedVote(null)}>
+          <div className="bg-white rounded-[32px] w-full max-w-lg p-8 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-start mb-4">
+              <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase ${selectedVote.active ? 'bg-[#C2507A] text-white' : 'bg-gray-400 text-white'}`}>
+                {selectedVote.active ? 'ONGOING' : 'CLOSED'}
+              </span>
+              <button onClick={() => setSelectedVote(null)} className="p-2 hover:bg-[#F7F3EE] rounded-lg"><X size={18} /></button>
+            </div>
+            <h2 className="text-xl font-black mb-2">{selectedVote.title}</h2>
+            <p className="text-xs text-[#888] mb-6">종료: {selectedVote.endsAt?.slice(0, 10) ?? '-'} · 총 {total.toLocaleString()}표</p>
+            <div className="space-y-4 mb-8">
+              {selectedVote.options.map(opt => {
+                const pct = total > 0 ? Math.round((opt.voteCount / total) * 100) : 0;
+                return (
+                  <div key={opt.id}>
+                    <div className="flex justify-between text-sm font-bold mb-1">
+                      <span>{opt.label}</span>
+                      <span className="text-[#C2507A]">{opt.voteCount.toLocaleString()} ({pct}%)</span>
+                    </div>
+                    <div className="h-2 bg-[#F7F3EE] rounded-full overflow-hidden">
+                      <div className="h-full bg-[#C2507A] rounded-full transition-all" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex gap-3">
+              {selectedVote.active && (
+                <button
+                  disabled
+                  title="백엔드 API 준비 중"
+                  className="flex-1 bg-red-500/50 text-white py-3 rounded-xl font-bold text-sm cursor-not-allowed"
+                >
+                  투표 강제 종료
+                </button>
+              )}
+              <button onClick={() => setSelectedVote(null)} className="flex-1 bg-[#F7F3EE] text-[#111] py-3 rounded-xl font-bold text-sm">닫기</button>
+            </div>
+          </div>
+        </div>
+      );
+    })()}
+
+    {selectedProduct && (
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[120] flex items-center justify-center p-6" onClick={() => { setSelectedProduct(null); setShowRestockModal(false); }}>
+        <div className="bg-white rounded-[32px] w-full max-w-lg p-8 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="flex justify-between items-start mb-6">
+            <span className={`text-[10px] font-bold px-2 py-1 rounded ${selectedProduct.status === 'ON_SALE' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+              {selectedProduct.status}
+            </span>
+            <button onClick={() => { setSelectedProduct(null); setShowRestockModal(false); }} className="p-2 hover:bg-[#F7F3EE] rounded-lg"><X size={18} /></button>
+          </div>
+          {!showRestockModal ? (
+            <>
+              <h2 className="text-xl font-black mb-4">상품 상세</h2>
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="block text-xs font-black text-[#888] uppercase mb-1">상품명</label>
+                  <input type="text" value={productEditForm.name} onChange={e => setProductEditForm({ ...productEditForm, name: e.target.value })} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]" />
+                </div>
+                <div>
+                  <label className="block text-xs font-black text-[#888] uppercase mb-1">가격 (KRW)</label>
+                  <input type="number" value={productEditForm.price} onChange={e => setProductEditForm({ ...productEditForm, price: e.target.value })} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]" />
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center text-sm">
+                  <div className="bg-[#F7F3EE] p-3 rounded-xl">
+                    <div className="text-[10px] text-[#888] font-bold">총 재고</div>
+                    <div className="font-black">{selectedProduct.totalQty}</div>
+                  </div>
+                  <div className="bg-[#F7F3EE] p-3 rounded-xl">
+                    <div className="text-[10px] text-[#888] font-bold">예약</div>
+                    <div className="font-black">{selectedProduct.reservedQty}</div>
+                  </div>
+                  <div className="bg-[#F7F3EE] p-3 rounded-xl">
+                    <div className="text-[10px] text-[#888] font-bold">가용</div>
+                    <div className="font-black text-[#C2507A]">{selectedProduct.availableQty}</div>
+                  </div>
+                </div>
+                {(selectedProduct.dropsStartAt || selectedProduct.dropsEndAt) && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-black text-[#888] uppercase mb-1">드롭 시작</label>
+                      <input type="datetime-local" value={productEditForm.dropsStartAt} onChange={e => setProductEditForm({ ...productEditForm, dropsStartAt: e.target.value })} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-3 py-2 rounded-xl text-sm" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-black text-[#888] uppercase mb-1">드롭 종료</label>
+                      <input type="datetime-local" value={productEditForm.dropsEndAt} onChange={e => setProductEditForm({ ...productEditForm, dropsEndAt: e.target.value })} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-3 py-2 rounded-xl text-sm" />
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-col gap-2">
+                <button
+                  className="w-full bg-[#C2507A] text-white py-3 rounded-xl font-bold text-sm"
+                  onClick={async () => {
+                    try {
+                      await updateProduct(selectedProduct.id, {
+                        name: productEditForm.name.trim(),
+                        price: Number(productEditForm.price),
+                        ...(productEditForm.dropsStartAt ? { dropsStartAt: `${productEditForm.dropsStartAt}:00` } : {}),
+                        ...(productEditForm.dropsEndAt ? { dropsEndAt: `${productEditForm.dropsEndAt}:00` } : {}),
+                      });
+                      await refreshProductList();
+                      const updated = await getProduct(selectedProduct.id);
+                      setSelectedProduct(updated);
+                      showToast('상품이 수정되었습니다.');
+                    } catch {
+                      showToast('상품 수정에 실패했습니다.', 'error');
+                    }
+                  }}
+                >
+                  수정 저장
+                </button>
+                {selectedProduct.status === 'ON_SALE' && (
+                  <button
+                    className="w-full bg-orange-100 text-orange-700 py-3 rounded-xl font-bold text-sm"
+                    onClick={async () => {
+                      if (!window.confirm('이 상품을 품절 처리하시겠습니까?')) return;
+                      try {
+                        await updateProduct(selectedProduct.id, { status: 'SOLD_OUT' });
+                        await refreshProductList();
+                        setSelectedProduct(null);
+                        showToast('품절 처리되었습니다.');
+                      } catch {
+                        showToast('품절 처리에 실패했습니다.', 'error');
+                      }
+                    }}
+                  >
+                    품절 처리
+                  </button>
+                )}
+                <button
+                  className="w-full bg-[#F7F3EE] text-[#111] py-3 rounded-xl font-bold text-sm"
+                  onClick={() => { setRestockQty(''); setShowRestockModal(true); }}
+                >
+                  재입고
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <h2 className="text-xl font-black mb-4">재입고</h2>
+              <input
+                type="number"
+                min={1}
+                placeholder="입고 수량"
+                value={restockQty}
+                onChange={e => setRestockQty(e.target.value)}
+                className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-3 rounded-xl mb-4 focus:outline-none focus:border-[#C2507A]"
+              />
+              <div className="flex gap-2">
+                <button className="flex-1 bg-[#F7F3EE] py-3 rounded-xl font-bold" onClick={() => setShowRestockModal(false)}>취소</button>
+                <button
+                  className="flex-1 bg-[#C2507A] text-white py-3 rounded-xl font-bold"
+                  onClick={async () => {
+                    const qty = Number(restockQty);
+                    if (!qty || qty < 1) { showToast('수량을 입력해주세요.', 'error'); return; }
+                    try {
+                      await restockProduct(selectedProduct.id, qty);
+                      await refreshProductList();
+                      const updated = await getProduct(selectedProduct.id);
+                      setSelectedProduct(updated);
+                      setShowRestockModal(false);
+                      showToast('재입고가 완료되었습니다.');
+                    } catch {
+                      showToast('재입고에 실패했습니다.', 'error');
+                    }
+                  }}
+                >
+                  입고하기
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    )}
 
     {toast && (
       <div role="alert" className={`fixed bottom-6 right-6 z-[200] px-6 py-4 rounded-2xl shadow-2xl text-white text-sm font-bold flex items-center gap-3 transition-all ${toast.type === 'error' ? 'bg-red-500' : 'bg-[#111]'}`}>

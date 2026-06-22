@@ -88,6 +88,21 @@ function extractFanIdFromJwt(token: string): string | null {
   }
 }
 
+/** JWT sub claim을 숫자로 반환. ARTIST role 시 artistMemberId로 사용. */
+export function getSubFromToken(): number | null {
+  const token = getToken()
+  if (!token) return null
+  try {
+    const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    const payload = JSON.parse(atob(b64)) as { sub?: unknown }
+    if (payload.sub == null) return null
+    const n = Number(payload.sub)
+    return Number.isFinite(n) ? n : null
+  } catch {
+    return null
+  }
+}
+
 /** X-Fan-Id 헤더 값. JWT sub claim → 없으면 localStorage 'fd_fan_id' → 없으면 '1'(로컬 폴백). */
 export function getFanIdHeader(): string {
   const token = getToken()

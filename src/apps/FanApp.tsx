@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { logout } from '../api/auth';
+import { logout, getSubFromToken } from '../api/auth';
 import { ROLE_KEY } from '../App';
 import { AnimatePresence, motion } from 'motion/react';
 import { Plus, Search, Calendar, Heart, Share2, Image as ImageIcon, Smile, MoreHorizontal, MessageSquare, Bell, Pin, Play, Youtube, ChevronLeft, ChevronRight, X, User, ShoppingBag, LogOut, Ticket, Settings, ThumbsUp, CheckCircle2, Gift } from 'lucide-react';
@@ -8,8 +8,7 @@ import { useCheckout } from '../hooks/useCheckout';
 import { useQueue } from '../hooks/useQueue';
 import { getProducts, getProduct, subscribeRestock, unsubscribeRestock } from '../api/products';
 import type { ProductListItem, ProductImage } from '../types/product';
-import { getArtists } from '../api/artist';
-import { getMyArtistMember } from '../api/artistMembers';
+import { getArtists, getArtistMembersList } from '../api/artist';
 import type { ArtistItem } from '../types/artist';
 import { getStoreBanners, getMainBanners } from '../api/banners';
 import type { StoreBannerResponse, BannerResponse } from '../types/banner';
@@ -553,19 +552,38 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       .finally(() => setCartLoading(false));
   }, [showCart]);
 
-  // 아티스트 목록 로드 — ARTIST role은 자신의 소속 그룹만, FAN role은 팔로우 목록
+  // 아티스트 목록 로드 — ARTIST role은 JWT sub + artists/members 2단계 조회, FAN은 팔로우 목록
   useEffect(() => {
     if (role === 'ARTIST') {
-      getMyArtistMember()
-        .then(me => {
-          setCurrentMemberName(me.memberName);
-          setFavoriteArtists([{
-            id: me.artistId,
-            name: me.groupName,
-            bg: artistGradient(me.artistId),
-          }]);
-        })
-        .catch(console.error);
+      const memberId = getSubFromToken();
+      if (memberId == null) return;
+      void (async () => {
+        try {
+          const artistsRes = await getArtists(undefined, 50);
+          const matches = await Promise.all(
+            artistsRes.items.map(async (artist) => {
+              try {
+                const members = await getArtistMembersList(artist.id);
+                const me = members.find(m => m.id === memberId);
+                return me ? { artist, member: me } : null;
+              } catch {
+                return null;
+              }
+            }),
+          );
+          const match = matches.find((r): r is NonNullable<typeof r> => r !== null);
+          if (!match) return;
+          const { artist, member } = match;
+          setCurrentMemberName(member.memberName);
+          const artistEntry = { id: artist.id, name: artist.name, bg: artistGradient(artist.id) };
+          setFavoriteArtists([artistEntry]);
+          setSelectedArtist(artistEntry);
+          setBoardTab('FEED');
+          setSearchParams({ artistId: String(artist.id), board: 'feed' }, { replace: true });
+        } catch (e) {
+          console.error('ARTIST init failed', e);
+        }
+      })();
     } else {
       getJoinedArtists()
         .then(res => {
@@ -605,10 +623,11 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       if (!TRANSIENT_TABS.has(tab)) setActiveTab(tab);
       setBoardTab(searchParams.get('board')?.toUpperCase() ?? 'FEED');
       setMyPageTab(searchParams.get('sub')?.toUpperCase() ?? 'OVERVIEW');
-      // 아티스트
+      // 아티스트 — ARTIST role은 자신의 보드가 고정이므로 artistId 없어도 null로 초기화하지 않음
       const artistIdParam = searchParams.get('artistId');
-      if (!artistIdParam) { setSelectedArtist(null); }
-      else if (favoriteArtists.length > 0) {
+      if (!artistIdParam) {
+        if (role !== 'ARTIST') setSelectedArtist(null);
+      } else if (favoriteArtists.length > 0) {
         const found = favoriteArtists.find(a => a.id === parseInt(artistIdParam));
         if (found) setSelectedArtist(found);
       }

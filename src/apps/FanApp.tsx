@@ -9,6 +9,7 @@ import { useQueue } from '../hooks/useQueue';
 import { getProducts, getProduct, subscribeRestock, unsubscribeRestock } from '../api/products';
 import type { ProductListItem, ProductImage } from '../types/product';
 import { getArtists } from '../api/artist';
+import { getMyArtistMember } from '../api/artistMembers';
 import type { ArtistItem } from '../types/artist';
 import { getStoreBanners, getMainBanners } from '../api/banners';
 import type { StoreBannerResponse, BannerResponse } from '../types/banner';
@@ -128,7 +129,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     const tempId = crypto.randomUUID();
     const tempComment = {
       id: tempId,
-      author: role === 'ARTIST' ? selectedArtist.name : 'Me',
+      author: role === 'ARTIST' ? (currentMemberName || selectedArtist.name) : 'Me',
       content: content.trim(),
       time: '방금 전',
     };
@@ -156,6 +157,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [activeTab, setActiveTab] = useState<string>(() =>
     TAB_FROM_URL[searchParams.get('tab') ?? ''] ?? 'HOME'
   );
+  const [currentMemberName, setCurrentMemberName] = useState<string>('');
   const [feeds, setFeeds] = useState<FeedResponse[]>([]);
   const [feedsLoading, setFeedsLoading] = useState(false);
 
@@ -551,18 +553,31 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       .finally(() => setCartLoading(false));
   }, [showCart]);
 
-  // 팔로우한 아티스트 목록 로드
+  // 아티스트 목록 로드 — ARTIST role은 자신의 소속 그룹만, FAN role은 팔로우 목록
   useEffect(() => {
-    getJoinedArtists()
-      .then(res => {
-        setFavoriteArtists(res.items.map(a => ({
-          id: a.artistId,
-          name: `Artist #${a.artistId}`,
-          bg: artistGradient(a.artistId),
-        })));
-      })
-      .catch(console.error);
-  }, []);
+    if (role === 'ARTIST') {
+      getMyArtistMember()
+        .then(me => {
+          setCurrentMemberName(me.memberName);
+          setFavoriteArtists([{
+            id: me.artistId,
+            name: me.groupName,
+            bg: artistGradient(me.artistId),
+          }]);
+        })
+        .catch(console.error);
+    } else {
+      getJoinedArtists()
+        .then(res => {
+          setFavoriteArtists(res.items.map(a => ({
+            id: a.artistId,
+            name: `Artist #${a.artistId}`,
+            bg: artistGradient(a.artistId),
+          })));
+        })
+        .catch(console.error);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 팔로우 첫 번째 아티스트 상품 추천
   useEffect(() => {

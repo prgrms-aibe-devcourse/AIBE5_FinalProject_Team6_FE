@@ -26,11 +26,18 @@ export async function getNotice(artistId: number, noticeId: number): Promise<Not
   return body.data as NoticeResult
 }
 
+export interface CreateNoticeOptions {
+  scheduledAt?: string
+  autoSyncCalendar?: boolean
+  calendarType?: 'DROP' | 'EVENT' | 'LIVE'
+}
+
 export async function createNotice(
   artistId: number,
   title: string,
   content: string,
   imageUrls: string[] = [],
+  options: CreateNoticeOptions = {},
 ): Promise<{ noticeId: number }> {
   const res = await fetchWithAuth(`/api/v1/artists/${artistId}/notices`, {
     method: 'POST',
@@ -39,7 +46,7 @@ export async function createNotice(
       ...getAuthHeaders(),
       'X-Artist-Member-Id': getFanIdHeader(),
     },
-    body: JSON.stringify({ title, content, imageUrls }),
+    body: JSON.stringify({ title, content, imageUrls, ...options }),
   })
   if (!res.ok) throw new Error(`createNotice failed: ${res.status}`)
   const body = await res.json()

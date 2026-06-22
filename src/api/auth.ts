@@ -109,6 +109,18 @@ export async function login(email: string, password: string): Promise<AuthToken>
   return body.data as AuthToken
 }
 
+export async function adminLogin(email: string, password: string): Promise<AuthToken> {
+  const res = await fetch('/api/v1/admin/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  })
+  if (res.status >= 500) throw new Error('server_error')
+  if (!res.ok) throw new Error(`adminLogin failed: ${res.status}`)
+  const body = await res.json()
+  return body.data as AuthToken
+}
+
 export async function logout(): Promise<void> {
   const refreshToken = getRefreshToken()
   if (refreshToken) {

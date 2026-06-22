@@ -134,6 +134,14 @@ export default function LoginPage() {
             >
               기획사 입점 신청 →
             </button>
+            <div className="mt-4">
+              <button
+                onClick={() => navigate('/admin/login')}
+                className="text-xs text-[#aaa] hover:text-[#888] transition-colors"
+              >
+                관리자이신가요? 관리자 로그인 →
+              </button>
+            </div>
           </div>
         </div>
       </div>

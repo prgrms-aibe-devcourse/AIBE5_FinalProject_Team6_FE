@@ -5,6 +5,7 @@ import type { AppRole } from './api/auth';
 import FanApp from './apps/FanApp';
 import AgencyApp from './apps/AgencyApp';
 import AdminApp from './apps/AdminApp';
+import AdminLoginPage from './apps/AdminLoginPage';
 import LoginPage from './apps/LoginPage';
 import SignupPage from './apps/SignupPage';
 import PasswordResetPage from './apps/PasswordResetPage';
@@ -16,7 +17,10 @@ export type Role = AppRole;
 export { ROLE_KEY };
 
 function RequireRole({ allowed, children }: { allowed: Role[]; children: ReactElement }) {
-  if (!getToken()) return <Navigate to="/login" replace />;
+  if (!getToken()) {
+    const loginPath = allowed.length === 1 && allowed[0] === 'ADMIN' ? '/admin/login' : '/login';
+    return <Navigate to={loginPath} replace />;
+  }
   const role = getAppRole();
   if (!role || !allowed.includes(role)) {
     return <Navigate to={role ? getRoleHomePath(role) : '/login'} replace />;
@@ -47,6 +51,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<RootRedirect />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/admin/login" element={<AdminLoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/reset-password" element={<PasswordResetPage />} />
         <Route path="/oauth/callback" element={<OAuthCallbackPage />} />

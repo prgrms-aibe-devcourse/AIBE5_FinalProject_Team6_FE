@@ -10,6 +10,7 @@ export interface CreateProductRequest {
   type: 'regular' | 'drops'
   dropsStartAt?: string
   dropsEndAt?: string
+  imageUrls?: string[]
 }
 
 export type { ProductListItem, ProductResponse }
@@ -71,6 +72,7 @@ export interface UpdateProductRequest {
   status?: string
   dropsStartAt?: string
   dropsEndAt?: string
+  imageUrls?: string[] | null
 }
 
 export async function updateProduct(

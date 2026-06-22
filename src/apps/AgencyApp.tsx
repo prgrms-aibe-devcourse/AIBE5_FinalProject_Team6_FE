@@ -10,7 +10,7 @@ import type { NoticeResult } from '../types/notice';
 import { getAgencyBanners, createAgencyBanner, updateAgencyBanner, deleteAgencyBanner, requestAgencyPresignedUrl, uploadToS3Agency } from '../api/agencyBanners';
 import type { AgencyBannerFormData } from '../api/agencyBanners';
 import type { BannerResponse } from '../types/banner';
-import { getVotes, createVote } from '../api/votes';
+import { getVotes, createVote, closeVote } from '../api/votes';
 import type { GoodsVoteResult } from '../types/vote';
 import { getProducts, getProduct, createProduct, updateProduct, restockProduct } from '../api/products';
 import type { CreateProductRequest, ProductListItem, ProductResponse } from '../api/products';
@@ -163,7 +163,9 @@ export default function AgencyApp() {
 
   const [productList, setProductList] = useState<ProductListItem[]>([]);
   const [productForm, setProductForm] = useState({ name: '', price: '', totalQty: '', isDrops: false, dropsStartAt: '', dropsEndAt: '' });
+  const [productImageFiles, setProductImageFiles] = useState<File[]>([]);
   const [productImagePreviews, setProductImagePreviews] = useState<string[]>([]);
+  const [productImageUploading, setProductImageUploading] = useState(false);
 
   // 스케줄 관리 상태
   const [agencyArtistId, setAgencyArtistId] = useState<number | null>(null);
@@ -177,6 +179,7 @@ export default function AgencyApp() {
 
   const [selectedNoticeDetail, setSelectedNoticeDetail] = useState<NoticeResult | null>(null);
   const [selectedVote, setSelectedVote] = useState<GoodsVoteResult | null>(null);
+  const [voteClosing, setVoteClosing] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ProductResponse | null>(null);
   const [productEditForm, setProductEditForm] = useState({ name: '', price: '', dropsStartAt: '', dropsEndAt: '' });
   const [restockQty, setRestockQty] = useState('');
@@ -1335,14 +1338,11 @@ export default function AgencyApp() {
                        <h3 className="text-xl font-bold mb-4">새 상품 / 드롭 추가</h3>
                        <div className="space-y-4">
                           <div>
-                            <label className="block text-sm font-bold text-[#888] mb-2 flex justify-between items-center">
-                              <span>상품 이미지 (최대 5장)</span>
-                              <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded">저장 API 준비 중</span>
-                            </label>
+                            <label className="block text-sm font-bold text-[#888] mb-2">상품 이미지 (최대 5장, 첫 번째가 대표)</label>
                             <label className="cursor-pointer">
                               <div className="w-full h-24 border-2 border-dashed border-[#ede8e2] rounded-xl flex flex-col items-center justify-center text-[#888] bg-[#F7F3EE] hover:border-[#C2507A] hover:text-[#C2507A] transition-colors">
                                 <Upload size={20} className="mb-1" />
-                                <span className="text-xs font-bold">클릭하여 이미지 선택 (미리보기만, 최대 5장)</span>
+                                <span className="text-xs font-bold">클릭하여 이미지 선택 (최대 5장)</span>
                               </div>
                               <input
                                 type="file"
@@ -1350,8 +1350,11 @@ export default function AgencyApp() {
                                 multiple
                                 accept="image/*"
                                 onChange={(e) => {
-                                  const files = Array.from(e.target.files ?? []).slice(0, 5);
-                                  const readers = files.map(file => new Promise<string>((resolve) => {
+                                  const newFiles = Array.from(e.target.files ?? []).slice(0, 5 - productImageFiles.length);
+                                  if (newFiles.length === 0) return;
+                                  const merged = [...productImageFiles, ...newFiles].slice(0, 5);
+                                  setProductImageFiles(merged);
+                                  const readers = merged.map(file => new Promise<string>((resolve) => {
                                     const reader = new FileReader();
                                     reader.onload = (ev) => resolve(ev.target?.result as string);
                                     reader.readAsDataURL(file);
@@ -1372,7 +1375,7 @@ export default function AgencyApp() {
                                     <button
                                       type="button"
                                       className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                                      onClick={() => setProductImagePreviews(prev => prev.filter((_, i) => i !== idx))}
+                                      onClick={() => { setProductImageFiles(prev => prev.filter((_, i) => i !== idx)); setProductImagePreviews(prev => prev.filter((_, i) => i !== idx)); }}
                                     >
                                       <X size={10} />
                                     </button>
@@ -1380,7 +1383,7 @@ export default function AgencyApp() {
                                 ))}
                               </div>
                             )}
-                            <p className="text-[10px] text-[#888] mt-2">미리보기만 가능합니다. 성빈님 BE 이미지 API 연동 후 실제 저장됩니다.</p>
+                            {productImageUploading && <p className="text-[10px] text-[#C2507A] mt-2 font-bold">이미지 업로드 중...</p>}
                           </div>
                           <div>
                             <label className="block text-sm font-bold text-[#888] mb-1">상품명 (Product Name)</label>
@@ -1415,13 +1418,22 @@ export default function AgencyApp() {
                          )}
                        </div>
                        <div className="flex gap-2 mt-6">
-                         <button className="flex-1 bg-[#F7F3EE] text-[#111] py-3 rounded-xl font-bold" onClick={() => { setShowProductModal(false); setProductImagePreviews([]); }}>취소</button>
-                         <button className="flex-1 bg-[#C2507A] text-white py-3 rounded-xl font-bold" onClick={async () => {
+                         <button className="flex-1 bg-[#F7F3EE] text-[#111] py-3 rounded-xl font-bold" onClick={() => { setShowProductModal(false); setProductImageFiles([]); setProductImagePreviews([]); }}>취소</button>
+                         <button disabled={productImageUploading} className={`flex-1 py-3 rounded-xl font-bold text-white transition-colors ${productImageUploading ? 'bg-[#C2507A]/50 cursor-not-allowed' : 'bg-[#C2507A]'}`} onClick={async () => {
                            if (!agencyArtistId || !productForm.name.trim() || !productForm.price || !productForm.totalQty) {
                              showToast('상품명, 가격, 재고를 모두 입력해주세요.', 'error');
                              return;
                            }
                            try {
+                             let imageUrls: string[] | undefined;
+                             if (productImageFiles.length > 0) {
+                               setProductImageUploading(true);
+                               imageUrls = await Promise.all(productImageFiles.map(async (file) => {
+                                 const { presignedUrl, imageUrl } = await requestAgencyPresignedUrl(file.type, file.size);
+                                 await uploadToS3Agency(presignedUrl, file);
+                                 return imageUrl;
+                               }));
+                             }
                              const req: CreateProductRequest = {
                                artistId: agencyArtistId,
                                name: productForm.name.trim(),
@@ -1430,15 +1442,19 @@ export default function AgencyApp() {
                                type: productForm.isDrops ? 'drops' : 'regular',
                                ...(productForm.isDrops && productForm.dropsStartAt ? { dropsStartAt: `${productForm.dropsStartAt}:00` } : {}),
                                ...(productForm.isDrops && productForm.dropsEndAt ? { dropsEndAt: `${productForm.dropsEndAt}:00` } : {}),
+                               ...(imageUrls ? { imageUrls } : {}),
                              };
                              await createProduct(req);
                              await refreshProductList();
                              setShowProductModal(false);
                              setProductForm({ name: '', price: '', totalQty: '', isDrops: false, dropsStartAt: '', dropsEndAt: '' });
+                             setProductImageFiles([]);
                              setProductImagePreviews([]);
                              showToast('상품이 등록되었습니다.');
                            } catch {
                              showToast('상품 등록에 실패했습니다.', 'error');
+                           } finally {
+                             setProductImageUploading(false);
                            }
                          }}>등록하기</button>
                        </div>
@@ -1456,8 +1472,8 @@ export default function AgencyApp() {
                        onClick={() => openProductDetail(item)}
                        className="bg-white rounded-2xl border border-[#EDE8E2] p-6 flex gap-4 items-center cursor-pointer hover:border-[#111] transition-colors"
                      >
-                       <div className="w-20 h-20 bg-[#F7F3EE] rounded-xl flex items-center justify-center shrink-0">
-                         <Package className="text-[#ccc] w-8 h-8" />
+                       <div className="w-20 h-20 bg-[#F7F3EE] rounded-xl flex items-center justify-center shrink-0 overflow-hidden">
+                         {item.thumbnailUrl ? <img src={item.thumbnailUrl} alt={item.name} className="w-full h-full object-cover" /> : <Package className="text-[#ccc] w-8 h-8" />}
                        </div>
                        <div className="flex-1">
                          <div className="flex justify-between items-start mb-2">
@@ -1710,11 +1726,24 @@ export default function AgencyApp() {
             <div className="flex gap-3">
               {selectedVote.active && (
                 <button
-                  disabled
-                  title="백엔드 API 준비 중"
-                  className="flex-1 bg-red-500/50 text-white py-3 rounded-xl font-bold text-sm cursor-not-allowed"
+                  disabled={voteClosing}
+                  className={`flex-1 py-3 rounded-xl font-bold text-sm text-white transition-colors ${voteClosing ? 'bg-red-300 cursor-not-allowed' : 'bg-red-500 hover:bg-red-600'}`}
+                  onClick={async () => {
+                    if (!window.confirm('이 투표를 강제 종료하시겠습니까?')) return;
+                    setVoteClosing(true);
+                    try {
+                      await closeVote(selectedVote.id);
+                      setSelectedVote({ ...selectedVote, active: false });
+                      if (agencyArtistId) getVotes(agencyArtistId).then(res => setVotesList(res.items)).catch(() => {});
+                      showToast('투표가 종료되었습니다.');
+                    } catch {
+                      showToast('투표 종료에 실패했습니다.', 'error');
+                    } finally {
+                      setVoteClosing(false);
+                    }
+                  }}
                 >
-                  투표 강제 종료
+                  {voteClosing ? '종료 중...' : '투표 강제 종료'}
                 </button>
               )}
               <button onClick={() => setSelectedVote(null)} className="flex-1 bg-[#F7F3EE] text-[#111] py-3 rounded-xl font-bold text-sm">닫기</button>
@@ -1736,6 +1765,16 @@ export default function AgencyApp() {
           {!showRestockModal ? (
             <>
               <h2 className="text-xl font-black mb-4">상품 상세</h2>
+              {selectedProduct.images && selectedProduct.images.length > 0 && (
+                <div className="flex gap-2 overflow-x-auto pb-1 mb-4">
+                  {selectedProduct.images.sort((a, b) => a.sortOrder - b.sortOrder).map((img, idx) => (
+                    <div key={idx} className="relative shrink-0 w-20 h-20 rounded-xl overflow-hidden border border-[#ede8e2]">
+                      {img.isPrimary && <div className="absolute top-1 left-1 bg-[#C2507A] text-white text-[8px] font-black px-1.5 py-0.5 rounded-sm z-10">대표</div>}
+                      <img src={img.imageUrl} alt="" className="w-full h-full object-cover" />
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="space-y-4 mb-6">
                 <div>
                   <label className="block text-xs font-black text-[#888] uppercase mb-1">상품명</label>

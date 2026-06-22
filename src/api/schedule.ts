@@ -31,20 +31,29 @@ export async function getLives(artistId: number): Promise<LivesResponse> {
   return body.data as LivesResponse
 }
 
+export interface CreateEventOptions {
+  linkNoticeId?: number
+  externalTicketUrl?: string
+}
+
 export async function createEvent(
   artistId: number,
   title: string,
   type: string,
   scheduledAt: string,
+  options: CreateEventOptions = {},
 ): Promise<{ eventId: number }> {
+  const payload: Record<string, unknown> = { title, type, scheduledAt }
+  if (options.linkNoticeId) payload.linkNoticeId = options.linkNoticeId
+  if (options.externalTicketUrl) payload.externalTicketUrl = options.externalTicketUrl
   const res = await fetch(`/api/v1/artists/${artistId}/events`, {
     method: 'POST',
     headers: agencyHeaders(),
-    body: JSON.stringify({ title, type, scheduledAt }),
+    body: JSON.stringify(payload),
   })
   if (!res.ok) throw new Error(`createEvent failed: ${res.status}`)
-  const body = await res.json()
-  return body.data as { eventId: number }
+  const json = await res.json()
+  return json.data as { eventId: number }
 }
 
 export async function registerLive(

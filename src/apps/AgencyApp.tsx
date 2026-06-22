@@ -159,7 +159,7 @@ export default function AgencyApp() {
   const [profileEditForm, setProfileEditForm] = useState({ bio: '', instagramUrl: '', youtubeUrl: '', twitterUrl: '', officialUrl: '' });
   const [editingMemberForm, setEditingMemberForm] = useState<MemberEditForm | null>(null);
   const profileImageInputRef = useRef<HTMLInputElement>(null);
-  const [newNotice, setNewNotice] = useState({ title: '', tag: 'NOTICE (일반공지)', content: '' });
+  const [newNotice, setNewNotice] = useState({ title: '', tag: 'NOTICE (일반공지)', content: '', scheduledAt: '', calendarType: 'EVENT' as 'DROP' | 'EVENT' | 'LIVE' });
 
   const [productList, setProductList] = useState<ProductListItem[]>([]);
   const [productForm, setProductForm] = useState({ name: '', price: '', totalQty: '', isDrops: false, dropsStartAt: '', dropsEndAt: '' });
@@ -170,7 +170,7 @@ export default function AgencyApp() {
   const [agencySchedules, setAgencySchedules] = useState<ScheduleResult[]>([]);
   const [agencyOrders, setAgencyOrders] = useState<AgencyOrderItem[]>([]);
   const [inventoryHistory, setInventoryHistory] = useState<InventoryHistoryItem[]>([]);
-  const [eventForm, setEventForm] = useState({ title: '', type: 'EVENT', date: '', time: '' });
+  const [eventForm, setEventForm] = useState<{ title: string; type: string; date: string; time: string; linkNoticeId: number | ''; externalTicketUrl: string }>({ title: '', type: 'EVENT', date: '', time: '', linkNoticeId: '', externalTicketUrl: '' });
   const [liveForm, setLiveForm] = useState({ title: '', date: '', time: '', liveUrl: '' });
   const [showLiveModal, setShowLiveModal] = useState(false);
   const [startingLiveId, setStartingLiveId] = useState<number | null>(null);
@@ -342,10 +342,13 @@ export default function AgencyApp() {
   const addNotice = async () => {
     if (!newNotice.title.trim() || !agencyArtistId) return;
     try {
-      await createNotice(agencyArtistId, newNotice.title, newNotice.content);
+      const options = linkNoticeToggle
+        ? { autoSyncCalendar: true, calendarType: newNotice.calendarType, ...(newNotice.scheduledAt ? { scheduledAt: newNotice.scheduledAt } : {}) }
+        : {};
+      await createNotice(agencyArtistId, newNotice.title, newNotice.content, [], options);
       const res = await getNotices(agencyArtistId);
       setNotices(res.items);
-      setNewNotice({ title: '', tag: 'NOTICE (일반공지)', content: '' });
+      setNewNotice({ title: '', tag: 'NOTICE (일반공지)', content: '', scheduledAt: '', calendarType: 'EVENT' });
       setShowNoticeModal(false);
       showToast('새 공지사항이 등록되었습니다!');
     } catch {
@@ -1057,15 +1060,27 @@ export default function AgencyApp() {
                             <input type="time" value={eventForm.time} onChange={e => setEventForm({...eventForm, time: e.target.value})} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]" />
                           </div>
                         </div>
+                        <div>
+                          <label className="block text-sm font-bold text-[#888] mb-1">연결 공지 (선택)</label>
+                          <select value={eventForm.linkNoticeId} onChange={e => setEventForm({...eventForm, linkNoticeId: e.target.value ? Number(e.target.value) : ''})} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]">
+                            <option value="">연결 안 함</option>
+                            {notices.map(n => <option key={n.id} value={n.id}>{n.title}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-bold text-[#888] mb-1">티켓 URL (선택)</label>
+                          <input type="url" value={eventForm.externalTicketUrl} onChange={e => setEventForm({...eventForm, externalTicketUrl: e.target.value})} className="w-full bg-[#F7F3EE] border border-[#ede8e2] px-4 py-2 rounded-xl focus:outline-none focus:border-[#C2507A]" placeholder="https://ticket.example.com/..." />
+                        </div>
                       </div>
                       <div className="flex gap-2 mt-6">
-                        <button className="flex-1 bg-[#F7F3EE] text-[#111] py-3 rounded-xl font-bold" onClick={() => { setShowEventModal(false); setEventForm({ title: '', type: 'EVENT', date: '', time: '' }); }}>취소</button>
+                        <button className="flex-1 bg-[#F7F3EE] text-[#111] py-3 rounded-xl font-bold" onClick={() => { setShowEventModal(false); setEventForm({ title: '', type: 'EVENT', date: '', time: '', linkNoticeId: '', externalTicketUrl: '' }); }}>취소</button>
                         <button className="flex-1 bg-[#C2507A] text-white py-3 rounded-xl font-bold" onClick={async () => {
                           if (!agencyArtistId || !eventForm.title.trim() || !eventForm.date || !eventForm.time) { showToast('모든 필드를 입력해주세요.', 'error'); return; }
                           try {
-                            await createEvent(agencyArtistId, eventForm.title.trim(), eventForm.type, `${eventForm.date}T${eventForm.time}:00+09:00`);
+                            const eventOptions = { ...(eventForm.linkNoticeId !== '' ? { linkNoticeId: eventForm.linkNoticeId as number } : {}), ...(eventForm.externalTicketUrl ? { externalTicketUrl: eventForm.externalTicketUrl } : {}) };
+                            await createEvent(agencyArtistId, eventForm.title.trim(), eventForm.type, `${eventForm.date}T${eventForm.time}:00+09:00`, eventOptions);
                             setShowEventModal(false);
-                            setEventForm({ title: '', type: 'EVENT', date: '', time: '' });
+                            setEventForm({ title: '', type: 'EVENT', date: '', time: '', linkNoticeId: '', externalTicketUrl: '' });
                             getCalendar(agencyArtistId).then(res => setAgencySchedules(res.events)).catch(() => {});
                             showToast('일정이 등록되었습니다.');
                           } catch { showToast('일정 등록에 실패했습니다.', 'error'); }
@@ -1218,11 +1233,15 @@ export default function AgencyApp() {
                                   <div className="grid grid-cols-2 gap-4">
                                     <div>
                                       <label className="block text-xs font-black text-[#888] uppercase mb-1">일정 일시</label>
-                                      <input type="datetime-local" className="w-full bg-white border border-[#ede8e2] px-3 py-2 rounded-lg" />
+                                      <input type="datetime-local" value={newNotice.scheduledAt} onChange={e => setNewNotice({ ...newNotice, scheduledAt: e.target.value })} className="w-full bg-white border border-[#ede8e2] px-3 py-2 rounded-lg focus:outline-none focus:border-[#C2507A]" />
                                     </div>
                                     <div>
-                                      <label className="block text-xs font-black text-[#888] uppercase mb-1">일정 타입</label>
-                                      <input type="text" value={newNotice.tag} className="w-full bg-white border border-[#ede8e2] px-3 py-2 rounded-lg" readOnly />
+                                      <label className="block text-xs font-black text-[#888] uppercase mb-1">캘린더 타입</label>
+                                      <select value={newNotice.calendarType} onChange={e => setNewNotice({ ...newNotice, calendarType: e.target.value as 'DROP' | 'EVENT' | 'LIVE' })} className="w-full bg-white border border-[#ede8e2] px-3 py-2 rounded-lg focus:outline-none focus:border-[#C2507A]">
+                                        <option value="EVENT">EVENT</option>
+                                        <option value="DROP">DROP</option>
+                                        <option value="LIVE">LIVE</option>
+                                      </select>
                                     </div>
                                   </div>
                                </div>

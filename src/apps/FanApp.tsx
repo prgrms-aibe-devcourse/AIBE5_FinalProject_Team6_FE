@@ -156,8 +156,6 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [activeTab, setActiveTab] = useState<string>(() =>
     TAB_FROM_URL[searchParams.get('tab') ?? ''] ?? 'HOME'
   );
-  const [isArtistAuthorized, setIsArtistAuthorized] = useState(false);
-  
   const [feeds, setFeeds] = useState<FeedResponse[]>([]);
   const [feedsLoading, setFeedsLoading] = useState(false);
 
@@ -737,66 +735,6 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       .catch(console.error)
       .finally(() => setStoreLoading(false));
   };
-
-  if (role === 'ARTIST' && !isArtistAuthorized) {
-    return (
-      <div className="min-h-screen bg-[#F7F3EE] flex items-center justify-center font-sans p-6">
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-[32px] p-10 w-full max-w-md shadow-[0_32px_64px_rgba(0,0,0,0.08)] border border-[#EDE8E2]"
-        >
-          <div className="text-center mb-10">
-            <div className="font-mono text-xs tracking-[4px] text-[#C2507A] font-bold mb-4 uppercase">Artist Portal</div>
-            <h2 className="text-3xl font-black tracking-tight text-[#111]">Artist Login</h2>
-          </div>
-          
-          <div className="space-y-6">
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-[#888] uppercase tracking-wider ml-1">Email or ID</label>
-              <input 
-                type="text" 
-                defaultValue="starlight_admin"
-                className="w-full bg-[#F7F3EE] border border-[#EDE8E2] px-6 py-4 rounded-2xl focus:outline-none focus:border-[#C2507A] transition-all font-medium" 
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-[#888] uppercase tracking-wider ml-1">Password</label>
-              <input 
-                type="password" 
-                defaultValue="password"
-                className="w-full bg-[#F7F3EE] border border-[#EDE8E2] px-6 py-4 rounded-2xl focus:outline-none focus:border-[#C2507A] transition-all font-medium" 
-              />
-            </div>
-
-            <button 
-              onClick={() => {
-                setIsArtistAuthorized(true);
-                setActiveTab('WORKSPACE');
-                if (favoriteArtists.length > 0) {
-                  setSelectedArtist(favoriteArtists[0]);
-                  setBoardTab('FEED');
-                }
-              }}
-              className="w-full bg-[#111] text-white py-5 rounded-2xl font-bold hover:bg-black transition-all shadow-lg active:scale-[0.98] mt-4"
-            >
-              Artist 로그인하기
-            </button>
-            
-            <div className="pt-6 border-t border-[#F7F3EE] text-center">
-              <button 
-                onClick={() => { logout(); localStorage.removeItem(ROLE_KEY); navigate('/login', { replace: true }); }}
-                className="text-sm font-bold text-[#888] hover:text-[#C2507A] transition-colors"
-              >
-                ← Back to main
-              </button>
-            </div>
-          </div>
-        </motion.div>
-      </div>
-    );
-  }
 
   return (
     <div className="fandrops-container" ref={containerRef}>
@@ -2283,8 +2221,8 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                   const artistName = storeArtists.find(a => a.id === item.artistId)?.name ?? `Artist #${item.artistId}`;
                   return (
                     <div key={item.id} className={`card reveal delay-${(idx % 3) * 100}${isSoldOut ? ' sold-out' : ''}`}
-                      style={{ cursor: isSoldOut ? 'default' : 'pointer', opacity: isSoldOut ? 0.7 : 1 }}
-                      onClick={() => { if (!isSoldOut) { setSelectedProduct(item); setActiveTab('STORE'); window.scrollTo({ top: 0, behavior: 'instant' }); } }}>
+                      style={{ cursor: 'pointer', opacity: isSoldOut ? 0.7 : 1 }}
+                      onClick={() => { setSelectedProduct(item); setActiveTab('STORE'); window.scrollTo({ top: 0, behavior: 'instant' }); }}>
                       <div className="c-img" style={{ background: item.thumbnailUrl ? 'transparent' : `linear-gradient(135deg, hsl(${item.id * 40}, 30%, 85%), hsl(${item.id * 40 + 20}, 30%, 78%))`, position: 'relative', overflow: 'hidden' }}>
                         {item.thumbnailUrl && <img src={item.thumbnailUrl} alt={item.name} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
                         <span className="c-tag">{artistName}</span>

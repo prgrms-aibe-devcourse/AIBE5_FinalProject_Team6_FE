@@ -355,11 +355,13 @@ export default function AgencyApp() {
 
   useEffect(() => {
     if (activeMenu !== 'orders') return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadOrders();
   }, [activeMenu, agencyArtistId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (activeMenu !== 'inventory') return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (agencyArtistId) refreshProductList().catch(() => {});
     loadInventory();
   }, [activeMenu, agencyArtistId, inventoryProductFilter]); // eslint-disable-line react-hooks/exhaustive-deps

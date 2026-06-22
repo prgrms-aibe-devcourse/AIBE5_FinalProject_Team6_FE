@@ -652,6 +652,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
 
   // 상품 상세 진입 시 images[] 로드
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!selectedProduct) { setProductImages([]); setProductMainImg(0); return; }
     getProduct(selectedProduct.id).then(res => {
       setProductImages(res.images ?? []);

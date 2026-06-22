@@ -64,3 +64,39 @@ export async function unsubscribeRestock(productId: number): Promise<void> {
   })
   if (!res.ok) throw new Error(`unsubscribeRestock failed: ${res.status}`)
 }
+
+export interface UpdateProductRequest {
+  name?: string
+  price?: number
+  status?: string
+  dropsStartAt?: string
+  dropsEndAt?: string
+}
+
+export async function updateProduct(
+  id: number,
+  data: UpdateProductRequest,
+): Promise<{ productId: number; status: string }> {
+  const res = await fetchWithAuth(`${BASE}/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) throw new Error(`updateProduct failed: ${res.status}`)
+  const body = await res.json()
+  return body.data as { productId: number; status: string }
+}
+
+export async function restockProduct(
+  productId: number,
+  quantity: number,
+): Promise<{ productId: number; totalQty: number }> {
+  const res = await fetchWithAuth(`${BASE}/${productId}/restock`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({ quantity }),
+  })
+  if (!res.ok) throw new Error(`restockProduct failed: ${res.status}`)
+  const body = await res.json()
+  return body.data as { productId: number; totalQty: number }
+}

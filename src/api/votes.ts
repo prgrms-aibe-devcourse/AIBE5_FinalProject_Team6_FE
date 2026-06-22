@@ -36,6 +36,16 @@ export async function createVote(
   return body.data as { voteId: number }
 }
 
+export async function closeVote(voteId: number): Promise<{ voteId: number; active: boolean }> {
+  const res = await fetch(`/api/v1/goods-votes/${voteId}/close`, {
+    method: 'PATCH',
+    headers: getAuthHeaders(),
+  })
+  if (!res.ok) throw new Error(`closeVote failed: ${res.status}`)
+  const body = await res.json()
+  return body.data as { voteId: number; active: boolean }
+}
+
 export async function castBallot(
   voteId: number,
   optionId: number,

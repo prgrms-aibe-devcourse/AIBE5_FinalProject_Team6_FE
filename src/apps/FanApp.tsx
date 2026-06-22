@@ -6,8 +6,8 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Plus, Search, Calendar, Heart, Share2, Image as ImageIcon, Smile, MoreHorizontal, MessageSquare, Bell, Pin, Play, Youtube, ChevronLeft, ChevronRight, X, User, ShoppingBag, LogOut, Ticket, Settings, ThumbsUp, CheckCircle2, Gift } from 'lucide-react';
 import { useCheckout } from '../hooks/useCheckout';
 import { useQueue } from '../hooks/useQueue';
-import { getProducts, subscribeRestock, unsubscribeRestock } from '../api/products';
-import type { ProductListItem } from '../types/product';
+import { getProducts, getProduct, subscribeRestock, unsubscribeRestock } from '../api/products';
+import type { ProductListItem, ProductImage } from '../types/product';
 import { getArtists } from '../api/artist';
 import type { ArtistItem } from '../types/artist';
 import { getStoreBanners, getMainBanners } from '../api/banners';
@@ -266,6 +266,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     return s ? s.toUpperCase() : 'OVERVIEW';
   });
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [productImages, setProductImages] = useState<ProductImage[]>([]);
 
   // New Filter & Sort States
   const [storeArtist, setStoreArtist] = useState('ALL');
@@ -648,6 +649,15 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     if (selectedNotice) params.noticeId = String(selectedNotice.id);
     setSearchParams(params, { replace: false });
   }, [selectedProduct?.id, selectedNotice?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 상품 상세 진입 시 images[] 로드
+  useEffect(() => {
+    if (!selectedProduct) { setProductImages([]); setProductMainImg(0); return; }
+    getProduct(selectedProduct.id).then(res => {
+      setProductImages(res.images ?? []);
+      setProductMainImg(0);
+    }).catch(() => setProductImages([]));
+  }, [selectedProduct?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // state → URL: 서브 상태 변경 시 replace (추가 history 항목 없음)
   useEffect(() => {
@@ -2274,7 +2284,8 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                     <div key={item.id} className={`card reveal delay-${(idx % 3) * 100}${isSoldOut ? ' sold-out' : ''}`}
                       style={{ cursor: isSoldOut ? 'default' : 'pointer', opacity: isSoldOut ? 0.7 : 1 }}
                       onClick={() => { if (!isSoldOut) { setSelectedProduct(item); setActiveTab('STORE'); window.scrollTo({ top: 0, behavior: 'instant' }); } }}>
-                      <div className="c-img" style={{ background: `linear-gradient(135deg, hsl(${item.id * 40}, 30%, 85%), hsl(${item.id * 40 + 20}, 30%, 78%))` }}>
+                      <div className="c-img" style={{ background: item.thumbnailUrl ? 'transparent' : `linear-gradient(135deg, hsl(${item.id * 40}, 30%, 85%), hsl(${item.id * 40 + 20}, 30%, 78%))`, position: 'relative', overflow: 'hidden' }}>
+                        {item.thumbnailUrl && <img src={item.thumbnailUrl} alt={item.name} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
                         <span className="c-tag">{artistName}</span>
                         {isSoldOut ? (
                           <span className="c-status" style={{ background: '#555' }}>SOLD OUT</span>
@@ -2322,7 +2333,8 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                   ) : recommendedProducts.map((item, idx) => (
                     <div key={item.id} className={`card reveal delay-${(idx % 3) * 100}`} style={{ cursor: 'pointer' }}
                       onClick={() => { setSelectedProduct(item); setActiveTab('STORE'); window.scrollTo({ top: 0, behavior: 'instant' }); }}>
-                      <div className="c-img" style={{ background: `linear-gradient(135deg, hsl(${item.id * 40}, 30%, 85%), #fff)` }}>
+                      <div className="c-img" style={{ background: item.thumbnailUrl ? 'transparent' : `linear-gradient(135deg, hsl(${item.id * 40}, 30%, 85%), #fff)`, position: 'relative', overflow: 'hidden' }}>
+                        {item.thumbnailUrl && <img src={item.thumbnailUrl} alt={item.name} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
                         <span className="c-tag">{storeArtists.find(a => a.id === item.artistId)?.name ?? `#${item.artistId}`}</span>
                         {item.status === 'SOLD_OUT' && <span className="c-status" style={{ background: '#888' }}>품절</span>}
                       </div>
@@ -2393,14 +2405,28 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                 <div style={{ display: 'flex', gap: '48px', alignItems: 'flex-start', marginBottom: '64px' }}>
                   {/* Left: Images */}
                   <div style={{ flex: 1 }}>
-                    <div style={{ background: `linear-gradient(135deg, hsl(${selectedProduct.id * 40}, 30%, 85%), #fff)`, borderRadius: '16px', height: '480px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
-                      <ImageIcon size={64} color="rgba(0,0,0,0.1)" />
-                    </div>
-                    <div style={{ display: 'flex', gap: '12px' }}>
-                      {[0,1,2,3,4].map(idx => (
-                        <div key={idx} onClick={() => setProductMainImg(idx)} style={{ width: '80px', height: '80px', borderRadius: '8px', cursor: 'pointer', background: `hsl(${selectedProduct.id * 40}, 30%, ${85 - idx*5}%)`, border: productMainImg === idx ? '2px solid #C2507A' : 'none' }}></div>
-                      ))}
-                    </div>
+                    {productImages.length > 0 ? (
+                      <>
+                        <div style={{ borderRadius: '16px', height: '480px', overflow: 'hidden', marginBottom: '16px', background: '#F7F3EE' }}>
+                          <img src={productImages.sort((a, b) => a.sortOrder - b.sortOrder)[productMainImg]?.imageUrl} alt={selectedProduct.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                        </div>
+                        {productImages.length > 1 && (
+                          <div style={{ display: 'flex', gap: '12px' }}>
+                            {productImages.sort((a, b) => a.sortOrder - b.sortOrder).map((img, idx) => (
+                              <div key={idx} onClick={() => setProductMainImg(idx)} style={{ width: '80px', height: '80px', borderRadius: '8px', cursor: 'pointer', overflow: 'hidden', border: productMainImg === idx ? '2px solid #C2507A' : '1px solid #EDE8E2', flexShrink: 0 }}>
+                                <img src={img.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ background: `linear-gradient(135deg, hsl(${selectedProduct.id * 40}, 30%, 85%), #fff)`, borderRadius: '16px', height: '480px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
+                          <ImageIcon size={64} color="rgba(0,0,0,0.1)" />
+                        </div>
+                      </>
+                    )}
                   </div>
                   {/* Right: Info */}
                   <div style={{ width: '420px', flexShrink: 0 }}>
@@ -2766,7 +2792,8 @@ export default function App({ role = 'FAN' }: { role?: string }) {
             style={{ opacity: isSoldOut ? 0.6 : 1, cursor: 'pointer' }}
             onClick={() => { setSelectedProduct(item); window.scrollTo({ top: 0, behavior: 'instant' }); }}
           >
-            <div style={{ position: 'relative', height: '220px', background: 'var(--bg-cream)' }}>
+            <div style={{ position: 'relative', height: '220px', background: item.thumbnailUrl ? 'transparent' : 'var(--bg-cream)', overflow: 'hidden' }}>
+              {item.thumbnailUrl && <img src={item.thumbnailUrl} alt={item.name} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
               <div style={{ position: 'absolute', top: 12, left: 12, background: 'rgba(255,255,255,0.9)', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 800 }}>
                 {storeArtists.find(a => a.id === item.artistId)?.name ?? `Artist #${item.artistId}`}
               </div>

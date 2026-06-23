@@ -223,6 +223,29 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       }
     }
   };
+  const handleActivityClick = async (activity: ActivityItem) => {
+    const artist = storeArtists.find(a => a.id === activity.artistId);
+    if (!artist) return;
+    setSelectedArtist(toFanArtistEntry(artist));
+    setBoardTab('FEED');
+    setTimeout(() => {
+      const element = document.getElementById(`feed-post-${activity.feedId}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        element.style.transition = 'all 0.4s ease';
+        element.style.boxShadow = '0 0 25px rgba(127, 119, 221, 0.45)';
+        element.style.borderColor = 'var(--point-violet)';
+        element.style.transform = 'scale(1.01)';
+        setTimeout(() => {
+          element.style.boxShadow = '';
+          element.style.borderColor = '';
+          element.style.transform = '';
+        }, 1800);
+      } else {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }, 400);
+  };
 
   const [notifications, setNotifications] = useState<NotificationResult[]>([]);
 
@@ -1276,6 +1299,39 @@ export default function App({ role = 'FAN' }: { role?: string }) {
             margin: 12px 12px 0 12px;
           }
         }
+
+        .mp-followed-artist-item {
+          transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .mp-followed-artist-item:hover {
+          transform: scale(1.06);
+        }
+        .mp-followed-artist-item:active {
+          transform: scale(0.96);
+        }
+
+        .mp-activity-item {
+          display: flex;
+          align-items: flex-start;
+          gap: 12px;
+          padding: 14px 16px;
+          margin: 0 -16px;
+          border-radius: 12px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          border-bottom: 1px solid var(--border);
+        }
+        .mp-activity-item:last-child {
+          border-bottom: none;
+        }
+        .mp-activity-item:hover {
+          background: rgba(127, 119, 221, 0.05);
+          transform: translateX(4px);
+        }
+        .mp-activity-item:active {
+          background: rgba(127, 119, 221, 0.1);
+          transform: translateX(2px);
+        }
       `}</style>
 
       {/* Shared Header */}
@@ -1845,6 +1901,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                         currentArtistPosts.map(post => (
                           <motion.div
                             key={post.id}
+                            id={`feed-post-${post.id}`}
                             initial={false}
                             animate={false}
                             className={`feed-post ${post.artistMemberId != null ? 'artist-post' : ''}`}
@@ -3394,7 +3451,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                             return (
                               <div 
                                 key={a.id} 
-                                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', cursor: 'pointer', textAlign: 'center' }}
+                                className="mp-followed-artist-item"
                                 onClick={() => { setSelectedArtist(artist); setBoardTab('FEED'); }}
                               >
                                 <ArtistAvatar
@@ -3421,8 +3478,8 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                           {activities.map(a => {
                             const artistName = storeArtists.find(artist => artist.id === a.artistId)?.name ?? `아티스트 #${a.artistId}`;
                             return (
-                              <div key={a.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '14px 0', borderBottom: '1px solid var(--border)' }}>
-                                <div style={{ flexShrink: 0, color: a.type === 'FEED_LIKE' ? 'var(--point-rose)' : 'var(--point-violet)' }}>
+                              <div key={a.id} className="mp-activity-item" onClick={() => handleActivityClick(a)}>
+                                <div style={{ flexShrink: 0, color: a.type === 'FEED_LIKE' ? 'var(--point-rose)' : 'var(--point-violet)', marginTop: '2px' }}>
                                   {a.type === 'FEED_LIKE' ? <Heart size={16} /> : <MessageSquare size={16} />}
                                 </div>
                                 <div style={{ flex: 1 }}>

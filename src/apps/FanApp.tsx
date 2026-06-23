@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { logout, getSubFromToken } from '../api/auth';
 import { ROLE_KEY } from '../App';
@@ -9,7 +9,9 @@ import { useQueue } from '../hooks/useQueue';
 import { getProducts, getProduct, subscribeRestock, unsubscribeRestock } from '../api/products';
 import type { ProductListItem, ProductImage } from '../types/product';
 import { getArtists, getArtistMembersList } from '../api/artist';
-import type { ArtistItem } from '../types/artist';
+import type { ArtistItem, FanArtistEntry } from '../types/artist';
+import { toFanArtistEntry, enrichFanArtist } from '../types/artist';
+import { ArtistAvatar } from '../components/ArtistAvatar';
 import { getStoreBanners, getMainBanners } from '../api/banners';
 import type { StoreBannerResponse, BannerResponse } from '../types/banner';
 import { getCart, addCartItem, updateCartItem, removeCartItem } from '../api/cart';
@@ -51,17 +53,6 @@ function fmtNoticeDate(iso: string): string {
 }
 
 
-
-function artistGradient(id: number): string {
-  const gradients = [
-    'linear-gradient(135deg, #FF9A9E, #FECFEF)',
-    'linear-gradient(135deg, #fccb90, #d57eeb)',
-    'linear-gradient(135deg, #a1c4fd, #c2e9fb)',
-    'linear-gradient(135deg, #84fab0, #8fd3f4)',
-    'linear-gradient(135deg, #f6d365, #fda085)',
-  ]
-  return gradients[id % gradients.length]
-}
 
 function formatCount(n: number): string {
   if (n >= 1000) return (n / 1000).toFixed(1) + 'K'
@@ -111,8 +102,8 @@ const TRANSIENT_TABS = new Set(['CHECKOUT', 'QUEUE_WAIT', 'ORDER_COMPLETE']);
 export default function App({ role = 'FAN' }: { role?: string }) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [favoriteArtists, setFavoriteArtists] = useState<{ id: number; name: string; bg: string }[]>([]);
-  const [selectedArtist, setSelectedArtist] = useState<any>(null);
+  const [favoriteArtists, setFavoriteArtists] = useState<FanArtistEntry[]>([]);
+  const [selectedArtist, setSelectedArtist] = useState<FanArtistEntry | null>(null);
   const [boardTab, setBoardTab] = useState<string>(() => {
     const b = searchParams.get('board');
     return b ? b.toUpperCase() : 'FEED';
@@ -287,6 +278,10 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [cartItems, setCartItems] = useState<CartItemResponse[]>([]);
   const [cartLoading, setCartLoading] = useState(false);
   const [storeArtists, setStoreArtists] = useState<ArtistItem[]>([]);
+  const boardArtist = useMemo(
+    () => (selectedArtist ? enrichFanArtist(selectedArtist, storeArtists) : null),
+    [selectedArtist, storeArtists],
+  );
   const [recommendedProducts, setRecommendedProducts] = useState<ProductListItem[]>([]);
   const [artistSearchQuery, setArtistSearchQuery] = useState('');
   const [fanToast, setFanToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
@@ -577,7 +572,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
           if (!match) return;
           const { artist, member } = match;
           setCurrentMemberName(member.memberName);
-          const artistEntry = { id: artist.id, name: artist.name, bg: artistGradient(artist.id) };
+          const artistEntry = toFanArtistEntry(artist);
           setFavoriteArtists([artistEntry]);
           setSelectedArtist(artistEntry);
           setBoardTab('FEED');
@@ -589,10 +584,10 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     } else {
       getJoinedArtists()
         .then(res => {
-          setFavoriteArtists(res.items.map(a => ({
+          setFavoriteArtists(res.items.map(a => toFanArtistEntry({
             id: a.artistId,
-            name: `Artist #${a.artistId}`,
-            bg: artistGradient(a.artistId),
+            name: a.artistName ?? `Artist #${a.artistId}`,
+            profileImageUrl: a.profileImageUrl,
           })));
         })
         .catch(console.error);
@@ -1514,11 +1509,12 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                          <div key={a.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
                            onClick={() => {
                              if (activeTab === 'STORE') { setStoreArtist(String(a.id)); setShowArtistSearch(false); setArtistSearchQuery(''); }
-                             else { setSelectedArtist(a); setBoardTab('FEED'); setShowArtistSearch(false); setArtistSearchQuery(''); }
+                             else { setSelectedArtist(toFanArtistEntry(a)); setBoardTab('FEED'); setShowArtistSearch(false); setArtistSearchQuery(''); }
                            }}>
-                           <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: artistGradient(a.id), display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '14px' }}>
-                             {a.name.substring(0, 2)}
-                           </div>
+                           <ArtistAvatar
+                             artist={toFanArtistEntry(a)}
+                             style={{ width: '64px', height: '64px', borderRadius: '50%', fontSize: '14px' }}
+                           />
                            <span style={{ fontSize: '13px', fontWeight: 700 }}>{a.name}</span>
                          </div>
                        ))}
@@ -1532,18 +1528,22 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                      <p style={{ fontSize: '13px', color: '#bbb', textAlign: 'center', padding: '24px 0' }}>팔로우한 아티스트가 없습니다.</p>
                    ) : (
                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
-                       {favoriteArtists.map(a => (
+                       {favoriteArtists.map(a => {
+                         const artist = enrichFanArtist(a, storeArtists);
+                         return (
                          <div key={a.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
                            onClick={() => {
                              if (activeTab === 'STORE') { setStoreArtist(String(a.id)); setShowArtistSearch(false); setArtistSearchQuery(''); }
-                             else { setSelectedArtist(a); setBoardTab('FEED'); setShowArtistSearch(false); setArtistSearchQuery(''); }
+                             else { setSelectedArtist(artist); setBoardTab('FEED'); setShowArtistSearch(false); setArtistSearchQuery(''); }
                            }}>
-                           <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: a.bg ?? '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '14px' }}>
-                             {(storeArtists.find(s => s.id === a.id)?.name ?? a.name).substring(0, 3)}
-                           </div>
-                           <span style={{ fontSize: '13px', fontWeight: 700 }}>{storeArtists.find(s => s.id === a.id)?.name ?? a.name}</span>
+                           <ArtistAvatar
+                             artist={artist}
+                             fallbackChars={3}
+                             style={{ width: '64px', height: '64px', borderRadius: '50%', fontSize: '14px' }}
+                           />
+                           <span style={{ fontSize: '13px', fontWeight: 700 }}>{artist.name}</span>
                          </div>
-                       ))}
+                       )})}
                      </div>
                    )}
                    <button
@@ -1609,13 +1609,15 @@ export default function App({ role = 'FAN' }: { role?: string }) {
               </div>
             )}
             <div className="board-header">
-              <div className="bh-bg-color" style={{ background: selectedArtist.bg }}></div>
+              <div className="bh-bg-color" style={{ background: boardArtist?.bg }}></div>
               <div className="bh-bg"></div>
               <div className="bh-content">
-                <div className="bh-avatar" style={{ background: selectedArtist.bg }}></div>
+                {boardArtist && (
+                  <ArtistAvatar artist={boardArtist} className="bh-avatar" />
+                )}
                 <div className="bh-info">
                   <div className="bh-name">{selectedArtist.name}</div>
-                  <div className="bh-stats">{selectedArtist.type || 'Artist'} · {selectedArtist.followers || '10K'} 팔로워</div>
+                  <div className="bh-stats">Artist · {(storeArtists.find(a => a.id === selectedArtist.id)?.fanCount ?? 0).toLocaleString()} 팔로워</div>
                 </div>
                 {role === 'ARTIST' ? (
                   <button className="bh-join-btn" onClick={() => { logout(); localStorage.removeItem(ROLE_KEY); navigate('/login', { replace: true }); }} style={{ background: '#333' }}>로그아웃</button>
@@ -1855,7 +1857,11 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                           style={{ background: 'rgba(194, 80, 122, 0.03)', border: '1px solid rgba(194, 80, 122, 0.15)' }}
                         >
                           <div className="fp-header">
-                            <div className="fp-avatar artist-badge" style={{ background: selectedArtist.bg }}></div>
+                            {boardArtist ? (
+                              <ArtistAvatar artist={boardArtist} className="fp-avatar artist-badge" />
+                            ) : (
+                              <div className="fp-avatar artist-badge" style={{ background: selectedArtist.bg }}></div>
+                            )}
                             <div className="fp-meta">
                               <div className="fp-author">
                                 {post.artistMemberId != null
@@ -2247,14 +2253,16 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                   <Plus size={24} />
                 </button>
                 
-                {favoriteArtists.map((artist, idx) => (
-                  <div key={idx} className="c-artist-item" onClick={() => { setSelectedArtist(artist); setBoardTab('FEED'); }}>
+                {favoriteArtists.map((artist, idx) => {
+                  const displayArtist = enrichFanArtist(artist, storeArtists);
+                  return (
+                  <div key={idx} className="c-artist-item" onClick={() => { setSelectedArtist(displayArtist); setBoardTab('FEED'); }}>
                     <div style={{ position: 'relative' }}>
-                      <div className="c-artist-avatar" style={{ background: artist.bg }}></div>
+                      <ArtistAvatar artist={displayArtist} className="c-artist-avatar" />
                     </div>
-                    <span>{storeArtists.find(s => s.id === artist.id)?.name ?? artist.name}</span>
+                    <span>{displayArtist.name}</span>
                   </div>
-                ))}
+                )})}
               </div>
             </section>
 
@@ -2360,11 +2368,12 @@ export default function App({ role = 'FAN' }: { role?: string }) {
 
             <div className="grid-4">
               {storeArtists.map((artist, idx) => {
+                const displayArtist = toFanArtistEntry(artist);
                 const isFollowing = favoriteArtists.some(a => a.id === artist.id);
                 return (
                   <div className={`artist-card reveal delay-${(idx % 4) * 100}`} key={artist.id}
-                    onClick={() => { setSelectedArtist(artist); setBoardTab('FEED'); }}>
-                    <div className="ac-avatar" style={{ background: artistGradient(artist.id) }}></div>
+                    onClick={() => { setSelectedArtist(displayArtist); setBoardTab('FEED'); }}>
+                    <ArtistAvatar artist={displayArtist} className="ac-avatar" />
                     <div className="ac-name">{artist.name}</div>
                     <div className="ac-desc">{(artist.fanCount ?? 0).toLocaleString()} 팔로워</div>
                     <button className="ac-btn" onClick={async e => {
@@ -2372,9 +2381,9 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                       if (isFollowing) {
                         setFavoriteArtists(prev => prev.filter(a => a.id !== artist.id));
                         try { await unfollowArtist(artist.id); }
-                        catch { setFavoriteArtists(prev => [...prev, { id: artist.id, name: artist.name, bg: artistGradient(artist.id) }]); }
+                        catch { setFavoriteArtists(prev => [...prev, displayArtist]); }
                       } else {
-                        setFavoriteArtists(prev => [...prev, { id: artist.id, name: artist.name, bg: artistGradient(artist.id) }]);
+                        setFavoriteArtists(prev => [...prev, displayArtist]);
                         try { await followArtist(artist.id); }
                         catch { setFavoriteArtists(prev => prev.filter(a => a.id !== artist.id)); }
                       }

@@ -18,6 +18,8 @@ export interface FeedListResponse {
 
 export interface JoinedArtistResponse {
   artistId: number
+  artistName?: string
+  profileImageUrl?: string
   followedAt: string
 }
 

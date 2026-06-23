@@ -47,7 +47,7 @@ export function FanAvatar({
         ...style,
       }}
     >
-      <div style={{ width: '78%', height: '78%' }}>
+      <div style={{ width: '90%', height: '90%' }}>
         <FanMascotArt index={index} />
       </div>
     </div>

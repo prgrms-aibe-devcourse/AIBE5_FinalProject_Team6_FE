@@ -52,9 +52,6 @@ function MascotStar() {
       <path
         d="M 50 16 C 52 16 56 34 58 36 L 76 38 C 78 38 64 48 64 50 L 70 68 C 70 70 52 60 50 60 C 48 60 30 70 30 68 L 36 50 C 36 48 22 38 24 38 L 42 36 C 44 34 48 16 50 16 Z"
         fill="#F5C842"
-        stroke={INK}
-        strokeWidth="1"
-        strokeLinejoin="round"
       />
       <CuteEyes ly={46} ry={46} r={4.5} />
       <CuteSmile y={57} wide />
@@ -70,8 +67,6 @@ function MascotBlob() {
       <path
         d="M 20 54 C 18 40 34 28 52 30 C 72 32 82 44 80 56 C 78 68 64 74 50 72 C 34 70 22 64 20 54 Z"
         fill="#9B7FD4"
-        stroke={INK}
-        strokeWidth="1"
       />
       <CuteEyes r={4.5} />
       <CuteSmile />
@@ -84,7 +79,7 @@ function MascotBlob() {
 function MascotSquircle() {
   return (
     <g>
-      <rect x="24" y="26" width="52" height="48" rx="20" fill="#4EC0F0" stroke={INK} strokeWidth="1" />
+      <rect x="24" y="26" width="52" height="48" rx="20" fill="#4EC0F0" />
       <CuteEyes r={5} />
       <CuteSmile y={59} wide />
       <ellipse cx="28" cy="56" rx="5" ry="3.5" fill="#FFB060" opacity="0.65" />
@@ -97,7 +92,7 @@ function MascotSquircle() {
 function MascotPea() {
   return (
     <g>
-      <ellipse cx="50" cy="52" rx="26" ry="28" fill="#6ECF7A" stroke={INK} strokeWidth="1" />
+      <ellipse cx="50" cy="52" rx="26" ry="28" fill="#6ECF7A" />
       <CuteEyes ly={48} ry={48} r={5} />
       <CuteSmile y={60} wide />
       <Blush y={56} />
@@ -112,9 +107,6 @@ function MascotCloud() {
       <path
         d="M 24 58 C 18 58 16 52 22 48 C 20 38 30 32 40 34 C 44 24 58 22 66 30 C 78 28 86 38 82 48 C 90 52 88 62 76 62 L 26 62 C 24 62 24 58 24 58 Z"
         fill="#8ED4F0"
-        stroke={INK}
-        strokeWidth="1"
-        strokeLinejoin="round"
       />
       <CuteEyes ly={48} ry={48} r={4} />
       <path
@@ -137,9 +129,6 @@ function MascotArch() {
       <path
         d="M 20 70 C 20 42 34 24 50 24 C 66 24 80 42 80 70 Z"
         fill="#4A9E62"
-        stroke={INK}
-        strokeWidth="1"
-        strokeLinejoin="round"
       />
       <CuteEyes ly={48} ry={48} r={4.5} />
       <CuteSmile y={58} wide />
@@ -152,7 +141,7 @@ function MascotArch() {
 function MascotEgg() {
   return (
     <g>
-      <ellipse cx="50" cy="52" rx="24" ry="28" fill="#F5D840" stroke={INK} strokeWidth="1" />
+      <ellipse cx="50" cy="52" rx="24" ry="28" fill="#F5D840" />
       <CuteEyes ly={47} ry={47} r={5} />
       <CuteSmile y={60} wide />
       <Blush y={56} />
@@ -167,9 +156,6 @@ function MascotHeart() {
       <path
         d="M 50 30 C 58 22 72 24 74 38 C 76 52 50 72 50 72 C 50 72 24 52 26 38 C 28 24 42 22 50 30 Z"
         fill="#F88850"
-        stroke={INK}
-        strokeWidth="1"
-        strokeLinejoin="round"
       />
       <CuteEyes ly={46} ry={46} r={4.5} />
       <CuteSmile y={57} />
@@ -186,9 +172,6 @@ function MascotRoseHeart() {
       <path
         d="M 50 34 C 58 26 70 28 72 40 C 74 52 50 68 50 68 C 50 68 26 52 28 40 C 30 28 42 26 50 34 Z"
         fill="#F888A8"
-        stroke={INK}
-        strokeWidth="1"
-        strokeLinejoin="round"
       />
       <CuteEyes ly={46} ry={46} r={4.5} />
       <path
@@ -211,8 +194,6 @@ function MascotSlab() {
       <path
         d="M 16 50 C 16 40 28 36 50 36 C 72 36 84 40 84 50 C 84 62 72 66 50 66 C 28 66 16 62 16 50 Z"
         fill="#F8B040"
-        stroke={INK}
-        strokeWidth="1"
       />
       <CuteEyes ly={48} ry={48} r={5} />
       <CuteSmile y={58} wide />
@@ -228,8 +209,6 @@ function MascotBean() {
       <path
         d="M 50 20 C 62 20 68 34 66 50 C 64 68 56 78 50 78 C 44 78 36 68 34 50 C 32 34 38 20 50 20 Z"
         fill="#F888B0"
-        stroke={INK}
-        strokeWidth="1"
       />
       <CuteEyes ly={46} ry={46} r={4.5} />
       <path
@@ -250,10 +229,10 @@ function MascotBean() {
 function MascotPetal() {
   return (
     <g>
-      <ellipse cx="50" cy="36" rx="17" ry="15" fill="#A080D8" stroke={INK} strokeWidth="0.8" />
-      <ellipse cx="36" cy="52" rx="15" ry="17" fill="#A080D8" stroke={INK} strokeWidth="0.8" />
-      <ellipse cx="64" cy="52" rx="15" ry="17" fill="#A080D8" stroke={INK} strokeWidth="0.8" />
-      <ellipse cx="50" cy="66" rx="17" ry="13" fill="#A080D8" stroke={INK} strokeWidth="0.8" />
+      <ellipse cx="50" cy="36" rx="17" ry="15" fill="#A080D8" />
+      <ellipse cx="36" cy="52" rx="15" ry="17" fill="#A080D8" />
+      <ellipse cx="64" cy="52" rx="15" ry="17" fill="#A080D8" />
+      <ellipse cx="50" cy="66" rx="17" ry="13" fill="#A080D8" />
       <CuteEyes ly={50} ry={50} r={4.5} />
       <CuteSmile y={60} />
       <Blush y={56} />

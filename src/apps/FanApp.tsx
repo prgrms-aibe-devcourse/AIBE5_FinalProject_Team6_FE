@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { logout, getSubFromToken } from '../api/auth';
 import { ROLE_KEY } from '../App';
@@ -308,10 +308,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [cartItems, setCartItems] = useState<CartItemResponse[]>([]);
   const [cartLoading, setCartLoading] = useState(false);
   const [storeArtists, setStoreArtists] = useState<ArtistItem[]>([]);
-  const boardArtist = useMemo(
-    () => (selectedArtist ? enrichFanArtist(selectedArtist, storeArtists) : null),
-    [selectedArtist, storeArtists],
-  );
+  const boardArtist = selectedArtist ? enrichFanArtist(selectedArtist, storeArtists) : null;
   const [recommendedProducts, setRecommendedProducts] = useState<ProductListItem[]>([]);
   const [artistSearchQuery, setArtistSearchQuery] = useState('');
   const [fanToast, setFanToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
@@ -358,22 +355,20 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     return localStorage.getItem('fan_introduction') ?? '';
   });
   const [activities, setActivities] = useState<ActivityItem[]>([]);
-  const groupedActivities = useMemo(() => {
-    const groups: { [key: number]: { artist: FanArtistEntry; comments: ActivityItem[]; likes: ActivityItem[] } } = {};
-    activities.forEach(a => {
-      if (!groups[a.artistId]) {
-        const storeArtist = storeArtists.find(artist => artist.id === a.artistId);
-        const artist = storeArtist ? toFanArtistEntry(storeArtist) : { id: a.artistId, name: `아티스트 #${a.artistId}`, bg: 'var(--point-violet)', profileImageUrl: '' };
-        groups[a.artistId] = { artist, comments: [], likes: [] };
-      }
-      if (a.type === 'FEED_LIKE') {
-        groups[a.artistId].likes.push(a);
-      } else {
-        groups[a.artistId].comments.push(a);
-      }
-    });
-    return Object.values(groups);
-  }, [activities, storeArtists]);
+  const activityGroups: { [key: number]: { artist: FanArtistEntry; comments: ActivityItem[]; likes: ActivityItem[] } } = {};
+  activities.forEach(a => {
+    if (!activityGroups[a.artistId]) {
+      const storeArtistMatch = storeArtists.find(artist => artist.id === a.artistId);
+      const artist = storeArtistMatch ? toFanArtistEntry(storeArtistMatch) : { id: a.artistId, name: `아티스트 #${a.artistId}`, bg: 'var(--point-violet)', profileImageUrl: '' };
+      activityGroups[a.artistId] = { artist, comments: [], likes: [] };
+    }
+    if (a.type === 'FEED_LIKE') {
+      activityGroups[a.artistId].likes.push(a);
+    } else {
+      activityGroups[a.artistId].comments.push(a);
+    }
+  });
+  const groupedActivities = Object.values(activityGroups);
   const [myOrders, setMyOrders] = useState<OrderListItem[]>([]);
   const [cancellingOrderId, setCancellingOrderId] = useState<number | null>(null);
   const [paymentDetails, setPaymentDetails] = useState<Record<number, PaymentDetail | 'loading' | 'error'>>({});
@@ -547,18 +542,26 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   // 상품 목록 로드 — 아티스트 필터 또는 상품 타입 변경 시 재fetch
   useEffect(() => {
     const artistId = storeArtist !== 'ALL' ? Number(storeArtist) : undefined;
-    setStoreLoading(true);
-    setStoreItems([]);
-    setStoreNextCursor(null);
-    setStoreHasMore(false);
-    getProducts(storeProductType, undefined, 20, artistId)
-      .then(res => {
+    let cancelled = false;
+    async function load() {
+      setStoreLoading(true);
+      setStoreItems([]);
+      setStoreNextCursor(null);
+      setStoreHasMore(false);
+      try {
+        const res = await getProducts(storeProductType, undefined, 20, artistId);
+        if (cancelled) return;
         setStoreItems(res.items ?? []);
         setStoreNextCursor(res.nextCursor ?? null);
         setStoreHasMore(res.hasMore ?? false);
-      })
-      .catch(console.error)
-      .finally(() => setStoreLoading(false));
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (!cancelled) setStoreLoading(false);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
   }, [storeArtist, storeProductType]);
 
   // 스토어 배너 로드

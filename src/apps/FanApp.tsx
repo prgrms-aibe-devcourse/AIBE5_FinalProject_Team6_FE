@@ -157,6 +157,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     TAB_FROM_URL[searchParams.get('tab') ?? ''] ?? 'HOME'
   );
   const [currentMemberName, setCurrentMemberName] = useState<string>('');
+  const [memberMap, setMemberMap] = useState<Record<number, string>>({});
   const [feeds, setFeeds] = useState<FeedResponse[]>([]);
   const [feedsLoading, setFeedsLoading] = useState(false);
 
@@ -740,14 +741,20 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     }
   }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 선택한 아티스트 피드 로드
+  // 선택한 아티스트 피드 로드 + memberId→name 맵 갱신
   useEffect(() => {
     if (!selectedArtist) return;
     void (async () => {
       setFeedsLoading(true);
       try {
-        const res = await getFeeds(selectedArtist.id);
+        const [res, members] = await Promise.all([
+          getFeeds(selectedArtist.id),
+          getArtistMembersList(selectedArtist.id),
+        ]);
         setFeeds(res.items);
+        const map: Record<number, string> = {};
+        members.forEach(m => { map[m.id] = m.memberName; });
+        setMemberMap(map);
       } catch (e) {
         console.error(e);
       } finally {
@@ -1736,7 +1743,9 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                               <div className={`fp-avatar ${post.artistMemberId != null ? 'artist-badge' : ''}`} style={post.artistMemberId != null ? { background: selectedArtist.bg } : {}}></div>
                               <div className="fp-meta">
                                 <div className="fp-author">
-                                  {selectedArtist.name}
+                                  {post.artistMemberId != null
+                                    ? (memberMap[post.artistMemberId] ?? (currentMemberName || selectedArtist.name))
+                                    : selectedArtist.name}
                                   {post.artistMemberId != null && (
                                     <span className="fp-badge artist" style={{ background: 'var(--point-rose)' }}>
                                       <CheckCircle2 size={10} fill="currentColor" /> Official
@@ -1838,7 +1847,9 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                             <div className="fp-avatar artist-badge" style={{ background: selectedArtist.bg }}></div>
                             <div className="fp-meta">
                               <div className="fp-author">
-                                {selectedArtist.name}
+                                {post.artistMemberId != null
+                                  ? (memberMap[post.artistMemberId] ?? selectedArtist.name)
+                                  : selectedArtist.name}
                                 <span className="fp-badge artist" style={{ background: 'var(--point-rose)' }}>
                                   <CheckCircle2 size={10} fill="currentColor" /> Official
                                 </span>

@@ -12,6 +12,7 @@ import { getArtists, getArtistMembersList } from '../api/artist';
 import type { ArtistItem, FanArtistEntry } from '../types/artist';
 import { toFanArtistEntry, enrichFanArtist } from '../types/artist';
 import { ArtistAvatar } from '../components/ArtistAvatar';
+import { MemberAvatar } from '../components/MemberAvatar';
 import { getStoreBanners, getMainBanners } from '../api/banners';
 import type { StoreBannerResponse, BannerResponse } from '../types/banner';
 import { getCart, addCartItem, updateCartItem, removeCartItem } from '../api/cart';
@@ -149,7 +150,8 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     TAB_FROM_URL[searchParams.get('tab') ?? ''] ?? 'HOME'
   );
   const [currentMemberName, setCurrentMemberName] = useState<string>('');
-  const [memberMap, setMemberMap] = useState<Record<number, string>>({});
+  const [currentMemberProfileImageUrl, setCurrentMemberProfileImageUrl] = useState<string>('');
+  const [memberMap, setMemberMap] = useState<Record<number, { name: string; profileImageUrl?: string }>>({});
   const [feeds, setFeeds] = useState<FeedResponse[]>([]);
   const [feedsLoading, setFeedsLoading] = useState(false);
 
@@ -572,6 +574,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
           if (!match) return;
           const { artist, member } = match;
           setCurrentMemberName(member.memberName);
+          setCurrentMemberProfileImageUrl(member.profileImageUrl ?? '');
           const artistEntry = toFanArtistEntry(artist);
           setFavoriteArtists([artistEntry]);
           setSelectedArtist(artistEntry);
@@ -748,8 +751,8 @@ export default function App({ role = 'FAN' }: { role?: string }) {
           getArtistMembersList(selectedArtist.id),
         ]);
         setFeeds(res.items);
-        const map: Record<number, string> = {};
-        members.forEach(m => { map[m.id] = m.memberName; });
+        const map: Record<number, { name: string; profileImageUrl?: string }> = {};
+        members.forEach(m => { map[m.id] = { name: m.memberName, profileImageUrl: m.profileImageUrl }; });
         setMemberMap(map);
       } catch (e) {
         console.error(e);
@@ -1709,7 +1712,12 @@ export default function App({ role = 'FAN' }: { role?: string }) {
 
                     {role === 'ARTIST' && (
                       <div className="post-composer">
-                        <div className="pc-avatar"></div>
+                        <MemberAvatar
+                          profileImageUrl={currentMemberProfileImageUrl || undefined}
+                          name={currentMemberName}
+                          artistId={selectedArtist?.id}
+                          className="pc-avatar"
+                        />
                         <div className="pc-input-area">
                           <textarea 
                             className="pc-input" 
@@ -1753,11 +1761,20 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                             style={post.artistMemberId != null ? { background: 'rgba(194, 80, 122, 0.03)', border: '1px solid rgba(194, 80, 122, 0.15)' } : {}}
                           >
                             <div className="fp-header">
-                              <div className={`fp-avatar ${post.artistMemberId != null ? 'artist-badge' : ''}`} style={post.artistMemberId != null ? { background: selectedArtist.bg } : {}}></div>
+                              {post.artistMemberId != null ? (
+                                <MemberAvatar
+                                  profileImageUrl={memberMap[post.artistMemberId]?.profileImageUrl}
+                                  name={memberMap[post.artistMemberId]?.name}
+                                  artistId={selectedArtist.id}
+                                  className="fp-avatar artist-badge"
+                                />
+                              ) : (
+                                <div className="fp-avatar"></div>
+                              )}
                               <div className="fp-meta">
                                 <div className="fp-author">
                                   {post.artistMemberId != null
-                                    ? (memberMap[post.artistMemberId] ?? (currentMemberName || selectedArtist.name))
+                                    ? (memberMap[post.artistMemberId]?.name ?? (currentMemberName || selectedArtist.name))
                                     : selectedArtist.name}
                                   {post.artistMemberId != null && (
                                     <span className="fp-badge artist" style={{ background: 'var(--point-rose)' }}>
@@ -1857,7 +1874,14 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                           style={{ background: 'rgba(194, 80, 122, 0.03)', border: '1px solid rgba(194, 80, 122, 0.15)' }}
                         >
                           <div className="fp-header">
-                            {boardArtist ? (
+                            {post.artistMemberId != null ? (
+                              <MemberAvatar
+                                profileImageUrl={memberMap[post.artistMemberId]?.profileImageUrl}
+                                name={memberMap[post.artistMemberId]?.name}
+                                artistId={selectedArtist.id}
+                                className="fp-avatar artist-badge"
+                              />
+                            ) : boardArtist ? (
                               <ArtistAvatar artist={boardArtist} className="fp-avatar artist-badge" />
                             ) : (
                               <div className="fp-avatar artist-badge" style={{ background: selectedArtist.bg }}></div>
@@ -1865,7 +1889,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                             <div className="fp-meta">
                               <div className="fp-author">
                                 {post.artistMemberId != null
-                                  ? (memberMap[post.artistMemberId] ?? selectedArtist.name)
+                                  ? (memberMap[post.artistMemberId]?.name ?? selectedArtist.name)
                                   : selectedArtist.name}
                                 <span className="fp-badge artist" style={{ background: 'var(--point-rose)' }}>
                                   <CheckCircle2 size={10} fill="currentColor" /> Official

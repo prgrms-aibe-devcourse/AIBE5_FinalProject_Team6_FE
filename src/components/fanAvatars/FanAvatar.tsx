@@ -9,6 +9,7 @@ export interface FanAvatarProps {
   style?: CSSProperties
   border?: string
   title?: string
+  customImageUrl?: string
 }
 
 /**
@@ -21,6 +22,7 @@ export function FanAvatar({
   style,
   border,
   title,
+  customImageUrl,
 }: FanAvatarProps) {
   const index = getFanAvatarIndex(fanId)
   const [from, to] = getFanAvatarBg(fanId)
@@ -36,7 +38,7 @@ export function FanAvatar({
         width: size,
         height: size,
         borderRadius: '50%',
-        background: `linear-gradient(145deg, ${from}, ${to})`,
+        background: customImageUrl ? 'transparent' : `linear-gradient(145deg, ${from}, ${to})`,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -47,9 +49,17 @@ export function FanAvatar({
         ...style,
       }}
     >
-      <div style={{ width: '90%', height: '90%' }}>
-        <FanMascotArt index={index} />
-      </div>
+      {customImageUrl ? (
+        <img
+          src={customImageUrl}
+          alt={label}
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        />
+      ) : (
+        <div style={{ width: '90%', height: '90%' }}>
+          <FanMascotArt index={index} />
+        </div>
+      )}
     </div>
   )
 }

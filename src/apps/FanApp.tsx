@@ -104,6 +104,7 @@ const TRANSIENT_TABS = new Set(['CHECKOUT', 'QUEUE_WAIT', 'ORDER_COMPLETE']);
 export default function App({ role = 'FAN' }: { role?: string }) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [favoriteArtists, setFavoriteArtists] = useState<FanArtistEntry[]>([]);
   const [selectedArtist, setSelectedArtist] = useState<FanArtistEntry | null>(null);
   const [boardTab, setBoardTab] = useState<string>(() => {
@@ -262,6 +263,8 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [showNotifications] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [editNickname, setEditNickname] = useState('');
+  const [editIntroduction, setEditIntroduction] = useState('');
+  const [editImageUrl, setEditImageUrl] = useState('');
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [welcomeArtist, setWelcomeArtist] = useState<FanArtistEntry | null>(null);
@@ -338,6 +341,12 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [isNotifUpdating, setIsNotifUpdating] = useState(false);
   const [restockSubscribed, setRestockSubscribed] = useState<Set<number>>(new Set());
   const [fanProfile, setFanProfile] = useState<FanResult | null>(null);
+  const [profileImageUrl, setProfileImageUrl] = useState<string>(() => {
+    return localStorage.getItem('fan_profile_image') ?? '';
+  });
+  const [introduction, setIntroduction] = useState<string>(() => {
+    return localStorage.getItem('fan_introduction') ?? '';
+  });
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [myOrders, setMyOrders] = useState<OrderListItem[]>([]);
   const [cancellingOrderId, setCancellingOrderId] = useState<number | null>(null);
@@ -1327,6 +1336,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                 fanId={fanProfile?.fanId ?? getSubFromToken() ?? 0}
                 size={32}
                 border="2px solid white"
+                customImageUrl={profileImageUrl}
               />
             </div>
           )}
@@ -1580,17 +1590,73 @@ export default function App({ role = 'FAN' }: { role?: string }) {
           <div className="cart-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowEditProfile(false)}>
             <div style={{ width: '100%', maxWidth: '440px', background: 'white', borderRadius: '32px', padding: '40px', position: 'relative' }} onClick={e => e.stopPropagation()}>
                <X size={24} style={{ position: 'absolute', top: 32, right: 32, cursor: 'pointer', color: '#888' }} onClick={() => setShowEditProfile(false)} />
-               <h2 style={{ fontSize: '24px', fontWeight: 800, marginBottom: '32px' }}>프로필 수정</h2>
+               <h2 style={{ fontSize: '24px', fontWeight: 800, marginBottom: '24px' }}>프로필 수정</h2>
 
-               <div className="form-group" style={{ marginBottom: '32px' }}>
+               {/* 프로필 이미지 수정 영역 */}
+               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '24px', position: 'relative' }}>
+                 <div 
+                   onClick={() => fileInputRef.current?.click()}
+                   style={{ position: 'relative', width: '100px', height: '100px', borderRadius: '50%', cursor: 'pointer', overflow: 'hidden', border: '2px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F7F3EE' }}
+                 >
+                   <FanAvatar
+                     fanId={fanProfile?.fanId ?? getSubFromToken() ?? 0}
+                     size={100}
+                     border="none"
+                     customImageUrl={editImageUrl}
+                   />
+                   <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.2s' }} className="avatar-hover-overlay">
+                     <ImageIcon size={20} color="white" />
+                   </div>
+                 </div>
+                 <style>{`
+                   div:hover > .avatar-hover-overlay { opacity: 1 !important; }
+                 `}</style>
+                 <span onClick={() => fileInputRef.current?.click()} style={{ fontSize: '12px', color: 'var(--point-rose)', fontWeight: 700, marginTop: '8px', cursor: 'pointer' }}>이미지 변경</span>
+                 <input 
+                   type="file" 
+                   ref={fileInputRef} 
+                   onChange={(e) => {
+                     const file = e.target.files?.[0];
+                     if (!file) return;
+                     if (file.size > 5 * 1024 * 1024) {
+                       showToast('이미지 크기는 최대 5MB까지 가능합니다.', 'error');
+                       return;
+                     }
+                     const reader = new FileReader();
+                     reader.onloadend = () => {
+                       setEditImageUrl(reader.result as string);
+                     };
+                     reader.readAsDataURL(file);
+                   }} 
+                   accept="image/*" 
+                   style={{ display: 'none' }} 
+                 />
+               </div>
+
+               <div className="form-group" style={{ marginBottom: '20px' }}>
                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px', color: 'var(--text-sub)' }}>닉네임</label>
                  <input type="text" value={editNickname} onChange={e => setEditNickname(e.target.value)} className="form-input" style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--bg-cream)', padding: '14px 16px', borderRadius: '12px', fontSize: '15px' }} />
                </div>
 
+               <div className="form-group" style={{ marginBottom: '32px' }}>
+                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px', color: 'var(--text-sub)' }}>한 줄 자기소개</label>
+                 <input type="text" value={editIntroduction} onChange={e => setEditIntroduction(e.target.value)} placeholder="자기소개를 입력해주세요" className="form-input" style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--bg-cream)', padding: '14px 16px', borderRadius: '12px', fontSize: '15px' }} />
+               </div>
+
                <button className="btn-primary" onClick={() => {
                  updateMyProfile({ nickname: editNickname })
-                   .then(updated => { setFanProfile(updated); setShowEditProfile(false); })
-                   .catch(() => {});
+                   .then(updated => { 
+                     setFanProfile(updated); 
+                     setIntroduction(editIntroduction);
+                     setProfileImageUrl(editImageUrl);
+                     localStorage.setItem('fan_profile_image', editImageUrl);
+                     localStorage.setItem('fan_introduction', editIntroduction);
+                     setShowEditProfile(false); 
+                     showToast('프로필이 성공적으로 수정되었습니다.');
+                   })
+                   .catch(() => {
+                     showToast('프로필 수정에 실패했습니다.', 'error');
+                   });
                }} style={{ width: '100%', background: 'var(--text-main)', color: 'white', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 800 }}>저장하기</button>
             </div>
           </div>
@@ -3276,14 +3342,29 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                 fanId={fanProfile?.fanId ?? getSubFromToken() ?? 0}
                 size={120}
                 border="4px solid rgba(255,255,255,0.2)"
+                customImageUrl={profileImageUrl}
               />
-              <div className="bh-info">
-                <div className="bh-name" style={{ fontSize: '40px' }}>{fanProfile?.nickname ?? '—'}</div>
-                <div className="bh-stats" style={{ fontSize: '16px', opacity: 1, color: '#DDD' }}>
+              <div className="bh-info" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div className="bh-name" style={{ fontSize: '32px', fontWeight: 800, color: 'white', lineHeight: 1.2 }}>{fanProfile?.nickname ?? '—'}</div>
+                <div style={{ fontSize: '15px', color: 'rgba(255,255,255,0.8)', fontWeight: 500, marginTop: '2px' }}>
+                  {introduction || '자기소개가 아직 등록되지 않았습니다.'}
+                </div>
+                <div className="bh-stats" style={{ fontSize: '13px', opacity: 0.6, color: '#DDD', marginTop: '4px' }}>
                   {fanProfile ? (() => { const d = new Date(fanProfile.createdAt); return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 가입`; })() : '—'}
                 </div>
               </div>
-              <button className="c-btn" onClick={() => { setEditNickname(fanProfile?.nickname ?? ''); setShowEditProfile(true); }} style={{background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)'}}>프로필 수정</button>
+              <button 
+                className="c-btn" 
+                onClick={() => { 
+                  setEditNickname(fanProfile?.nickname ?? ''); 
+                  setEditIntroduction(introduction);
+                  setEditImageUrl(profileImageUrl);
+                  setShowEditProfile(true); 
+                }} 
+                style={{background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)'}}
+              >
+                프로필 수정
+              </button>
             </div>
           </div>
 
@@ -3295,10 +3376,6 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                 <div className={`mp-nav-item ${myPageTab === 'COLLECTION' ? 'active' : ''}`} onClick={() => setMyPageTab('COLLECTION')}><ImageIcon size={18} /> 나의 컬렉션</div>
                 <div className={`mp-nav-item ${myPageTab === 'SETTINGS' ? 'active' : ''}`} onClick={() => setMyPageTab('SETTINGS')}><Settings size={18} /> 설정</div>
                 <div className="mp-nav-item" style={{ color: '#FF4444', marginTop: '20px' }} onClick={() => setShowLogoutModal(true)}><LogOut size={18} /> 로그아웃</div>
-              </div>
-              
-              <div style={{ background: 'var(--bg-cream)', borderRadius: '16px', padding: '24px' }}>
-                <h4 style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-sub)', marginBottom: '16px', letterSpacing: '1px' }}>계정 정보</h4>
               </div>
             </div>
 
@@ -3341,20 +3418,24 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                         <p style={{ color: 'var(--text-sub)', fontSize: '15px', margin: 0 }}>최근 활동 내역이 없습니다.</p>
                       ) : (
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          {activities.map(a => (
-                            <div key={a.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '14px 0', borderBottom: '1px solid var(--border)' }}>
-                              <div style={{ flexShrink: 0, color: a.type === 'FEED_LIKE' ? 'var(--point-rose)' : 'var(--point-violet)' }}>
-                                {a.type === 'FEED_LIKE' ? <Heart size={16} /> : <MessageSquare size={16} />}
-                              </div>
-                              <div style={{ flex: 1 }}>
-                                <div style={{ fontSize: '13px', fontWeight: 700, marginBottom: '4px' }}>
-                                  {a.type === 'FEED_LIKE' ? '피드 좋아요' : '댓글 작성'}
+                          {activities.map(a => {
+                            const artistName = storeArtists.find(artist => artist.id === a.artistId)?.name ?? `아티스트 #${a.artistId}`;
+                            return (
+                              <div key={a.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '14px 0', borderBottom: '1px solid var(--border)' }}>
+                                <div style={{ flexShrink: 0, color: a.type === 'FEED_LIKE' ? 'var(--point-rose)' : 'var(--point-violet)' }}>
+                                  {a.type === 'FEED_LIKE' ? <Heart size={16} /> : <MessageSquare size={16} />}
                                 </div>
-                                <div style={{ fontSize: '13px', color: 'var(--text-sub)', marginBottom: '4px' }}>{a.content}</div>
-                                <div style={{ fontSize: '11px', color: 'var(--text-sub)' }}>{formatTime(a.createdAt)}</div>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ fontSize: '13px', fontWeight: 700, marginBottom: '4px' }}>
+                                    {a.type === 'FEED_LIKE' ? '피드 좋아요' : '댓글 작성'}
+                                    <span style={{ fontSize: '12px', color: 'var(--text-sub)', fontWeight: 600, marginLeft: '8px' }}>· {artistName}</span>
+                                  </div>
+                                  <div style={{ fontSize: '13px', color: 'var(--text-sub)', marginBottom: '4px' }}>{a.content}</div>
+                                  <div style={{ fontSize: '11px', color: 'var(--text-sub)' }}>{formatTime(a.createdAt)}</div>
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       )}
                     </div>

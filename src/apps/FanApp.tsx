@@ -357,6 +357,22 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     return localStorage.getItem('fan_introduction') ?? '';
   });
   const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const groupedActivities = useMemo(() => {
+    const groups: { [key: number]: { artist: FanArtistEntry; comments: ActivityItem[]; likes: ActivityItem[] } } = {};
+    activities.forEach(a => {
+      if (!groups[a.artistId]) {
+        const storeArtist = storeArtists.find(artist => artist.id === a.artistId);
+        const artist = storeArtist ? toFanArtistEntry(storeArtist) : { id: a.artistId, name: `아티스트 #${a.artistId}`, bg: 'var(--point-violet)', profileImageUrl: '' };
+        groups[a.artistId] = { artist, comments: [], likes: [] };
+      }
+      if (a.type === 'FEED_LIKE') {
+        groups[a.artistId].likes.push(a);
+      } else {
+        groups[a.artistId].comments.push(a);
+      }
+    });
+    return Object.values(groups);
+  }, [activities, storeArtists]);
   const [myOrders, setMyOrders] = useState<OrderListItem[]>([]);
   const [cancellingOrderId, setCancellingOrderId] = useState<number | null>(null);
   const [paymentDetails, setPaymentDetails] = useState<Record<number, PaymentDetail | 'loading' | 'error'>>({});
@@ -3542,25 +3558,54 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                       {activities.length === 0 ? (
                         <p style={{ color: 'var(--text-sub)', fontSize: '15px', margin: 0 }}>최근 활동 내역이 없습니다.</p>
                       ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          {activities.map(a => {
-                            const artistName = storeArtists.find(artist => artist.id === a.artistId)?.name ?? `아티스트 #${a.artistId}`;
-                            return (
-                              <div key={a.id} className="mp-activity-item" onClick={() => handleActivityClick(a)}>
-                                <div style={{ flexShrink: 0, color: a.type === 'FEED_LIKE' ? 'var(--point-rose)' : 'var(--point-violet)', marginTop: '2px' }}>
-                                  {a.type === 'FEED_LIKE' ? <Heart size={16} /> : <MessageSquare size={16} />}
-                                </div>
-                                <div style={{ flex: 1 }}>
-                                  <div style={{ fontSize: '13px', fontWeight: 700, marginBottom: '4px' }}>
-                                    {a.type === 'FEED_LIKE' ? '피드 좋아요' : '댓글 작성'}
-                                    <span style={{ fontSize: '12px', color: 'var(--text-sub)', fontWeight: 600, marginLeft: '8px' }}>· {artistName}</span>
-                                  </div>
-                                  <div style={{ fontSize: '13px', color: 'var(--text-sub)', marginBottom: '4px' }}>{a.content}</div>
-                                  <div style={{ fontSize: '11px', color: 'var(--text-sub)' }}>{formatTime(a.createdAt)}</div>
-                                </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                          {groupedActivities.map(group => (
+                            <div key={group.artist.id} style={{ border: '1px solid var(--border)', borderRadius: '24px', padding: '24px', background: 'rgba(255,255,255,0.4)', backdropFilter: 'blur(10px)', boxShadow: '0 8px 32px rgba(0,0,0,0.02)' }}>
+                              {/* Artist Mini Header */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px', borderBottom: '1px solid var(--border)', paddingBottom: '12px' }}>
+                                <ArtistAvatar artist={group.artist} style={{ width: '40px', height: '40px', borderRadius: '50%' }} />
+                                <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.3px' }}>{group.artist.name}</div>
                               </div>
-                            );
-                          })}
+
+                              {/* Comments Sub-section */}
+                              {group.comments.length > 0 && (
+                                <div style={{ marginBottom: group.likes.length > 0 ? '20px' : '0' }}>
+                                  <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--point-violet)', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <MessageSquare size={14} /> 작성한 댓글 ({group.comments.length})
+                                  </div>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    {group.comments.map(a => (
+                                      <div key={a.id} className="mp-activity-item" onClick={() => handleActivityClick(a)} style={{ margin: 0, padding: '12px 16px', borderBottom: 'none', background: 'rgba(255,255,255,0.6)', borderRadius: '12px' }}>
+                                        <div style={{ flex: 1 }}>
+                                          <div style={{ fontSize: '13px', color: 'var(--text-main)', fontWeight: 600, marginBottom: '4px' }}>{a.content}</div>
+                                          <div style={{ fontSize: '11px', color: 'var(--text-sub)' }}>{formatTime(a.createdAt)}</div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Likes Sub-section */}
+                              {group.likes.length > 0 && (
+                                <div>
+                                  <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--point-rose)', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <Heart size={14} /> 좋아요 한 피드 ({group.likes.length})
+                                  </div>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    {group.likes.map(a => (
+                                      <div key={a.id} className="mp-activity-item" onClick={() => handleActivityClick(a)} style={{ margin: 0, padding: '12px 16px', borderBottom: 'none', background: 'rgba(255,255,255,0.6)', borderRadius: '12px' }}>
+                                        <div style={{ flex: 1 }}>
+                                          <div style={{ fontSize: '13px', color: 'var(--text-main)', fontWeight: 600, marginBottom: '4px' }}>{a.content}</div>
+                                          <div style={{ fontSize: '11px', color: 'var(--text-sub)' }}>{formatTime(a.createdAt)}</div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>

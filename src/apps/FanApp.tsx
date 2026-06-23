@@ -24,6 +24,7 @@ import { getVotes, castBallot } from '../api/votes';
 import type { GoodsVoteResult } from '../types/vote';
 import { getAttendanceEvents, checkIn } from '../api/attendance';
 import type { AttendanceEventResult } from '../types/attendance';
+import { getRewardAsset } from '../constants/attendanceRewardImages';
 import { getNotifications, markAsRead } from '../api/notifications';
 import type { NotificationResult } from '../types/notification';
 import { getMyProfile, updateMyProfile, getMyActivities } from '../api/fan';
@@ -3373,8 +3374,19 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                     <div className="grid-3">
                       {collectedCards.map(card => (
                         <div key={card.id} className="card" style={{ height: 'fit-content' }}>
-                          <div className="c-img" style={{ height: '300px' }}>
-                            <img src={card.img} alt={card.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          <div className="c-img" style={{ height: '300px', background: card.img ? undefined : (card.gradient ?? 'linear-gradient(135deg, #FF9A9E, #FECFEF)') }}>
+                            {card.img && (
+                              <img
+                                src={card.img}
+                                alt={card.title}
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                onError={e => {
+                                  const el = e.target as HTMLImageElement;
+                                  el.style.display = 'none';
+                                  (el.parentElement as HTMLElement).style.background = card.gradient ?? 'linear-gradient(135deg, #FF9A9E, #FECFEF)';
+                                }}
+                              />
+                            )}
                             <div className="c-tag">DIGITAL PC</div>
                           </div>
                           <div className="c-body" style={{ padding: '20px' }}>
@@ -3537,56 +3549,71 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                       <p style={{ color: 'var(--text-sub)', fontSize: '14px' }}>내 보관함에서 언제든 확인할 수 있습니다!</p>
                     </div>
 
-                    <motion.div 
-                      className="photocard-preview"
-                      initial={{ filter: "blur(30px)", x: 0, rotate: 0 }}
-                      animate={{ 
-                        filter: ["blur(30px)", "blur(30px)", "blur(0px)"],
-                        x: [0, -30, 30, -30, 30, -30, 30, -30, 30, -30, 30, -30, 30, -30, 30, -30, 30, 0, 0, 0],
-                        rotate: [0, -6, 6, -6, 6, -6, 6, -6, 6, -6, 6, -6, 6, -6, 6, -6, 6, 0, 0, 0],
-                      }}
-                      transition={{ 
-                        filter: { duration: 2.2, times: [0, 0.85, 1], ease: "easeOut" },
-                        x: { 
-                          duration: 2.2, 
-                          times: [0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.95, 1],
-                          ease: "linear"
-                        },
-                        rotate: { 
-                          duration: 2.2, 
-                          times: [0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.95, 1],
-                          ease: "linear"
-                        }
-                      }}
-                    >
-                      <img src="https://images.unsplash.com/photo-1493225255756-d9584f8606e9?auto=format&fit=crop&q=80&w=600" alt="Special Photocard" />
-                      <div className="shine"></div>
-                      <div style={{ position: 'absolute', bottom: '16px', left: '16px', color: 'white', textShadow: '0 2px 4px rgba(0,0,0,0.5)', textAlign: 'left' }}>
-                        <div style={{ fontSize: '10px', fontWeight: 800, opacity: 0.8 }}>EXCLUSIVE DROP</div>
-                        <div style={{ fontSize: '16px', fontWeight: 900 }}>{selectedArtist?.name || 'NOVA'}: Behind</div>
-                      </div>
-                    </motion.div>
+                    {(() => {
+                      const rewardAsset = getRewardAsset(selectedArtist?.id);
+                      return (
+                        <>
+                          <motion.div
+                            className="photocard-preview"
+                            style={{ background: rewardAsset.gradient }}
+                            initial={{ filter: "blur(30px)", x: 0, rotate: 0 }}
+                            animate={{
+                              filter: ["blur(30px)", "blur(30px)", "blur(0px)"],
+                              x: [0, -30, 30, -30, 30, -30, 30, -30, 30, -30, 30, -30, 30, -30, 30, -30, 30, 0, 0, 0],
+                              rotate: [0, -6, 6, -6, 6, -6, 6, -6, 6, -6, 6, -6, 6, -6, 6, -6, 6, 0, 0, 0],
+                            }}
+                            transition={{
+                              filter: { duration: 2.2, times: [0, 0.85, 1], ease: "easeOut" },
+                              x: {
+                                duration: 2.2,
+                                times: [0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.95, 1],
+                                ease: "linear"
+                              },
+                              rotate: {
+                                duration: 2.2,
+                                times: [0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.95, 1],
+                                ease: "linear"
+                              }
+                            }}
+                          >
+                            {rewardAsset.imgUrl && (
+                              <img
+                                src={rewardAsset.imgUrl}
+                                alt="Special Photocard"
+                                onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                              />
+                            )}
+                            <div className="shine"></div>
+                            <div style={{ position: 'absolute', bottom: '16px', left: '16px', color: 'white', textShadow: '0 2px 4px rgba(0,0,0,0.5)', textAlign: 'left' }}>
+                              <div style={{ fontSize: '10px', fontWeight: 800, opacity: 0.8 }}>EXCLUSIVE DROP</div>
+                              <div style={{ fontSize: '16px', fontWeight: 900 }}>{selectedArtist?.name || 'NOVA'}: Behind</div>
+                            </div>
+                          </motion.div>
 
-                    <button
-                      className="btn-primary"
-                      style={{ background: 'var(--point-rose)' }}
-                      onClick={() => {
-                        const newCard = {
-                          id: Date.now(),
-                          artistName: selectedArtist?.name || 'NOVA',
-                          title: `${selectedArtist?.name || 'NOVA'}: Behind`,
-                          img: 'https://images.unsplash.com/photo-1493225255756-d9584f8606e9?auto=format&fit=crop&q=80&w=600',
-                          date: new Date().toLocaleDateString()
-                        };
-                        setCollectedCards(prev => [...prev, newCard]);
-                        setShowAttendance(false);
-                        setActiveTab('MY PAGE');
-                        setMyPageTab('COLLECTION');
-                        setSelectedArtist(null);
-                      }}
-                    >
-                      보관함으로 가기
-                    </button>
+                          <button
+                            className="btn-primary"
+                            style={{ background: 'var(--point-rose)' }}
+                            onClick={() => {
+                              const newCard = {
+                                id: Date.now(),
+                                artistName: selectedArtist?.name || 'NOVA',
+                                title: `${selectedArtist?.name || 'NOVA'}: Behind`,
+                                img: rewardAsset.imgUrl,
+                                gradient: rewardAsset.gradient,
+                                date: new Date().toLocaleDateString()
+                              };
+                              setCollectedCards(prev => [...prev, newCard]);
+                              setShowAttendance(false);
+                              setActiveTab('MY PAGE');
+                              setMyPageTab('COLLECTION');
+                              setSelectedArtist(null);
+                            }}
+                          >
+                            보관함으로 가기
+                          </button>
+                        </>
+                      );
+                    })()}
                   </motion.div>
                 </div>
               )}

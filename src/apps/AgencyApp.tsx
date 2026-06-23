@@ -188,6 +188,10 @@ export default function AgencyApp() {
   const [voteClosing, setVoteClosing] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ProductResponse | null>(null);
   const [productEditForm, setProductEditForm] = useState({ name: '', price: '', dropsStartAt: '', dropsEndAt: '' });
+  const [editProductImages, setEditProductImages] = useState<{ url: string }[]>([]);
+  const [editProductNewFiles, setEditProductNewFiles] = useState<File[]>([]);
+  const [editProductNewPreviews, setEditProductNewPreviews] = useState<string[]>([]);
+  const [editProductImageUploading, setEditProductImageUploading] = useState(false);
   const [restockQty, setRestockQty] = useState('');
   const [showRestockModal, setShowRestockModal] = useState(false);
   const [ordersCursor, setOrdersCursor] = useState<string | null>(null);
@@ -227,6 +231,11 @@ export default function AgencyApp() {
         dropsStartAt: detail.dropsStartAt ? detail.dropsStartAt.slice(0, 16) : '',
         dropsEndAt: detail.dropsEndAt ? detail.dropsEndAt.slice(0, 16) : '',
       });
+      setEditProductImages(
+        [...detail.images].sort((a, b) => a.sortOrder - b.sortOrder).map(img => ({ url: img.imageUrl }))
+      );
+      setEditProductNewFiles([]);
+      setEditProductNewPreviews([]);
     } catch {
       showToast('상품 정보를 불러오지 못했습니다.', 'error');
     }
@@ -1759,27 +1768,85 @@ export default function AgencyApp() {
     })()}
 
     {selectedProduct && (
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[120] flex items-center justify-center p-6" onClick={() => { setSelectedProduct(null); setShowRestockModal(false); }}>
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[120] flex items-center justify-center p-6" onClick={() => { setSelectedProduct(null); setShowRestockModal(false); setEditProductImages([]); setEditProductNewFiles([]); setEditProductNewPreviews([]); }}>
         <div className="bg-white rounded-[32px] w-full max-w-lg p-8 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
           <div className="flex justify-between items-start mb-6">
             <span className={`text-[10px] font-bold px-2 py-1 rounded ${selectedProduct.status === 'ON_SALE' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
               {selectedProduct.status}
             </span>
-            <button onClick={() => { setSelectedProduct(null); setShowRestockModal(false); }} className="p-2 hover:bg-[#F7F3EE] rounded-lg"><X size={18} /></button>
+            <button onClick={() => { setSelectedProduct(null); setShowRestockModal(false); setEditProductImages([]); setEditProductNewFiles([]); setEditProductNewPreviews([]); }} className="p-2 hover:bg-[#F7F3EE] rounded-lg"><X size={18} /></button>
           </div>
           {!showRestockModal ? (
             <>
               <h2 className="text-xl font-black mb-4">상품 상세</h2>
-              {selectedProduct.images && selectedProduct.images.length > 0 && (
-                <div className="flex gap-2 overflow-x-auto pb-1 mb-4">
-                  {selectedProduct.images.sort((a, b) => a.sortOrder - b.sortOrder).map((img, idx) => (
-                    <div key={idx} className="relative shrink-0 w-20 h-20 rounded-xl overflow-hidden border border-[#ede8e2]">
-                      {img.isPrimary && <div className="absolute top-1 left-1 bg-[#C2507A] text-white text-[8px] font-black px-1.5 py-0.5 rounded-sm z-10">대표</div>}
-                      <img src={img.imageUrl} alt="" className="w-full h-full object-cover" />
+              <div className="mb-4">
+                <label className="block text-xs font-black text-[#888] uppercase mb-2">상품 이미지 (최대 5장, 첫 번째가 대표)</label>
+                {(editProductImages.length > 0 || editProductNewPreviews.length > 0) && (
+                  <div className="flex gap-2 overflow-x-auto pb-1 mb-2">
+                    {editProductImages.map((img, idx) => (
+                      <div key={`existing-${idx}`} className="relative shrink-0 w-16 h-16 rounded-lg border border-[#ede8e2] overflow-hidden group">
+                        {idx === 0 && editProductNewPreviews.length === 0 && (
+                          <div className="absolute top-1 left-1 bg-[#C2507A] text-white text-[8px] font-black px-1.5 py-0.5 rounded-sm z-10">대표</div>
+                        )}
+                        <img src={img.url} alt="" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => setEditProductImages(prev => prev.filter((_, i) => i !== idx))}
+                        >
+                          <X size={10} />
+                        </button>
+                      </div>
+                    ))}
+                    {editProductNewPreviews.map((src, idx) => {
+                      const isFirst = editProductImages.length === 0 && idx === 0;
+                      return (
+                        <div key={`new-${idx}`} className="relative shrink-0 w-16 h-16 rounded-lg border border-[#ede8e2] overflow-hidden group">
+                          {isFirst && (
+                            <div className="absolute top-1 left-1 bg-[#C2507A] text-white text-[8px] font-black px-1.5 py-0.5 rounded-sm z-10">대표</div>
+                          )}
+                          <img src={src} alt="" className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => { setEditProductNewFiles(prev => prev.filter((_, i) => i !== idx)); setEditProductNewPreviews(prev => prev.filter((_, i) => i !== idx)); }}
+                          >
+                            <X size={10} />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {editProductImages.length + editProductNewPreviews.length < 5 && (
+                  <label className="cursor-pointer">
+                    <div className="w-full h-16 border-2 border-dashed border-[#ede8e2] rounded-xl flex items-center justify-center text-[#888] bg-[#F7F3EE] hover:border-[#C2507A] hover:text-[#C2507A] transition-colors gap-2">
+                      <Upload size={16} />
+                      <span className="text-xs font-bold">이미지 추가 ({editProductImages.length + editProductNewPreviews.length}/5)</span>
                     </div>
-                  ))}
-                </div>
-              )}
+                    <input
+                      type="file"
+                      className="hidden"
+                      multiple
+                      accept="image/*"
+                      onChange={(e) => {
+                        const remaining = 5 - editProductImages.length - editProductNewFiles.length;
+                        const added = Array.from(e.target.files ?? []).slice(0, remaining);
+                        if (added.length === 0) return;
+                        setEditProductNewFiles(prev => [...prev, ...added]);
+                        const readers = added.map(file => new Promise<string>((resolve) => {
+                          const reader = new FileReader();
+                          reader.onload = (ev) => resolve(ev.target?.result as string);
+                          reader.readAsDataURL(file);
+                        }));
+                        Promise.all(readers).then(urls => setEditProductNewPreviews(prev => [...prev, ...urls]));
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                )}
+                {editProductImageUploading && <p className="text-[10px] text-[#C2507A] mt-2 font-bold">이미지 업로드 중...</p>}
+              </div>
               <div className="space-y-4 mb-6">
                 <div>
                   <label className="block text-xs font-black text-[#888] uppercase mb-1">상품명</label>
@@ -1818,21 +1885,49 @@ export default function AgencyApp() {
               </div>
               <div className="flex flex-col gap-2">
                 <button
-                  className="w-full bg-[#C2507A] text-white py-3 rounded-xl font-bold text-sm"
+                  disabled={editProductImageUploading}
+                  className={`w-full py-3 rounded-xl font-bold text-sm text-white transition-colors ${editProductImageUploading ? 'bg-[#C2507A]/50 cursor-not-allowed' : 'bg-[#C2507A]'}`}
                   onClick={async () => {
                     try {
+                      let imageUrls: string[] | undefined;
+                      const originalUrls = [...selectedProduct.images]
+                        .sort((a, b) => a.sortOrder - b.sortOrder)
+                        .map(img => img.imageUrl);
+                      const hasImageChange =
+                        editProductNewFiles.length > 0 ||
+                        editProductImages.length !== originalUrls.length ||
+                        editProductImages.some((img, i) => img.url !== originalUrls[i]);
+                      if (hasImageChange) {
+                        setEditProductImageUploading(true);
+                        const uploadedUrls = await Promise.all(
+                          editProductNewFiles.map(async (file) => {
+                            const { presignedUrl, imageUrl } = await requestAgencyPresignedUrl(file.type, file.size);
+                            await uploadToS3Agency(presignedUrl, file);
+                            return imageUrl;
+                          })
+                        );
+                        imageUrls = [...editProductImages.map(img => img.url), ...uploadedUrls];
+                      }
                       await updateProduct(selectedProduct.id, {
                         name: productEditForm.name.trim(),
                         price: Number(productEditForm.price),
                         ...(productEditForm.dropsStartAt ? { dropsStartAt: `${productEditForm.dropsStartAt}:00` } : {}),
                         ...(productEditForm.dropsEndAt ? { dropsEndAt: `${productEditForm.dropsEndAt}:00` } : {}),
+                        ...(imageUrls !== undefined ? { imageUrls } : {}),
                       });
                       await refreshProductList();
                       const updated = await getProduct(selectedProduct.id);
                       setSelectedProduct(updated);
+                      setEditProductImages(
+                        [...updated.images].sort((a, b) => a.sortOrder - b.sortOrder).map(img => ({ url: img.imageUrl }))
+                      );
+                      setEditProductNewFiles([]);
+                      setEditProductNewPreviews([]);
                       showToast('상품이 수정되었습니다.');
                     } catch {
                       showToast('상품 수정에 실패했습니다.', 'error');
+                    } finally {
+                      setEditProductImageUploading(false);
                     }
                   }}
                 >

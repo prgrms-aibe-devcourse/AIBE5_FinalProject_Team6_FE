@@ -18,8 +18,39 @@ export interface CreateArtistMemberRequest {
 }
 
 export interface UpdateArtistMemberRequest {
-  memberName?: string
-  profileImageUrl?: string
+  memberName: string
+}
+
+export async function requestMemberProfileImagePresignedUrl(
+  memberId: number,
+  contentType: string,
+  contentLength: number,
+): Promise<{ presignedUrl: string; imageUrl: string }> {
+  const res = await fetchWithAuth(
+    `/api/v1/artist-members/${memberId}/profile-image/presigned-url`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify({ contentType, contentLength }),
+    },
+  )
+  if (!res.ok) throw new Error(`requestMemberProfileImagePresignedUrl failed: ${res.status}`)
+  const body = await res.json()
+  return body.data
+}
+
+export async function updateMemberProfileImage(
+  memberId: number,
+  imageUrl: string,
+): Promise<ArtistMember> {
+  const res = await fetchWithAuth(`/api/v1/artist-members/${memberId}/profile-image`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({ imageUrl }),
+  })
+  if (!res.ok) throw new Error(`updateMemberProfileImage failed: ${res.status}`)
+  const body = await res.json()
+  return body.data as ArtistMember
 }
 
 export async function createArtistMember(

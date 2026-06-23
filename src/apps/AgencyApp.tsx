@@ -16,7 +16,13 @@ import { getProducts, getProduct, createProduct, updateProduct, restockProduct }
 import type { CreateProductRequest, ProductListItem, ProductResponse } from '../api/products';
 import { getAgencyArtists, getArtistPublicProfile, updateArtistProfile, requestArtistProfileImagePresignedUrl, updateArtistProfileImage, getArtistMembers } from '../api/agencyArtists'
 import type { ArtistItem, ArtistPublicProfile, ArtistMember } from '../types/artist'
-import { createArtistMember, updateArtistMember, deleteArtistMember } from '../api/artistMembers'
+import {
+  createArtistMember,
+  updateArtistMember,
+  deleteArtistMember,
+  requestMemberProfileImagePresignedUrl,
+  updateMemberProfileImage,
+} from '../api/artistMembers'
 import { getAgencyOrders } from '../api/agencyOrders'
 import type { AgencyOrderItem } from '../api/agencyOrders'
 import { getAgencyInventoryHistory } from '../api/agencyInventory'
@@ -301,24 +307,23 @@ export default function AgencyApp() {
   const handleMemberSave = async () => {
     if (!agencyArtistId || !editingMemberForm) return;
     try {
-      let profileImageUrl = editingMemberForm.profileImageUrl;
-      if (editingMemberForm._file) {
-        const { presignedUrl, imageUrl } = await requestAgencyPresignedUrl(
-          editingMemberForm._file.type, editingMemberForm._file.size,
-        );
-        await uploadToS3Agency(presignedUrl, editingMemberForm._file);
-        profileImageUrl = imageUrl;
-      }
       if (editingMemberForm.id) {
         await updateArtistMember(editingMemberForm.id, {
           memberName: editingMemberForm.memberName,
-          profileImageUrl: profileImageUrl || undefined,
         });
+        if (editingMemberForm._file) {
+          const { presignedUrl, imageUrl } = await requestMemberProfileImagePresignedUrl(
+            editingMemberForm.id,
+            editingMemberForm._file.type,
+            editingMemberForm._file.size,
+          );
+          await uploadToS3Agency(presignedUrl, editingMemberForm._file);
+          await updateMemberProfileImage(editingMemberForm.id, imageUrl);
+        }
       } else {
         await createArtistMember({
           artistId: agencyArtistId,
           memberName: editingMemberForm.memberName,
-          profileImageUrl: profileImageUrl || undefined,
         });
       }
       const updated = await getArtistMembers(agencyArtistId);

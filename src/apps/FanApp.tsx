@@ -25,6 +25,7 @@ import type { AttendanceEventResult } from '../types/attendance';
 import { getNotifications, markAsRead } from '../api/notifications';
 import type { NotificationResult } from '../types/notification';
 import { getMyProfile, updateMyProfile, getMyActivities } from '../api/fan';
+import { FanAvatar } from '../components/fanAvatars/FanAvatar';
 import type { FanResult, ActivityItem } from '../types/fan';
 import { getMyOrders, cancelOrder } from '../api/orders';
 import type { OrderListItem } from '../types/order';
@@ -1301,11 +1302,21 @@ export default function App({ role = 'FAN' }: { role?: string }) {
               </div>
             </>
           )}
-          <div className="avatar" onClick={() => { 
-            if (role === 'ARTIST') return;
-            setActiveTab('MY PAGE'); 
-            setSelectedArtist(null); 
-          }}></div>
+          {role !== 'ARTIST' && (
+            <div
+              onClick={() => {
+                setActiveTab('MY PAGE');
+                setSelectedArtist(null);
+              }}
+              style={{ cursor: 'pointer' }}
+            >
+              <FanAvatar
+                fanId={fanProfile?.fanId ?? getSubFromToken() ?? 0}
+                size={32}
+                border="2px solid white"
+              />
+            </div>
+          )}
           {role === 'ARTIST' && (
             <button 
               onClick={() => { logout(); localStorage.removeItem(ROLE_KEY); navigate('/login', { replace: true }); }}
@@ -3168,7 +3179,11 @@ export default function App({ role = 'FAN' }: { role?: string }) {
           <div className="board-header" style={{height: '240px', marginBottom: '40px', padding: '40px 60px'}}>
             <div className="bh-bg-color" style={{ background: '#1A1A1A' }}></div>
             <div className="bh-content">
-              <div className="bh-avatar" style={{ background: 'linear-gradient(135deg, #E8E0D8, #D0C6BE)', width: '120px', height: '120px' }}></div>
+              <FanAvatar
+                fanId={fanProfile?.fanId ?? getSubFromToken() ?? 0}
+                size={120}
+                border="4px solid rgba(255,255,255,0.2)"
+              />
               <div className="bh-info">
                 <div className="bh-name" style={{ fontSize: '40px' }}>{fanProfile?.nickname ?? '—'}</div>
                 <div className="bh-stats" style={{ fontSize: '16px', opacity: 1, color: '#DDD' }}>

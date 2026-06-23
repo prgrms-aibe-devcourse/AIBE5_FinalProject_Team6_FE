@@ -198,17 +198,25 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     const isFollowing = favoriteArtists.some(a => a.id === selectedArtist.id);
     if (isFollowing) {
       setFavoriteArtists(prev => prev.filter(a => a.id !== selectedArtist.id));
+      setStoreArtists(prev => prev.map(a => a.id === selectedArtist.id ? { ...a, fanCount: Math.max(0, (a.fanCount ?? 0) - 1) } : a));
       try {
         await unfollowArtist(selectedArtist.id);
       } catch {
         setFavoriteArtists(prev => [...prev, selectedArtist]);
+        setStoreArtists(prev => prev.map(a => a.id === selectedArtist.id ? { ...a, fanCount: (a.fanCount ?? 0) + 1 } : a));
+        showToast('언팔로우 처리에 실패했습니다.', 'error');
       }
     } else {
       setFavoriteArtists(prev => [...prev, selectedArtist]);
+      setStoreArtists(prev => prev.map(a => a.id === selectedArtist.id ? { ...a, fanCount: (a.fanCount ?? 0) + 1 } : a));
       try {
         await followArtist(selectedArtist.id);
+        setWelcomeArtist(selectedArtist);
+        setShowWelcomeModal(true);
       } catch {
         setFavoriteArtists(prev => prev.filter(a => a.id !== selectedArtist.id));
+        setStoreArtists(prev => prev.map(a => a.id === selectedArtist.id ? { ...a, fanCount: Math.max(0, (a.fanCount ?? 0) - 1) } : a));
+        showToast('팔로우 처리에 실패했습니다.', 'error');
       }
     }
   };
@@ -253,6 +261,8 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [editNickname, setEditNickname] = useState('');
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  const [welcomeArtist, setWelcomeArtist] = useState<FanArtistEntry | null>(null);
   const [agreeOrder, setAgreeOrder] = useState(false);
   const [agreePrivacy, setAgreePrivacy] = useState(false);
 
@@ -2405,12 +2415,26 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                       e.stopPropagation();
                       if (isFollowing) {
                         setFavoriteArtists(prev => prev.filter(a => a.id !== artist.id));
+                        setStoreArtists(prev => prev.map(a => a.id === artist.id ? { ...a, fanCount: Math.max(0, (a.fanCount ?? 0) - 1) } : a));
                         try { await unfollowArtist(artist.id); }
-                        catch { setFavoriteArtists(prev => [...prev, displayArtist]); }
+                        catch { 
+                          setFavoriteArtists(prev => [...prev, displayArtist]);
+                          setStoreArtists(prev => prev.map(a => a.id === artist.id ? { ...a, fanCount: (a.fanCount ?? 0) + 1 } : a));
+                          showToast('언팔로우 처리에 실패했습니다.', 'error');
+                        }
                       } else {
                         setFavoriteArtists(prev => [...prev, displayArtist]);
-                        try { await followArtist(artist.id); }
-                        catch { setFavoriteArtists(prev => prev.filter(a => a.id !== artist.id)); }
+                        setStoreArtists(prev => prev.map(a => a.id === artist.id ? { ...a, fanCount: (a.fanCount ?? 0) + 1 } : a));
+                        try { 
+                          await followArtist(artist.id);
+                          setWelcomeArtist(displayArtist);
+                          setShowWelcomeModal(true);
+                        }
+                        catch { 
+                          setFavoriteArtists(prev => prev.filter(a => a.id !== artist.id));
+                          setStoreArtists(prev => prev.map(a => a.id === artist.id ? { ...a, fanCount: Math.max(0, (a.fanCount ?? 0) - 1) } : a));
+                          showToast('팔로우 처리에 실패했습니다.', 'error');
+                        }
                       }
                     }}>
                       {isFollowing ? '✓ 팔로우 중' : '+ 팔로우'}
@@ -3915,6 +3939,105 @@ export default function App({ role = 'FAN' }: { role?: string }) {
           <div style={{ fontSize: '12px', color: 'var(--text-sub)' }}>기획사/아티스트 전용 플랫폼입니다</div>
         </div>
       </footer>
+
+      {/* Welcome Onboarding Modal */}
+      {showWelcomeModal && welcomeArtist && (
+        <div className="modal-overlay" style={{ zIndex: 1100 }} onClick={() => setShowWelcomeModal(false)}>
+          <div 
+            className="modal-content" 
+            style={{ 
+              maxWidth: '440px', 
+              padding: '0', 
+              overflow: 'hidden', 
+              background: 'rgba(255, 255, 255, 0.85)', 
+              backdropFilter: 'blur(20px)',
+              border: '1px solid rgba(255, 255, 255, 0.4)',
+              boxShadow: '0 20px 50px rgba(0,0,0,0.15)',
+              textAlign: 'center'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header Gradient Accent */}
+            <div style={{ height: '12px', background: 'linear-gradient(to right, #C2507A, #7F77DD)' }} />
+            
+            <div style={{ padding: '40px 32px' }}>
+              {/* Confetti or Celebratory Icon */}
+              <div style={{ 
+                width: '80px', 
+                height: '80px', 
+                borderRadius: '50%', 
+                background: 'linear-gradient(135deg, rgba(194, 80, 122, 0.1), rgba(127, 119, 221, 0.1))', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                margin: '0 auto 24px auto',
+                boxShadow: '0 8px 24px rgba(194, 80, 122, 0.08)'
+              }}>
+                <span style={{ fontSize: '36px' }}>🎉</span>
+              </div>
+
+              {/* Title */}
+              <h2 style={{ fontSize: '24px', fontWeight: 900, color: '#111', marginBottom: '12px', letterSpacing: '-0.5px' }}>
+                <span style={{ color: '#C2507A' }}>{welcomeArtist.name}</span>님을 팔로우하셨어요!
+              </h2>
+
+              {/* Description */}
+              <p style={{ fontSize: '15px', color: 'var(--text-sub)', lineHeight: 1.6, fontWeight: 500, marginBottom: '32px' }}>
+                성공적으로 커뮤니티에 가입되었습니다.<br />
+                지금 당장 만나러 가볼까요?
+              </p>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button 
+                  onClick={() => setShowWelcomeModal(false)}
+                  style={{ 
+                    flex: 1, 
+                    padding: '16px', 
+                    borderRadius: '16px', 
+                    border: '1px solid #EDE8E2', 
+                    background: 'white', 
+                    color: '#666', 
+                    fontSize: '15px', 
+                    fontWeight: 700, 
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = '#F7F3EE'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'white'; }}
+                >
+                  나중에 하기
+                </button>
+                <button 
+                  onClick={() => {
+                    setSelectedArtist(welcomeArtist);
+                    setBoardTab('FEED');
+                    setShowWelcomeModal(false);
+                    window.scrollTo({ top: 0, behavior: 'instant' });
+                  }}
+                  style={{ 
+                    flex: 1, 
+                    padding: '16px', 
+                    borderRadius: '16px', 
+                    border: 'none', 
+                    background: 'linear-gradient(135deg, #C2507A, #7F77DD)', 
+                    color: 'white', 
+                    fontSize: '15px', 
+                    fontWeight: 800, 
+                    cursor: 'pointer',
+                    boxShadow: '0 8px 20px rgba(194, 80, 122, 0.25)',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; }}
+                  onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
+                >
+                  지금 가기
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast */}
       {fanToast && (

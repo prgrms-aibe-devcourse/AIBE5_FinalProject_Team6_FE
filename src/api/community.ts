@@ -117,6 +117,21 @@ export async function unlikeComment(commentId: number): Promise<void> {
   if (!res.ok) throw new Error(`unlikeComment failed: ${res.status}`)
 }
 
+export async function getComments(
+  feedId: number,
+  cursor?: string,
+  size = 20,
+): Promise<{ items: any[]; nextCursor: string | null; hasMore: boolean }> {
+  const params = new URLSearchParams({ size: String(size) })
+  if (cursor) params.set('cursor', cursor)
+  const res = await fetchWithAuth(`/api/v1/feeds/${feedId}/comments?${params}`, {
+    headers: { ...getAuthHeaders(), 'X-Fan-Id': getFanIdHeader() },
+  })
+  if (!res.ok) throw new Error(`getComments failed: ${res.status}`)
+  const body = await res.json()
+  return body.data
+}
+
 export async function getJoinedArtists(
   cursor?: string,
   size = 20,

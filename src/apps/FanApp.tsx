@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { logout, getSubFromToken } from '../api/auth';
 import { ROLE_KEY } from '../App';
@@ -17,7 +17,7 @@ import { getStoreBanners, getMainBanners } from '../api/banners';
 import type { StoreBannerResponse, BannerResponse } from '../types/banner';
 import { getCart, addCartItem, updateCartItem, removeCartItem } from '../api/cart';
 import type { CartItemResponse } from '../types/cart';
-import { getFeeds, createFeed, createComment, likeFeed, unlikeFeed, followArtist, unfollowArtist, getJoinedArtists, likeComment, unlikeComment } from '../api/community';
+import { getFeeds, createFeed, createComment, likeFeed, unlikeFeed, followArtist, unfollowArtist, getJoinedArtists, likeComment, unlikeComment, getComments } from '../api/community';
 import type { FeedResponse } from '../types/feed';
 import { getCalendar, getLives } from '../api/schedule';
 import type { ScheduleResult } from '../types/schedule';
@@ -104,6 +104,7 @@ const TRANSIENT_TABS = new Set(['CHECKOUT', 'QUEUE_WAIT', 'ORDER_COMPLETE']);
 export default function App({ role = 'FAN' }: { role?: string }) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [favoriteArtists, setFavoriteArtists] = useState<FanArtistEntry[]>([]);
   const [selectedArtist, setSelectedArtist] = useState<FanArtistEntry | null>(null);
   const [boardTab, setBoardTab] = useState<string>(() => {
@@ -198,19 +199,38 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     const isFollowing = favoriteArtists.some(a => a.id === selectedArtist.id);
     if (isFollowing) {
       setFavoriteArtists(prev => prev.filter(a => a.id !== selectedArtist.id));
+      setStoreArtists(prev => prev.map(a => a.id === selectedArtist.id ? { ...a, fanCount: Math.max(0, (a.fanCount ?? 0) - 1) } : a));
       try {
         await unfollowArtist(selectedArtist.id);
+        setUnfollowedArtist(selectedArtist);
+        setShowUnfollowModal(true);
       } catch {
         setFavoriteArtists(prev => [...prev, selectedArtist]);
+        setStoreArtists(prev => prev.map(a => a.id === selectedArtist.id ? { ...a, fanCount: (a.fanCount ?? 0) + 1 } : a));
+        showToast('언팔로우 처리에 실패했습니다.', 'error');
       }
     } else {
       setFavoriteArtists(prev => [...prev, selectedArtist]);
+      setStoreArtists(prev => prev.map(a => a.id === selectedArtist.id ? { ...a, fanCount: (a.fanCount ?? 0) + 1 } : a));
       try {
         await followArtist(selectedArtist.id);
+        setWelcomeArtist(selectedArtist);
+        setShowWelcomeModal(true);
       } catch {
         setFavoriteArtists(prev => prev.filter(a => a.id !== selectedArtist.id));
+        setStoreArtists(prev => prev.map(a => a.id === selectedArtist.id ? { ...a, fanCount: Math.max(0, (a.fanCount ?? 0) - 1) } : a));
+        showToast('팔로우 처리에 실패했습니다.', 'error');
       }
     }
+  };
+  const [pendingScrollFeedId, setPendingScrollFeedId] = useState<number | null>(null);
+
+  const handleActivityClick = async (activity: ActivityItem) => {
+    const artist = storeArtists.find(a => a.id === activity.artistId);
+    if (!artist) return;
+    setSelectedArtist(toFanArtistEntry(artist));
+    setBoardTab('FEED');
+    setPendingScrollFeedId(activity.feedId);
   };
 
   const [notifications, setNotifications] = useState<NotificationResult[]>([]);
@@ -225,7 +245,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     handlePay, resetCheckout,
   } = useCheckout(setActiveTab);
 
-  const { queueState, resetQueue } = useQueue();
+  const { queueState, startQueue, resetQueue } = useQueue();
 
   // 대기열 PROCESSING 전이 시 accessTicket을 checkoutData에 담아 결제 화면으로 이동
   useEffect(() => {
@@ -252,7 +272,13 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [showNotifications] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [editNickname, setEditNickname] = useState('');
+  const [editIntroduction, setEditIntroduction] = useState('');
+  const [editImageUrl, setEditImageUrl] = useState('');
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  const [welcomeArtist, setWelcomeArtist] = useState<FanArtistEntry | null>(null);
+  const [showUnfollowModal, setShowUnfollowModal] = useState(false);
+  const [unfollowedArtist, setUnfollowedArtist] = useState<FanArtistEntry | null>(null);
   const [agreeOrder, setAgreeOrder] = useState(false);
   const [agreePrivacy, setAgreePrivacy] = useState(false);
 
@@ -266,6 +292,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   // New Filter & Sort States
   const [storeArtist, setStoreArtist] = useState('ALL');
   const [storeCategory, setStoreCategory] = useState('전체');
+  const [storeProductType, setStoreProductType] = useState<'regular' | 'drops'>('regular');
   const [storeSort, setStoreSort] = useState('낮은가격순');
   const [storeSearch, setStoreSearch] = useState('');
   const [storePage, setStorePage] = useState(1);
@@ -281,10 +308,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [cartItems, setCartItems] = useState<CartItemResponse[]>([]);
   const [cartLoading, setCartLoading] = useState(false);
   const [storeArtists, setStoreArtists] = useState<ArtistItem[]>([]);
-  const boardArtist = useMemo(
-    () => (selectedArtist ? enrichFanArtist(selectedArtist, storeArtists) : null),
-    [selectedArtist, storeArtists],
-  );
+  const boardArtist = selectedArtist ? enrichFanArtist(selectedArtist, storeArtists) : null;
   const [recommendedProducts, setRecommendedProducts] = useState<ProductListItem[]>([]);
   const [artistSearchQuery, setArtistSearchQuery] = useState('');
   const [fanToast, setFanToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
@@ -324,7 +348,27 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [isNotifUpdating, setIsNotifUpdating] = useState(false);
   const [restockSubscribed, setRestockSubscribed] = useState<Set<number>>(new Set());
   const [fanProfile, setFanProfile] = useState<FanResult | null>(null);
+  const [profileImageUrl, setProfileImageUrl] = useState<string>(() => {
+    return localStorage.getItem('fan_profile_image') ?? '';
+  });
+  const [introduction, setIntroduction] = useState<string>(() => {
+    return localStorage.getItem('fan_introduction') ?? '';
+  });
   const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const activityGroups: { [key: number]: { artist: FanArtistEntry; comments: ActivityItem[]; likes: ActivityItem[] } } = {};
+  activities.forEach(a => {
+    if (!activityGroups[a.artistId]) {
+      const storeArtistMatch = storeArtists.find(artist => artist.id === a.artistId);
+      const artist = storeArtistMatch ? toFanArtistEntry(storeArtistMatch) : { id: a.artistId, name: `아티스트 #${a.artistId}`, bg: 'var(--point-violet)', profileImageUrl: '' };
+      activityGroups[a.artistId] = { artist, comments: [], likes: [] };
+    }
+    if (a.type === 'FEED_LIKE') {
+      activityGroups[a.artistId].likes.push(a);
+    } else {
+      activityGroups[a.artistId].comments.push(a);
+    }
+  });
+  const groupedActivities = Object.values(activityGroups);
   const [myOrders, setMyOrders] = useState<OrderListItem[]>([]);
   const [cancellingOrderId, setCancellingOrderId] = useState<number | null>(null);
   const [paymentDetails, setPaymentDetails] = useState<Record<number, PaymentDetail | 'loading' | 'error'>>({});
@@ -495,26 +539,30 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     localStorage.setItem('fd_collected_cards', JSON.stringify(collectedCards));
   }, [collectedCards]);
 
-  // 상품 목록 로드 — 아티스트 필터 변경 시 재fetch
+  // 상품 목록 로드 — 아티스트 필터 또는 상품 타입 변경 시 재fetch
   useEffect(() => {
     const artistId = storeArtist !== 'ALL' ? Number(storeArtist) : undefined;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setStoreLoading(true);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setStoreItems([]);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setStoreNextCursor(null);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setStoreHasMore(false);
-    getProducts('regular', undefined, 20, artistId)
-      .then(res => {
+    let cancelled = false;
+    async function load() {
+      setStoreLoading(true);
+      setStoreItems([]);
+      setStoreNextCursor(null);
+      setStoreHasMore(false);
+      try {
+        const res = await getProducts(storeProductType, undefined, 20, artistId);
+        if (cancelled) return;
         setStoreItems(res.items ?? []);
         setStoreNextCursor(res.nextCursor ?? null);
         setStoreHasMore(res.hasMore ?? false);
-      })
-      .catch(console.error)
-      .finally(() => setStoreLoading(false));
-  }, [storeArtist]);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (!cancelled) setStoreLoading(false);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [storeArtist, storeProductType]);
 
   // 스토어 배너 로드
   useEffect(() => {
@@ -683,13 +731,14 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     setSearchParams(params, { replace: false });
   }, [selectedProduct?.id, selectedNotice?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 상품 상세 진입 시 images[] 로드
+  // 상품 상세 진입 시 images[] 로드 및 상세 정보 업데이트
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!selectedProduct) { setProductImages([]); setProductMainImg(0); return; }
     getProduct(selectedProduct.id).then(res => {
       setProductImages(res.images ?? []);
       setProductMainImg(0);
+      setSelectedProduct((prev: ProductListItem | null) => prev && prev.id === res.id ? { ...prev, ...res } : prev);
     }).catch(() => setProductImages([]));
   }, [selectedProduct?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -741,7 +790,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     }
   }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 선택한 아티스트 피드 로드 + memberId→name 맵 갱신
+  // 선택한 아티스트 피드 로드 + memberId→name 맵 갱신 + 댓글 로드
   useEffect(() => {
     if (!selectedArtist) return;
     void (async () => {
@@ -755,19 +804,93 @@ export default function App({ role = 'FAN' }: { role?: string }) {
         const map: Record<number, { name: string; profileImageUrl?: string }> = {};
         members.forEach(m => { map[m.id] = { name: m.memberName, profileImageUrl: m.profileImageUrl }; });
         setMemberMap(map);
+
+        // 각 피드에 대한 댓글 비동기 일괄 조회
+        const currentFanId = fanProfile?.fanId ?? getSubFromToken() ?? 0;
+        const commentsData = await Promise.all(
+          res.items.map(feed => getComments(feed.id).catch(() => ({ items: [] })))
+        );
+
+        const newCommentsMap: Record<string, any[]> = {};
+        res.items.forEach((feed, index) => {
+          const rawComments = commentsData[index]?.items || [];
+          const formattedComments: any[] = [];
+          rawComments.forEach((item: any) => {
+            const c = item.comment;
+            let author = '익명';
+            if (c.artistMemberId != null) {
+              author = map[c.artistMemberId]?.name ?? '아티스트';
+            } else if (c.fanId != null) {
+              author = (c.fanId === currentFanId) ? (fanProfile?.nickname || '나') : `팬 #${c.fanId}`;
+            }
+            formattedComments.push({
+              id: c.id,
+              author: author,
+              content: c.content,
+              isLiked: false,
+              likes: 0
+            });
+
+            // 답글(대댓글) 플래트닝 처리
+            if (item.replies && item.replies.length > 0) {
+              item.replies.forEach((r: any) => {
+                let rAuthor = '익명';
+                if (r.artistMemberId != null) {
+                  rAuthor = map[r.artistMemberId]?.name ?? '아티스트';
+                } else if (r.fanId != null) {
+                  rAuthor = (r.fanId === currentFanId) ? (fanProfile?.nickname || '나') : `팬 #${r.fanId}`;
+                }
+                formattedComments.push({
+                  id: r.id,
+                  author: `↳ ${rAuthor}`,
+                  content: r.content,
+                  isLiked: false,
+                  likes: 0
+                });
+              });
+            }
+          });
+          newCommentsMap[String(feed.id)] = formattedComments;
+        });
+        setCommentsMap(newCommentsMap);
       } catch (e) {
         console.error(e);
       } finally {
         setFeedsLoading(false);
       }
     })();
-  }, [selectedArtist?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedArtist?.id, fanProfile?.fanId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 활동 내역 클릭 시 해당 피드 게시글로 스크롤 및 하이라이트 효과 적용
+  useEffect(() => {
+    if (pendingScrollFeedId !== null && !feedsLoading) {
+      const timer = setTimeout(() => {
+        const element = document.getElementById(`feed-post-${pendingScrollFeedId}`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          element.style.transition = 'all 0.4s ease';
+          element.style.boxShadow = '0 0 25px rgba(127, 119, 221, 0.45)';
+          element.style.borderColor = 'var(--point-violet)';
+          element.style.transform = 'scale(1.01)';
+          setTimeout(() => {
+            element.style.boxShadow = '';
+            element.style.borderColor = '';
+            element.style.transform = '';
+          }, 1800);
+        } else {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        setPendingScrollFeedId(null);
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [feeds, feedsLoading, pendingScrollFeedId]);
 
   const handleLoadMore = () => {
     if (!storeNextCursor || storeLoading) return;
     const artistId = storeArtist !== 'ALL' ? Number(storeArtist) : undefined;
     setStoreLoading(true);
-    getProducts('regular', storeNextCursor, 20, artistId)
+    getProducts(storeProductType, storeNextCursor, 20, artistId)
       .then(res => {
         setStoreItems(prev => [...prev, ...(res.items ?? [])]);
         setStoreNextCursor(res.nextCursor ?? null);
@@ -1253,6 +1376,47 @@ export default function App({ role = 'FAN' }: { role?: string }) {
             margin: 12px 12px 0 12px;
           }
         }
+
+        .mp-followed-artist-item {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 10px;
+          cursor: pointer;
+          text-align: center;
+        }
+        .mp-followed-artist-item > *:first-child {
+          transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .mp-followed-artist-item:hover > *:first-child {
+          transform: scale(1.06);
+        }
+        .mp-followed-artist-item:active > *:first-child {
+          transform: scale(0.96);
+        }
+
+        .mp-activity-item {
+          display: flex;
+          align-items: flex-start;
+          gap: 12px;
+          padding: 14px 16px;
+          margin: 0 -16px;
+          border-radius: 12px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          border-bottom: 1px solid var(--border);
+        }
+        .mp-activity-item:last-child {
+          border-bottom: none;
+        }
+        .mp-activity-item:hover {
+          background: rgba(127, 119, 221, 0.05);
+          transform: translateX(4px);
+        }
+        .mp-activity-item:active {
+          background: rgba(127, 119, 221, 0.1);
+          transform: translateX(2px);
+        }
       `}</style>
 
       {/* Shared Header */}
@@ -1313,6 +1477,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                 fanId={fanProfile?.fanId ?? getSubFromToken() ?? 0}
                 size={32}
                 border="2px solid white"
+                customImageUrl={profileImageUrl}
               />
             </div>
           )}
@@ -1566,17 +1731,73 @@ export default function App({ role = 'FAN' }: { role?: string }) {
           <div className="cart-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowEditProfile(false)}>
             <div style={{ width: '100%', maxWidth: '440px', background: 'white', borderRadius: '32px', padding: '40px', position: 'relative' }} onClick={e => e.stopPropagation()}>
                <X size={24} style={{ position: 'absolute', top: 32, right: 32, cursor: 'pointer', color: '#888' }} onClick={() => setShowEditProfile(false)} />
-               <h2 style={{ fontSize: '24px', fontWeight: 800, marginBottom: '32px' }}>프로필 수정</h2>
+               <h2 style={{ fontSize: '24px', fontWeight: 800, marginBottom: '24px' }}>프로필 수정</h2>
 
-               <div className="form-group" style={{ marginBottom: '32px' }}>
+               {/* 프로필 이미지 수정 영역 */}
+               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '24px', position: 'relative' }}>
+                 <div 
+                   onClick={() => fileInputRef.current?.click()}
+                   style={{ position: 'relative', width: '100px', height: '100px', borderRadius: '50%', cursor: 'pointer', overflow: 'hidden', border: '2px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F7F3EE' }}
+                 >
+                   <FanAvatar
+                     fanId={fanProfile?.fanId ?? getSubFromToken() ?? 0}
+                     size={100}
+                     border="none"
+                     customImageUrl={editImageUrl}
+                   />
+                   <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.2s' }} className="avatar-hover-overlay">
+                     <ImageIcon size={20} color="white" />
+                   </div>
+                 </div>
+                 <style>{`
+                   div:hover > .avatar-hover-overlay { opacity: 1 !important; }
+                 `}</style>
+                 <span onClick={() => fileInputRef.current?.click()} style={{ fontSize: '12px', color: 'var(--point-rose)', fontWeight: 700, marginTop: '8px', cursor: 'pointer' }}>이미지 변경</span>
+                 <input 
+                   type="file" 
+                   ref={fileInputRef} 
+                   onChange={(e) => {
+                     const file = e.target.files?.[0];
+                     if (!file) return;
+                     if (file.size > 5 * 1024 * 1024) {
+                       showToast('이미지 크기는 최대 5MB까지 가능합니다.', 'error');
+                       return;
+                     }
+                     const reader = new FileReader();
+                     reader.onloadend = () => {
+                       setEditImageUrl(reader.result as string);
+                     };
+                     reader.readAsDataURL(file);
+                   }} 
+                   accept="image/*" 
+                   style={{ display: 'none' }} 
+                 />
+               </div>
+
+               <div className="form-group" style={{ marginBottom: '20px' }}>
                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px', color: 'var(--text-sub)' }}>닉네임</label>
                  <input type="text" value={editNickname} onChange={e => setEditNickname(e.target.value)} className="form-input" style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--bg-cream)', padding: '14px 16px', borderRadius: '12px', fontSize: '15px' }} />
                </div>
 
+               <div className="form-group" style={{ marginBottom: '32px' }}>
+                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px', color: 'var(--text-sub)' }}>한 줄 자기소개</label>
+                 <input type="text" value={editIntroduction} onChange={e => setEditIntroduction(e.target.value)} placeholder="자기소개를 입력해주세요" className="form-input" style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--bg-cream)', padding: '14px 16px', borderRadius: '12px', fontSize: '15px' }} />
+               </div>
+
                <button className="btn-primary" onClick={() => {
                  updateMyProfile({ nickname: editNickname })
-                   .then(updated => { setFanProfile(updated); setShowEditProfile(false); })
-                   .catch(() => {});
+                   .then(updated => { 
+                     setFanProfile(updated); 
+                     setIntroduction(editIntroduction);
+                     setProfileImageUrl(editImageUrl);
+                     localStorage.setItem('fan_profile_image', editImageUrl);
+                     localStorage.setItem('fan_introduction', editIntroduction);
+                     setShowEditProfile(false); 
+                     showToast('프로필이 성공적으로 수정되었습니다.');
+                   })
+                   .catch(() => {
+                     showToast('프로필 수정에 실패했습니다.', 'error');
+                   });
                }} style={{ width: '100%', background: 'var(--text-main)', color: 'white', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 800 }}>저장하기</button>
             </div>
           </div>
@@ -1626,8 +1847,17 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                 {role === 'ARTIST' ? (
                   <button className="bh-join-btn" onClick={() => { logout(); localStorage.removeItem(ROLE_KEY); navigate('/login', { replace: true }); }} style={{ background: '#333' }}>로그아웃</button>
                 ) : (
-                  <button className="bh-join-btn" onClick={handleFollowToggle}>
-                    {favoriteArtists.some(a => a.id === selectedArtist.id) ? '언팔로우' : '팔로우'}
+                  <button 
+                    className="bh-join-btn" 
+                    onClick={handleFollowToggle}
+                    style={favoriteArtists.some(a => a.id === selectedArtist.id) ? {
+                      background: 'rgba(255, 255, 255, 0.2)',
+                      border: '1px solid rgba(255, 255, 255, 0.4)',
+                      backdropFilter: 'blur(10px)',
+                      color: 'white'
+                    } : undefined}
+                  >
+                    {favoriteArtists.some(a => a.id === selectedArtist.id) ? '✓ 팔로우 중' : '+ 팔로우'}
                   </button>
                 )}
               </div>
@@ -1756,6 +1986,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                         currentArtistPosts.map(post => (
                           <motion.div
                             key={post.id}
+                            id={`feed-post-${post.id}`}
                             initial={false}
                             animate={false}
                             className={`feed-post ${post.artistMemberId != null ? 'artist-post' : ''}`}
@@ -2405,12 +2636,30 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                       e.stopPropagation();
                       if (isFollowing) {
                         setFavoriteArtists(prev => prev.filter(a => a.id !== artist.id));
-                        try { await unfollowArtist(artist.id); }
-                        catch { setFavoriteArtists(prev => [...prev, displayArtist]); }
+                        setStoreArtists(prev => prev.map(a => a.id === artist.id ? { ...a, fanCount: Math.max(0, (a.fanCount ?? 0) - 1) } : a));
+                        try {
+                          await unfollowArtist(artist.id);
+                          setUnfollowedArtist(displayArtist);
+                          setShowUnfollowModal(true);
+                        }
+                        catch { 
+                          setFavoriteArtists(prev => [...prev, displayArtist]);
+                          setStoreArtists(prev => prev.map(a => a.id === artist.id ? { ...a, fanCount: (a.fanCount ?? 0) + 1 } : a));
+                          showToast('언팔로우 처리에 실패했습니다.', 'error');
+                        }
                       } else {
                         setFavoriteArtists(prev => [...prev, displayArtist]);
-                        try { await followArtist(artist.id); }
-                        catch { setFavoriteArtists(prev => prev.filter(a => a.id !== artist.id)); }
+                        setStoreArtists(prev => prev.map(a => a.id === artist.id ? { ...a, fanCount: (a.fanCount ?? 0) + 1 } : a));
+                        try { 
+                          await followArtist(artist.id);
+                          setWelcomeArtist(displayArtist);
+                          setShowWelcomeModal(true);
+                        }
+                        catch { 
+                          setFavoriteArtists(prev => prev.filter(a => a.id !== artist.id));
+                          setStoreArtists(prev => prev.map(a => a.id === artist.id ? { ...a, fanCount: Math.max(0, (a.fanCount ?? 0) - 1) } : a));
+                          showToast('팔로우 처리에 실패했습니다.', 'error');
+                        }
                       }
                     }}>
                       {isFollowing ? '✓ 팔로우 중' : '+ 팔로우'}
@@ -2536,9 +2785,15 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                         style={{ flex: 1, padding: '16px', borderRadius: '12px', border: '1px solid #C2507A', color: '#C2507A', fontWeight: 800, textAlign: 'center', cursor: 'pointer' }}
                       >장바구니 담기</button>
                       <button
-                        onClick={() => {
+                        onClick={async () => {
+                          const isDrops = selectedProduct.dropsStartAt != null;
                           setCheckoutData({ type: 'product', title: selectedProduct.name, price: Number(selectedProduct.price), qty: productQty, option: productOption, productId: selectedProduct.id, accessTicket: null });
-                          setActiveTab('CHECKOUT');
+                          if (isDrops) {
+                            setActiveTab('QUEUE_WAIT');
+                            await startQueue(selectedProduct.id);
+                          } else {
+                            setActiveTab('CHECKOUT');
+                          }
                         }}
                         style={{ flex: 1, padding: '16px', borderRadius: '12px', background: 'linear-gradient(135deg, #C2507A, #7F77DD)', color: 'white', fontWeight: 800, textAlign: 'center', cursor: 'pointer' }}
                       >바로 구매하기</button>
@@ -2775,8 +3030,45 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   </div>
   <div style={{ padding: '16px 0 32px 0' }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', gap: '20px', flexWrap: 'wrap' }}>
-      {/* 카테고리 필터: BE API에 category 필드 추가 후 활성화 예정 */}
-      <div />
+      {/* 카테고리 필터: 상시 상품 및 드롭스 탭 분리 및 강조 */}
+      <div style={{ display: 'flex', gap: '8px' }}>
+        <button 
+          onClick={() => { setStoreProductType('regular'); setStorePage(1); }}
+          style={{
+            padding: '8px 18px',
+            borderRadius: '20px',
+            border: storeProductType === 'regular' ? '1px solid var(--text-main)' : '1px solid #EDE8E2',
+            background: storeProductType === 'regular' ? 'var(--text-main)' : 'white',
+            color: storeProductType === 'regular' ? 'white' : 'var(--text-main)',
+            fontSize: '13px',
+            fontWeight: 800,
+            cursor: 'pointer',
+            transition: 'all 0.25s ease'
+          }}
+        >
+          상시 상품
+        </button>
+        <button 
+          onClick={() => { setStoreProductType('drops'); setStorePage(1); }}
+          style={{
+            padding: '8px 18px',
+            borderRadius: '20px',
+            border: storeProductType === 'drops' ? '1px solid var(--point-rose)' : '1px solid #EDE8E2',
+            background: storeProductType === 'drops' ? 'linear-gradient(135deg, #C2507A, #7F77DD)' : 'white',
+            color: storeProductType === 'drops' ? 'white' : 'var(--point-rose)',
+            fontSize: '13px',
+            fontWeight: 800,
+            cursor: 'pointer',
+            boxShadow: storeProductType === 'drops' ? '0 4px 12px rgba(194, 80, 122, 0.2)' : 'none',
+            transition: 'all 0.25s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px'
+          }}
+        >
+          드롭스 🔥
+        </button>
+      </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1, minWidth: '300px', justifyContent: 'flex-end' }}>
         <div style={{ position: 'relative', flex: 1, maxWidth: '240px' }}>
           <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#888' }} />
@@ -2909,8 +3201,13 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                     onClick={(e) => {
                       e.stopPropagation();
                       if (!isSoldOut) {
-                        setCheckoutData({ type: 'product', title: item.name, price: Number(item.price), qty: 1, option: 'Version A', productId: item.id, accessTicket: null });
-                        setActiveTab('CHECKOUT');
+                        const isDrops = item.dropsStartAt != null || storeProductType === 'drops';
+                        if (isDrops) {
+                          setSelectedProduct(item);
+                        } else {
+                          setCheckoutData({ type: 'product', title: item.name, price: Number(item.price), qty: 1, option: 'Version A', productId: item.id, accessTicket: null });
+                          setActiveTab('CHECKOUT');
+                        }
                       }
                     }}
                     style={{ background: isSoldOut ? '#ccc' : '#111', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 700, cursor: isSoldOut ? 'not-allowed' : 'pointer' }}
@@ -3235,14 +3532,29 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                 fanId={fanProfile?.fanId ?? getSubFromToken() ?? 0}
                 size={120}
                 border="4px solid rgba(255,255,255,0.2)"
+                customImageUrl={profileImageUrl}
               />
-              <div className="bh-info">
-                <div className="bh-name" style={{ fontSize: '40px' }}>{fanProfile?.nickname ?? '—'}</div>
-                <div className="bh-stats" style={{ fontSize: '16px', opacity: 1, color: '#DDD' }}>
+              <div className="bh-info" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div className="bh-name" style={{ fontSize: '32px', fontWeight: 800, color: 'white', lineHeight: 1.2 }}>{fanProfile?.nickname ?? '—'}</div>
+                <div style={{ fontSize: '15px', color: 'rgba(255,255,255,0.8)', fontWeight: 500, marginTop: '2px' }}>
+                  {introduction || '자기소개가 아직 등록되지 않았습니다.'}
+                </div>
+                <div className="bh-stats" style={{ fontSize: '13px', opacity: 0.6, color: '#DDD', marginTop: '4px' }}>
                   {fanProfile ? (() => { const d = new Date(fanProfile.createdAt); return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 가입`; })() : '—'}
                 </div>
               </div>
-              <button className="c-btn" onClick={() => { setEditNickname(fanProfile?.nickname ?? ''); setShowEditProfile(true); }} style={{background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)'}}>프로필 수정</button>
+              <button 
+                className="c-btn" 
+                onClick={() => { 
+                  setEditNickname(fanProfile?.nickname ?? ''); 
+                  setEditIntroduction(introduction);
+                  setEditImageUrl(profileImageUrl);
+                  setShowEditProfile(true); 
+                }} 
+                style={{background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)'}}
+              >
+                프로필 수정
+              </button>
             </div>
           </div>
 
@@ -3255,37 +3567,133 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                 <div className={`mp-nav-item ${myPageTab === 'SETTINGS' ? 'active' : ''}`} onClick={() => setMyPageTab('SETTINGS')}><Settings size={18} /> 설정</div>
                 <div className="mp-nav-item" style={{ color: '#FF4444', marginTop: '20px' }} onClick={() => setShowLogoutModal(true)}><LogOut size={18} /> 로그아웃</div>
               </div>
-              
-              <div style={{ background: 'var(--bg-cream)', borderRadius: '16px', padding: '24px' }}>
-                <h4 style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-sub)', marginBottom: '16px', letterSpacing: '1px' }}>계정 정보</h4>
-              </div>
             </div>
 
             <div style={{ flex: 1 }}>
               {myPageTab === 'OVERVIEW' && (
-                <div className="reveal">
-                  <h3 style={{fontSize: '24px', fontWeight: 800, marginBottom: '24px'}}>전체 개요</h3>
-                  <div className="card" style={{padding: '32px'}}>
-                    {activities.length === 0 ? (
-                      <p style={{ color: 'var(--text-sub)', fontSize: '15px' }}>최근 활동 내역이 없습니다.</p>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        {activities.map(a => (
-                          <div key={a.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '14px 0', borderBottom: '1px solid var(--border)' }}>
-                            <div style={{ flexShrink: 0, color: a.type === 'FEED_LIKE' ? 'var(--point-rose)' : 'var(--point-violet)' }}>
-                              {a.type === 'FEED_LIKE' ? <Heart size={16} /> : <MessageSquare size={16} />}
-                            </div>
-                            <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: '13px', fontWeight: 700, marginBottom: '4px' }}>
-                                {a.type === 'FEED_LIKE' ? '피드 좋아요' : '댓글 작성'}
+                <div className="reveal" style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+                  <div>
+                    <h3 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '16px', letterSpacing: '-0.5px' }}>팔로우 중인 아티스트 ({favoriteArtists.length})</h3>
+                    <div className="card" style={{ padding: '24px 32px' }}>
+                      {favoriteArtists.length === 0 ? (
+                        <p style={{ color: 'var(--text-sub)', fontSize: '15px', margin: 0 }}>팔로우 중인 아티스트가 없습니다. 좋아하는 아티스트를 찾아 팔로우해보세요!</p>
+                      ) : (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '20px' }}>
+                          {favoriteArtists.map(a => {
+                            const artist = enrichFanArtist(a, storeArtists);
+                            return (
+                              <div 
+                                key={a.id} 
+                                className="mp-followed-artist-item"
+                                onClick={() => { setSelectedArtist(artist); setBoardTab('FEED'); }}
+                              >
+                                <ArtistAvatar
+                                  artist={artist}
+                                  fallbackChars={3}
+                                  style={{ width: '72px', height: '72px', borderRadius: '50%', boxShadow: '0 8px 16px rgba(0,0,0,0.06)' }}
+                                />
+                                <span style={{ fontSize: '14px', fontWeight: 800, color: 'var(--text-main)' }}>{artist.name}</span>
                               </div>
-                              <div style={{ fontSize: '13px', color: 'var(--text-sub)', marginBottom: '4px' }}>{a.content}</div>
-                              <div style={{ fontSize: '11px', color: 'var(--text-sub)' }}>{formatTime(a.createdAt)}</div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '16px', letterSpacing: '-0.5px' }}>최근 활동 내역</h3>
+                    <div className="card" style={{ padding: '32px' }}>
+                      {activities.length === 0 ? (
+                        <p style={{ color: 'var(--text-sub)', fontSize: '15px', margin: 0 }}>최근 활동 내역이 없습니다.</p>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                          {groupedActivities.map(group => (
+                            <div key={group.artist.id} style={{ border: '1px solid var(--border)', borderRadius: '24px', padding: '24px', background: 'rgba(255,255,255,0.4)', backdropFilter: 'blur(10px)', boxShadow: '0 8px 32px rgba(0,0,0,0.02)' }}>
+                              {/* Artist Mini Header */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px', borderBottom: '1px solid var(--border)', paddingBottom: '12px' }}>
+                                <ArtistAvatar artist={group.artist} style={{ width: '40px', height: '40px', borderRadius: '50%' }} />
+                                <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.3px' }}>{group.artist.name}</div>
+                              </div>
+
+                              {/* Comments Sub-section */}
+                              {group.comments.length > 0 && (
+                                <div style={{ marginBottom: group.likes.length > 0 ? '24px' : '0' }}>
+                                  <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--point-violet)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <MessageSquare size={14} /> 작성한 댓글 ({group.comments.length})
+                                  </div>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                    {group.comments.map(a => (
+                                      <div key={a.id} className="mp-activity-item" onClick={() => handleActivityClick(a)} style={{ 
+                                        margin: 0, 
+                                        padding: '16px 20px', 
+                                        borderBottom: 'none', 
+                                        background: 'rgba(255,255,255,0.7)', 
+                                        borderRadius: '16px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        gap: '16px',
+                                        boxShadow: '0 4px 12px rgba(0,0,0,0.01)'
+                                      }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
+                                          <div style={{ flexShrink: 0, color: 'var(--point-violet)', background: 'rgba(127, 119, 221, 0.1)', padding: '8px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            <MessageSquare size={16} />
+                                          </div>
+                                          <div style={{ fontSize: '14px', color: 'var(--text-main)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            {a.content}
+                                          </div>
+                                        </div>
+                                        <div style={{ fontSize: '12px', color: 'var(--text-sub)', fontWeight: 500, flexShrink: 0 }}>
+                                          {formatTime(a.createdAt)}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Likes Sub-section */}
+                              {group.likes.length > 0 && (
+                                <div>
+                                  <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--point-rose)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <Heart size={14} /> 좋아요 한 피드 ({group.likes.length})
+                                  </div>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                    {group.likes.map(a => (
+                                      <div key={a.id} className="mp-activity-item" onClick={() => handleActivityClick(a)} style={{ 
+                                        margin: 0, 
+                                        padding: '16px 20px', 
+                                        borderBottom: 'none', 
+                                        background: 'rgba(255,255,255,0.7)', 
+                                        borderRadius: '16px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        gap: '16px',
+                                        boxShadow: '0 4px 12px rgba(0,0,0,0.01)'
+                                      }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
+                                          <div style={{ flexShrink: 0, color: 'var(--point-rose)', background: 'rgba(194, 80, 122, 0.1)', padding: '8px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            <Heart size={16} fill="currentColor" />
+                                          </div>
+                                          <div style={{ fontSize: '14px', color: 'var(--text-main)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            피드에 좋아요를 남겼습니다.
+                                          </div>
+                                        </div>
+                                        <div style={{ fontSize: '12px', color: 'var(--text-sub)', fontWeight: 500, flexShrink: 0 }}>
+                                          {formatTime(a.createdAt)}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
@@ -3915,6 +4323,213 @@ export default function App({ role = 'FAN' }: { role?: string }) {
           <div style={{ fontSize: '12px', color: 'var(--text-sub)' }}>기획사/아티스트 전용 플랫폼입니다</div>
         </div>
       </footer>
+
+      {/* Welcome Onboarding Modal */}
+      {showWelcomeModal && welcomeArtist && (
+        <div className="modal-overlay" style={{ zIndex: 1100 }} onClick={() => setShowWelcomeModal(false)}>
+          <div 
+            className="modal-content" 
+            style={{ 
+              maxWidth: '440px', 
+              padding: '0', 
+              overflow: 'hidden', 
+              background: 'rgba(255, 255, 255, 0.85)', 
+              backdropFilter: 'blur(20px)',
+              border: '1px solid rgba(255, 255, 255, 0.4)',
+              boxShadow: '0 20px 50px rgba(0,0,0,0.15)',
+              textAlign: 'center'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header Gradient Accent */}
+            <div style={{ height: '12px', background: 'linear-gradient(to right, #C2507A, #7F77DD)' }} />
+            
+            <div style={{ padding: '40px 32px' }}>
+              {/* Confetti or Celebratory Icon */}
+              <div style={{ 
+                width: '80px', 
+                height: '80px', 
+                borderRadius: '50%', 
+                background: 'linear-gradient(135deg, rgba(194, 80, 122, 0.1), rgba(127, 119, 221, 0.1))', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                margin: '0 auto 24px auto',
+                boxShadow: '0 8px 24px rgba(194, 80, 122, 0.08)'
+              }}>
+                <span style={{ fontSize: '36px' }}>🎉</span>
+              </div>
+
+              {/* Title */}
+              <h2 style={{ fontSize: '24px', fontWeight: 900, color: '#111', marginBottom: '12px', letterSpacing: '-0.5px' }}>
+                <span style={{ color: '#C2507A' }}>{welcomeArtist.name}</span>님과 한층 더 가까워졌어요!
+              </h2>
+
+              {/* Description */}
+              <p style={{ fontSize: '15px', color: 'var(--text-sub)', lineHeight: 1.6, fontWeight: 500, marginBottom: '32px' }}>
+                지금 당장 만나러 가볼까요?
+              </p>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button 
+                  onClick={() => setShowWelcomeModal(false)}
+                  style={{ 
+                    flex: 1, 
+                    padding: '16px', 
+                    borderRadius: '16px', 
+                    border: '1px solid #EDE8E2', 
+                    background: 'white', 
+                    color: '#666', 
+                    fontSize: '15px', 
+                    fontWeight: 700, 
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = '#F7F3EE'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'white'; }}
+                >
+                  나중에 하기
+                </button>
+                <button 
+                  onClick={() => {
+                    setSelectedArtist(welcomeArtist);
+                    setBoardTab('FEED');
+                    setShowWelcomeModal(false);
+                    window.scrollTo({ top: 0, behavior: 'instant' });
+                  }}
+                  style={{ 
+                    flex: 1, 
+                    padding: '16px', 
+                    borderRadius: '16px', 
+                    border: 'none', 
+                    background: 'linear-gradient(135deg, #C2507A, #7F77DD)', 
+                    color: 'white', 
+                    fontSize: '15px', 
+                    fontWeight: 800, 
+                    cursor: 'pointer',
+                    boxShadow: '0 8px 20px rgba(194, 80, 122, 0.25)',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; }}
+                  onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
+                >
+                  지금 가기
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Unfollow Onboarding Modal */}
+      {showUnfollowModal && unfollowedArtist && (
+        <div className="modal-overlay" style={{ zIndex: 1100 }} onClick={() => setShowUnfollowModal(false)}>
+          <div 
+            className="modal-content" 
+            style={{ 
+              maxWidth: '440px', 
+              padding: '0', 
+              overflow: 'hidden', 
+              background: 'rgba(255, 255, 255, 0.85)', 
+              backdropFilter: 'blur(20px)',
+              border: '1px solid rgba(255, 255, 255, 0.4)',
+              boxShadow: '0 20px 50px rgba(0,0,0,0.15)',
+              textAlign: 'center'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header Gradient Accent */}
+            <div style={{ height: '12px', background: 'linear-gradient(to right, #7F77DD, #C2507A)' }} />
+            
+            <div style={{ padding: '40px 32px' }}>
+              {/* Confetti or Celebratory Icon */}
+              <div style={{ 
+                width: '80px', 
+                height: '80px', 
+                borderRadius: '50%', 
+                background: 'linear-gradient(135deg, rgba(127, 119, 221, 0.1), rgba(194, 80, 122, 0.1))', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                margin: '0 auto 24px auto',
+                boxShadow: '0 8px 24px rgba(127, 119, 221, 0.08)'
+              }}>
+                <span style={{ fontSize: '36px' }}>🤝</span>
+              </div>
+
+              {/* Title */}
+              <h2 style={{ fontSize: '24px', fontWeight: 900, color: '#111', marginBottom: '12px', letterSpacing: '-0.5px' }}>
+                <span style={{ color: '#7F77DD' }}>{unfollowedArtist.name}</span>님과 조금 멀어졌어요
+              </h2>
+
+              {/* Description */}
+              <p style={{ fontSize: '15px', color: 'var(--text-sub)', lineHeight: 1.6, fontWeight: 500, marginBottom: '32px' }}>
+                언제든지 다시 소식을 받고 소통할 수 있어요.<br />
+                지금 다시 팔로우할까요?
+              </p>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button 
+                  onClick={() => setShowUnfollowModal(false)}
+                  style={{ 
+                    flex: 1, 
+                    padding: '16px', 
+                    borderRadius: '16px', 
+                    border: '1px solid #EDE8E2', 
+                    background: 'white', 
+                    color: '#666', 
+                    fontSize: '15px', 
+                    fontWeight: 700, 
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = '#F7F3EE'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'white'; }}
+                >
+                  확인
+                </button>
+                <button 
+                  onClick={async () => {
+                    const artist = unfollowedArtist;
+                    if (!artist) return;
+                    setFavoriteArtists(prev => [...prev, artist]);
+                    setStoreArtists(prev => prev.map(a => a.id === artist.id ? { ...a, fanCount: (a.fanCount ?? 0) + 1 } : a));
+                    setShowUnfollowModal(false);
+                    try {
+                      await followArtist(artist.id);
+                      setWelcomeArtist(artist);
+                      setShowWelcomeModal(true);
+                    } catch {
+                      setFavoriteArtists(prev => prev.filter(a => a.id !== artist.id));
+                      setStoreArtists(prev => prev.map(a => a.id === artist.id ? { ...a, fanCount: Math.max(0, (a.fanCount ?? 0) - 1) } : a));
+                      showToast('팔로우 처리에 실패했습니다.', 'error');
+                    }
+                  }}
+                  style={{ 
+                    flex: 1, 
+                    padding: '16px', 
+                    borderRadius: '16px', 
+                    border: 'none', 
+                    background: 'linear-gradient(135deg, #7F77DD, #C2507A)', 
+                    color: 'white', 
+                    fontSize: '15px', 
+                    fontWeight: 800, 
+                    cursor: 'pointer',
+                    boxShadow: '0 8px 20px rgba(127, 119, 221, 0.25)',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; }}
+                  onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
+                >
+                  다시 팔로우
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast */}
       {fanToast && (

@@ -201,6 +201,8 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       setStoreArtists(prev => prev.map(a => a.id === selectedArtist.id ? { ...a, fanCount: Math.max(0, (a.fanCount ?? 0) - 1) } : a));
       try {
         await unfollowArtist(selectedArtist.id);
+        setUnfollowedArtist(selectedArtist);
+        setShowUnfollowModal(true);
       } catch {
         setFavoriteArtists(prev => [...prev, selectedArtist]);
         setStoreArtists(prev => prev.map(a => a.id === selectedArtist.id ? { ...a, fanCount: (a.fanCount ?? 0) + 1 } : a));
@@ -263,6 +265,8 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [welcomeArtist, setWelcomeArtist] = useState<FanArtistEntry | null>(null);
+  const [showUnfollowModal, setShowUnfollowModal] = useState(false);
+  const [unfollowedArtist, setUnfollowedArtist] = useState<FanArtistEntry | null>(null);
   const [agreeOrder, setAgreeOrder] = useState(false);
   const [agreePrivacy, setAgreePrivacy] = useState(false);
 
@@ -1636,8 +1640,17 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                 {role === 'ARTIST' ? (
                   <button className="bh-join-btn" onClick={() => { logout(); localStorage.removeItem(ROLE_KEY); navigate('/login', { replace: true }); }} style={{ background: '#333' }}>로그아웃</button>
                 ) : (
-                  <button className="bh-join-btn" onClick={handleFollowToggle}>
-                    {favoriteArtists.some(a => a.id === selectedArtist.id) ? '언팔로우' : '팔로우'}
+                  <button 
+                    className="bh-join-btn" 
+                    onClick={handleFollowToggle}
+                    style={favoriteArtists.some(a => a.id === selectedArtist.id) ? {
+                      background: 'rgba(255, 255, 255, 0.2)',
+                      border: '1px solid rgba(255, 255, 255, 0.4)',
+                      backdropFilter: 'blur(10px)',
+                      color: 'white'
+                    } : undefined}
+                  >
+                    {favoriteArtists.some(a => a.id === selectedArtist.id) ? '✓ 팔로우 중' : '+ 팔로우'}
                   </button>
                 )}
               </div>
@@ -2416,7 +2429,11 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                       if (isFollowing) {
                         setFavoriteArtists(prev => prev.filter(a => a.id !== artist.id));
                         setStoreArtists(prev => prev.map(a => a.id === artist.id ? { ...a, fanCount: Math.max(0, (a.fanCount ?? 0) - 1) } : a));
-                        try { await unfollowArtist(artist.id); }
+                        try {
+                          await unfollowArtist(artist.id);
+                          setUnfollowedArtist(displayArtist);
+                          setShowUnfollowModal(true);
+                        }
                         catch { 
                           setFavoriteArtists(prev => [...prev, displayArtist]);
                           setStoreArtists(prev => prev.map(a => a.id === artist.id ? { ...a, fanCount: (a.fanCount ?? 0) + 1 } : a));
@@ -3287,29 +3304,60 @@ export default function App({ role = 'FAN' }: { role?: string }) {
 
             <div style={{ flex: 1 }}>
               {myPageTab === 'OVERVIEW' && (
-                <div className="reveal">
-                  <h3 style={{fontSize: '24px', fontWeight: 800, marginBottom: '24px'}}>전체 개요</h3>
-                  <div className="card" style={{padding: '32px'}}>
-                    {activities.length === 0 ? (
-                      <p style={{ color: 'var(--text-sub)', fontSize: '15px' }}>최근 활동 내역이 없습니다.</p>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        {activities.map(a => (
-                          <div key={a.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '14px 0', borderBottom: '1px solid var(--border)' }}>
-                            <div style={{ flexShrink: 0, color: a.type === 'FEED_LIKE' ? 'var(--point-rose)' : 'var(--point-violet)' }}>
-                              {a.type === 'FEED_LIKE' ? <Heart size={16} /> : <MessageSquare size={16} />}
-                            </div>
-                            <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: '13px', fontWeight: 700, marginBottom: '4px' }}>
-                                {a.type === 'FEED_LIKE' ? '피드 좋아요' : '댓글 작성'}
+                <div className="reveal" style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+                  <div>
+                    <h3 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '16px', letterSpacing: '-0.5px' }}>팔로우 중인 아티스트 ({favoriteArtists.length})</h3>
+                    <div className="card" style={{ padding: '24px 32px' }}>
+                      {favoriteArtists.length === 0 ? (
+                        <p style={{ color: 'var(--text-sub)', fontSize: '15px', margin: 0 }}>팔로우 중인 아티스트가 없습니다. 좋아하는 아티스트를 찾아 팔로우해보세요!</p>
+                      ) : (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '20px' }}>
+                          {favoriteArtists.map(a => {
+                            const artist = enrichFanArtist(a, storeArtists);
+                            return (
+                              <div 
+                                key={a.id} 
+                                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', cursor: 'pointer', textAlign: 'center' }}
+                                onClick={() => { setSelectedArtist(artist); setBoardTab('FEED'); }}
+                              >
+                                <ArtistAvatar
+                                  artist={artist}
+                                  fallbackChars={3}
+                                  style={{ width: '72px', height: '72px', borderRadius: '50%', boxShadow: '0 8px 16px rgba(0,0,0,0.06)' }}
+                                />
+                                <span style={{ fontSize: '14px', fontWeight: 800, color: 'var(--text-main)' }}>{artist.name}</span>
                               </div>
-                              <div style={{ fontSize: '13px', color: 'var(--text-sub)', marginBottom: '4px' }}>{a.content}</div>
-                              <div style={{ fontSize: '11px', color: 'var(--text-sub)' }}>{formatTime(a.createdAt)}</div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '16px', letterSpacing: '-0.5px' }}>최근 활동 내역</h3>
+                    <div className="card" style={{ padding: '32px' }}>
+                      {activities.length === 0 ? (
+                        <p style={{ color: 'var(--text-sub)', fontSize: '15px', margin: 0 }}>최근 활동 내역이 없습니다.</p>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          {activities.map(a => (
+                            <div key={a.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '14px 0', borderBottom: '1px solid var(--border)' }}>
+                              <div style={{ flexShrink: 0, color: a.type === 'FEED_LIKE' ? 'var(--point-rose)' : 'var(--point-violet)' }}>
+                                {a.type === 'FEED_LIKE' ? <Heart size={16} /> : <MessageSquare size={16} />}
+                              </div>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: '13px', fontWeight: 700, marginBottom: '4px' }}>
+                                  {a.type === 'FEED_LIKE' ? '피드 좋아요' : '댓글 작성'}
+                                </div>
+                                <div style={{ fontSize: '13px', color: 'var(--text-sub)', marginBottom: '4px' }}>{a.content}</div>
+                                <div style={{ fontSize: '11px', color: 'var(--text-sub)' }}>{formatTime(a.createdAt)}</div>
+                              </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
@@ -3978,12 +4026,11 @@ export default function App({ role = 'FAN' }: { role?: string }) {
 
               {/* Title */}
               <h2 style={{ fontSize: '24px', fontWeight: 900, color: '#111', marginBottom: '12px', letterSpacing: '-0.5px' }}>
-                <span style={{ color: '#C2507A' }}>{welcomeArtist.name}</span>님을 팔로우하셨어요!
+                <span style={{ color: '#C2507A' }}>{welcomeArtist.name}</span>님과 한층 더 가까워졌어요!
               </h2>
 
               {/* Description */}
               <p style={{ fontSize: '15px', color: 'var(--text-sub)', lineHeight: 1.6, fontWeight: 500, marginBottom: '32px' }}>
-                성공적으로 커뮤니티에 가입되었습니다.<br />
                 지금 당장 만나러 가볼까요?
               </p>
 
@@ -4032,6 +4079,115 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                   onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
                 >
                   지금 가기
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Unfollow Onboarding Modal */}
+      {showUnfollowModal && unfollowedArtist && (
+        <div className="modal-overlay" style={{ zIndex: 1100 }} onClick={() => setShowUnfollowModal(false)}>
+          <div 
+            className="modal-content" 
+            style={{ 
+              maxWidth: '440px', 
+              padding: '0', 
+              overflow: 'hidden', 
+              background: 'rgba(255, 255, 255, 0.85)', 
+              backdropFilter: 'blur(20px)',
+              border: '1px solid rgba(255, 255, 255, 0.4)',
+              boxShadow: '0 20px 50px rgba(0,0,0,0.15)',
+              textAlign: 'center'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header Gradient Accent */}
+            <div style={{ height: '12px', background: 'linear-gradient(to right, #7F77DD, #C2507A)' }} />
+            
+            <div style={{ padding: '40px 32px' }}>
+              {/* Confetti or Celebratory Icon */}
+              <div style={{ 
+                width: '80px', 
+                height: '80px', 
+                borderRadius: '50%', 
+                background: 'linear-gradient(135deg, rgba(127, 119, 221, 0.1), rgba(194, 80, 122, 0.1))', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                margin: '0 auto 24px auto',
+                boxShadow: '0 8px 24px rgba(127, 119, 221, 0.08)'
+              }}>
+                <span style={{ fontSize: '36px' }}>🤝</span>
+              </div>
+
+              {/* Title */}
+              <h2 style={{ fontSize: '24px', fontWeight: 900, color: '#111', marginBottom: '12px', letterSpacing: '-0.5px' }}>
+                <span style={{ color: '#7F77DD' }}>{unfollowedArtist.name}</span>님과 조금 멀어졌어요
+              </h2>
+
+              {/* Description */}
+              <p style={{ fontSize: '15px', color: 'var(--text-sub)', lineHeight: 1.6, fontWeight: 500, marginBottom: '32px' }}>
+                언제든지 다시 소식을 받고 소통할 수 있어요.<br />
+                지금 다시 팔로우할까요?
+              </p>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button 
+                  onClick={() => setShowUnfollowModal(false)}
+                  style={{ 
+                    flex: 1, 
+                    padding: '16px', 
+                    borderRadius: '16px', 
+                    border: '1px solid #EDE8E2', 
+                    background: 'white', 
+                    color: '#666', 
+                    fontSize: '15px', 
+                    fontWeight: 700, 
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = '#F7F3EE'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'white'; }}
+                >
+                  확인
+                </button>
+                <button 
+                  onClick={async () => {
+                    const artist = unfollowedArtist;
+                    if (!artist) return;
+                    setFavoriteArtists(prev => [...prev, artist]);
+                    setStoreArtists(prev => prev.map(a => a.id === artist.id ? { ...a, fanCount: (a.fanCount ?? 0) + 1 } : a));
+                    setShowUnfollowModal(false);
+                    try {
+                      await followArtist(artist.id);
+                      setWelcomeArtist(artist);
+                      setShowWelcomeModal(true);
+                    } catch {
+                      setFavoriteArtists(prev => prev.filter(a => a.id !== artist.id));
+                      setStoreArtists(prev => prev.map(a => a.id === artist.id ? { ...a, fanCount: Math.max(0, (a.fanCount ?? 0) - 1) } : a));
+                      showToast('팔로우 처리에 실패했습니다.', 'error');
+                    }
+                  }}
+                  style={{ 
+                    flex: 1, 
+                    padding: '16px', 
+                    borderRadius: '16px', 
+                    border: 'none', 
+                    background: 'linear-gradient(135deg, #7F77DD, #C2507A)', 
+                    color: 'white', 
+                    fontSize: '15px', 
+                    fontWeight: 800, 
+                    cursor: 'pointer',
+                    boxShadow: '0 8px 20px rgba(127, 119, 221, 0.25)',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; }}
+                  onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
+                >
+                  다시 팔로우
                 </button>
               </div>
             </div>

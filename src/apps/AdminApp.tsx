@@ -14,6 +14,87 @@ import type { BannerFormData } from '../api/adminBanners';
 import { getStoreBanners } from '../api/banners';
 import type { BannerResponse, StoreBannerResponse } from '../types/banner';
 
+type ContentStatus = 'APPROVED' | 'REPORTED' | 'SPAM';
+type ContentType = 'POST' | 'COMMENT';
+
+interface ContentRow {
+  type: ContentType;
+  author: string;
+  group: string;
+  content: string;
+  date: string;
+  status: ContentStatus;
+}
+
+const MOCK_CONTENT: ContentRow[] = [
+  { type: 'POST', author: 'NovaSera', group: 'NOVA', content: 'Thank you so much to everyone who came!', date: '2026-05-14 10:20', status: 'APPROVED' },
+  { type: 'POST', author: 'SpammerX', group: '-', content: 'Click here for free tickets!!!', date: '2026-05-14 09:12', status: 'SPAM' },
+  { type: 'POST', author: 'User_129', group: 'NOVA', content: '오늘 콘서트 너무 좋았어요', date: '2026-05-13 22:44', status: 'APPROVED' },
+  { type: 'COMMENT', author: 'User_492', group: '-', content: 'This is amazing!', date: '2026-05-14 10:25', status: 'APPROVED' },
+  { type: 'COMMENT', author: 'Hater01', group: '-', content: '이거 사기 아닌가요 신고합니다', date: '2026-05-14 11:03', status: 'REPORTED' },
+];
+
+const STATUS_STYLE: Record<ContentStatus, string> = {
+  APPROVED: 'bg-green-50 text-green-600 border-green-100',
+  REPORTED: 'bg-orange-50 text-orange-600 border-orange-100',
+  SPAM: 'bg-red-50 text-red-600 border-red-100',
+};
+
+function ContentMonitoringPanel() {
+  const [contentTab, setContentTab] = useState<ContentType>('POST');
+  const rows = MOCK_CONTENT.filter(r => r.type === contentTab);
+
+  return (
+    <div className="bg-white rounded-2xl border border-[#EDE8E2] shadow-sm overflow-hidden">
+      <div className="p-4 border-b border-[#EDE8E2] bg-[#F7F3EE] flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <h3 className="font-bold text-[#111]">Content Monitoring</h3>
+          <span className="text-[10px] font-black tracking-wider uppercase bg-amber-50 text-amber-600 border border-amber-200 px-2 py-0.5 rounded-full">샘플 데이터</span>
+        </div>
+        <div className="flex bg-[#F7F3EE] rounded-xl p-1 border border-[#EDE8E2]">
+          {(['POST', 'COMMENT'] as const).map(tab => (
+            <button
+              key={tab}
+              onClick={() => setContentTab(tab)}
+              className={`px-5 py-1.5 rounded-lg text-xs font-bold transition-all ${contentTab === tab ? 'bg-[#111] text-white' : 'text-[#888] hover:text-[#111]'}`}
+            >
+              {tab === 'POST' ? 'Posts' : 'Comments'}
+            </button>
+          ))}
+        </div>
+      </div>
+      <table className="w-full text-left border-collapse">
+        <thead>
+          <tr className="border-b border-[#EDE8E2] text-xs uppercase tracking-[1px] text-[#888]">
+            <th className="p-4 font-medium">Status</th>
+            <th className="p-4 font-medium">Author</th>
+            <th className="p-4 font-medium">Group</th>
+            <th className="p-4 font-medium">Content Preview</th>
+            <th className="p-4 font-medium">Date</th>
+            <th className="p-4 font-medium text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((c, i) => (
+            <tr key={i} className={`border-b border-[#EDE8E2] last:border-0 hover:bg-black/[0.02] transition-colors ${c.status === 'SPAM' ? 'bg-red-50/40' : c.status === 'REPORTED' ? 'bg-orange-50/30' : ''}`}>
+              <td className="p-4">
+                <span className={`text-[10px] font-black tracking-wider uppercase px-2.5 py-1 rounded-full border ${STATUS_STYLE[c.status]}`}>{c.status}</span>
+              </td>
+              <td className="p-4 text-sm font-bold text-[#111]">{c.author}</td>
+              <td className="p-4 text-xs font-mono text-[#888]">{c.group}</td>
+              <td className="p-4 text-sm max-w-[240px] truncate text-[#555]">{c.content}</td>
+              <td className="p-4 text-xs font-mono text-[#888]">{c.date}</td>
+              <td className="p-4 text-right">
+                <button className="text-xs font-bold text-red-600 hover:underline">Delete</button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default function AdminApp() {
   const navigate = useNavigate();
   const [activeMenu, setActiveMenu] = useState('agencies');
@@ -429,45 +510,16 @@ export default function AdminApp() {
           )}
 
           {activeMenu === 'content' && (
-            <div className="bg-white rounded-2xl border border-[#EDE8E2] shadow-sm overflow-hidden">
-               <div className="p-4 border-b border-[#EDE8E2] bg-[#F7F3EE]">
-                 <h3 className="font-bold text-[#111]">Content Monitoring</h3>
-               </div>
-               <table className="w-full text-left border-collapse">
-                 <thead>
-                   <tr className="border-b border-[#EDE8E2] text-xs uppercase tracking-[1px] text-[#888]">
-                     <th className="p-4 font-medium">Type</th>
-                     <th className="p-4 font-medium">Author</th>
-                     <th className="p-4 font-medium">Content Preview</th>
-                     <th className="p-4 font-medium">Date</th>
-                     <th className="p-4 font-medium text-right">Actions</th>
-                   </tr>
-                 </thead>
-                 <tbody>
-                   {[
-                     { type: 'POST', author: 'Starlight', content: 'Thank you so much to everyone...', date: '2026-05-14 10:20' },
-                     { type: 'COMMENT', author: 'User_492', content: 'This is amazing!', date: '2026-05-14 10:25' },
-                     { type: 'POST', author: 'SpammerX', content: 'Click here for free tickets!!!', date: '2026-05-14 09:12' },
-                   ].map((c, i) => (
-                     <tr key={i} className={`border-b border-[#EDE8E2] last:border-0 hover:bg-black/5 transition-colors ${i === 2 ? 'bg-red-50/50' : ''}`}>
-                       <td className="p-4"><span className="text-[10px] font-bold bg-[#111] text-white px-2 py-1 rounded">{c.type}</span></td>
-                       <td className="p-4 text-sm font-bold">{c.author}</td>
-                       <td className="p-4 text-sm max-w-[200px] truncate text-[#555]">{c.content}</td>
-                       <td className="p-4 text-xs font-mono text-[#888]">{c.date}</td>
-                       <td className="p-4 text-right">
-                         <button className="text-xs font-bold text-red-600 hover:underline">Delete</button>
-                       </td>
-                     </tr>
-                   ))}
-                 </tbody>
-               </table>
-            </div>
+            <ContentMonitoringPanel />
           )}
 
           {activeMenu === 'orders' && (
             <div className="bg-white rounded-2xl border border-[#EDE8E2] shadow-sm overflow-hidden">
               <div className="p-4 border-b border-[#EDE8E2] bg-[#F7F3EE] flex justify-between items-center">
-                <h3 className="font-bold text-[#111]">Platform Orders & Revenue</h3>
+                <div className="flex items-center gap-3">
+                  <h3 className="font-bold text-[#111]">Platform Orders & Revenue</h3>
+                  <span className="text-[10px] font-black tracking-wider uppercase bg-amber-50 text-amber-600 border border-amber-200 px-2 py-0.5 rounded-full">샘플 데이터</span>
+                </div>
                 <span className="text-sm font-bold text-[#C2507A] bg-pink-50 px-3 py-1 rounded-full">Total: ₩12,450,000 Today</span>
               </div>
               <table className="w-full text-left border-collapse">
@@ -489,7 +541,13 @@ export default function AdminApp() {
                       <td className="p-4 text-sm font-mono font-bold text-[#111]">{o.id}</td>
                       <td className="p-4 text-sm">{o.buyer}</td>
                       <td className="p-4 text-sm font-bold text-[#333]">{o.amount}</td>
-                      <td className="p-4 text-xs text-[#888]">{o.status}</td>
+                      <td className="p-4">
+                        <span className={`text-[10px] font-black tracking-wider uppercase px-2.5 py-1 rounded-full border ${
+                          o.status === 'Payment Complete' ? 'bg-green-50 text-green-600 border-green-100' :
+                          o.status === 'Shipping' ? 'bg-blue-50 text-blue-600 border-blue-100' :
+                          'bg-red-50 text-red-600 border-red-100'
+                        }`}>{o.status}</span>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

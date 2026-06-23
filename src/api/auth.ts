@@ -160,11 +160,12 @@ export async function signup(
   email: string,
   password: string,
   nickname: string,
+  termsAgreed: boolean,
 ): Promise<AuthToken> {
   const res = await fetch(`${BASE}/signup`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password, nickname, termsAgreed: true }),
+    body: JSON.stringify({ email, password, nickname, termsAgreed }),
   })
   if (!res.ok) throw new Error(`signup failed: ${res.status}`)
   const body = await res.json()

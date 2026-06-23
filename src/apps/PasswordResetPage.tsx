@@ -58,6 +58,13 @@ export default function PasswordResetPage() {
             <p className="text-[#888]">{token ? '새 비밀번호 설정' : '비밀번호 찾기'}</p>
           </div>
 
+          {!token && !done && (
+            <p className="text-xs text-center text-[#AAA] mb-6">
+              이메일로 가입한 팬 계정만 이용 가능합니다.<br />
+              소셜 가입 계정은 카카오·구글로 로그인해주세요.
+            </p>
+          )}
+
           {done ? (
             <div className="text-center space-y-4">
               <p className="text-[#111] font-medium">

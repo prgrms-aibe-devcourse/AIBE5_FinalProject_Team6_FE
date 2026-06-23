@@ -6,19 +6,31 @@ interface MascotArtProps {
 
 const INK = '#2A2A2A'
 
-/** 큰 눈 + 하이라이트 */
-function CuteEyes({ lx = 38, ly = 47, rx = 62, ry = 47, r = 5 }: {
-  lx?: number; ly?: number; rx?: number; ry?: number; r?: number
+type Gaze = { dx: number; dy: number }
+
+/** 큰 눈 — 동공만, 시선 방향 오프셋 */
+function CuteEyes({
+  lx = 42,
+  ly = 47,
+  rx = 58,
+  ry = 47,
+  r = 5,
+  gaze = { dx: 0, dy: 0 },
+}: {
+  lx?: number
+  ly?: number
+  rx?: number
+  ry?: number
+  r?: number
+  gaze?: Gaze
 }) {
-  const pr = r * 0.55
+  const pr = r * 0.66
   return (
     <>
       <circle cx={lx} cy={ly} r={r} fill="#fff" />
       <circle cx={rx} cy={ry} r={r} fill="#fff" />
-      <circle cx={lx} cy={ly} r={pr} fill={INK} />
-      <circle cx={rx} cy={ry} r={pr} fill={INK} />
-      <circle cx={lx + 1.5} cy={ly - 1.5} r={1.3} fill="#fff" />
-      <circle cx={rx + 1.5} cy={ry - 1.5} r={1.3} fill="#fff" />
+      <circle cx={lx + gaze.dx} cy={ly + gaze.dy} r={pr} fill={INK} />
+      <circle cx={rx + gaze.dx} cy={ry + gaze.dy} r={pr} fill={INK} />
     </>
   )
 }
@@ -53,7 +65,7 @@ function MascotStar() {
         d="M 50 16 C 52 16 56 34 58 36 L 76 38 C 78 38 64 48 64 50 L 70 68 C 70 70 52 60 50 60 C 48 60 30 70 30 68 L 36 50 C 36 48 22 38 24 38 L 42 36 C 44 34 48 16 50 16 Z"
         fill="#F5C842"
       />
-      <CuteEyes ly={46} ry={46} r={4.5} />
+      <CuteEyes ly={46} ry={46} r={4.5} gaze={{ dx: 0, dy: 0 }} />
       <CuteSmile y={57} wide />
       <Blush y={52} />
     </g>
@@ -68,7 +80,7 @@ function MascotBlob() {
         d="M 20 54 C 18 40 34 28 52 30 C 72 32 82 44 80 56 C 78 68 64 74 50 72 C 34 70 22 64 20 54 Z"
         fill="#9B7FD4"
       />
-      <CuteEyes r={4.5} />
+      <CuteEyes r={4.5} gaze={{ dx: -1.2, dy: -1.0 }} />
       <CuteSmile />
       <Blush />
     </g>
@@ -80,7 +92,7 @@ function MascotSquircle() {
   return (
     <g>
       <rect x="24" y="26" width="52" height="48" rx="20" fill="#4EC0F0" />
-      <CuteEyes r={5} />
+      <CuteEyes r={5} gaze={{ dx: 1.2, dy: -1.0 }} />
       <CuteSmile y={59} wide />
       <ellipse cx="28" cy="56" rx="5" ry="3.5" fill="#FFB060" opacity="0.65" />
       <ellipse cx="72" cy="56" rx="5" ry="3.5" fill="#FFB060" opacity="0.65" />
@@ -93,7 +105,7 @@ function MascotPea() {
   return (
     <g>
       <ellipse cx="50" cy="52" rx="26" ry="28" fill="#6ECF7A" />
-      <CuteEyes ly={48} ry={48} r={5} />
+      <CuteEyes ly={48} ry={48} r={5} gaze={{ dx: -1.2, dy: 1.0 }} />
       <CuteSmile y={60} wide />
       <Blush y={56} />
     </g>
@@ -108,7 +120,7 @@ function MascotCloud() {
         d="M 24 58 C 18 58 16 52 22 48 C 20 38 30 32 40 34 C 44 24 58 22 66 30 C 78 28 86 38 82 48 C 90 52 88 62 76 62 L 26 62 C 24 62 24 58 24 58 Z"
         fill="#8ED4F0"
       />
-      <CuteEyes ly={48} ry={48} r={4} />
+      <CuteEyes ly={48} ry={48} r={4} gaze={{ dx: 1.2, dy: 1.0 }} />
       <path
         d="M 42 56 L 46 60 L 50 56 L 54 60 L 58 56"
         stroke={INK}
@@ -130,7 +142,7 @@ function MascotArch() {
         d="M 20 70 C 20 42 34 24 50 24 C 66 24 80 42 80 70 Z"
         fill="#4A9E62"
       />
-      <CuteEyes ly={48} ry={48} r={4.5} />
+      <CuteEyes ly={48} ry={48} r={4.5} gaze={{ dx: -0.75, dy: -1.1 }} />
       <CuteSmile y={58} wide />
       <Blush y={54} />
     </g>
@@ -142,7 +154,7 @@ function MascotEgg() {
   return (
     <g>
       <ellipse cx="50" cy="52" rx="24" ry="28" fill="#F5D840" />
-      <CuteEyes ly={47} ry={47} r={5} />
+      <CuteEyes ly={47} ry={47} r={5} gaze={{ dx: 0.75, dy: -1.1 }} />
       <CuteSmile y={60} wide />
       <Blush y={56} />
     </g>
@@ -157,7 +169,7 @@ function MascotHeart() {
         d="M 50 30 C 58 22 72 24 74 38 C 76 52 50 72 50 72 C 50 72 24 52 26 38 C 28 24 42 22 50 30 Z"
         fill="#F88850"
       />
-      <CuteEyes ly={46} ry={46} r={4.5} />
+      <CuteEyes ly={46} ry={46} r={4.5} gaze={{ dx: -0.75, dy: 1.1 }} />
       <CuteSmile y={57} />
       <Blush y={53} />
     </g>
@@ -173,7 +185,7 @@ function MascotRoseHeart() {
         d="M 50 34 C 58 26 70 28 72 40 C 74 52 50 68 50 68 C 50 68 26 52 28 40 C 30 28 42 26 50 34 Z"
         fill="#F888A8"
       />
-      <CuteEyes ly={46} ry={46} r={4.5} />
+      <CuteEyes ly={46} ry={46} r={4.5} gaze={{ dx: 0.75, dy: 1.1 }} />
       <path
         d="M 42 56 L 46 60 L 50 56 L 54 60 L 58 56"
         stroke={INK}
@@ -195,7 +207,7 @@ function MascotSlab() {
         d="M 16 50 C 16 40 28 36 50 36 C 72 36 84 40 84 50 C 84 62 72 66 50 66 C 28 66 16 62 16 50 Z"
         fill="#F8B040"
       />
-      <CuteEyes ly={48} ry={48} r={5} />
+      <CuteEyes ly={48} ry={48} r={5} gaze={{ dx: -1.4, dy: -0.7 }} />
       <CuteSmile y={58} wide />
       <Blush y={54} />
     </g>
@@ -210,7 +222,7 @@ function MascotBean() {
         d="M 50 20 C 62 20 68 34 66 50 C 64 68 56 78 50 78 C 44 78 36 68 34 50 C 32 34 38 20 50 20 Z"
         fill="#F888B0"
       />
-      <CuteEyes ly={46} ry={46} r={4.5} />
+      <CuteEyes ly={46} ry={46} r={4.5} gaze={{ dx: 1.4, dy: -0.7 }} />
       <path
         d="M 42 58 L 46 62 L 50 58 L 54 62 L 58 58"
         stroke={INK}
@@ -233,7 +245,7 @@ function MascotPetal() {
       <ellipse cx="36" cy="52" rx="15" ry="17" fill="#A080D8" />
       <ellipse cx="64" cy="52" rx="15" ry="17" fill="#A080D8" />
       <ellipse cx="50" cy="66" rx="17" ry="13" fill="#A080D8" />
-      <CuteEyes ly={50} ry={50} r={4.5} />
+      <CuteEyes ly={50} ry={50} r={4.5} gaze={{ dx: 1.4, dy: 0.7 }} />
       <CuteSmile y={60} />
       <Blush y={56} />
     </g>

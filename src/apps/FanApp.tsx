@@ -223,28 +223,14 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       }
     }
   };
+  const [pendingScrollFeedId, setPendingScrollFeedId] = useState<number | null>(null);
+
   const handleActivityClick = async (activity: ActivityItem) => {
     const artist = storeArtists.find(a => a.id === activity.artistId);
     if (!artist) return;
     setSelectedArtist(toFanArtistEntry(artist));
     setBoardTab('FEED');
-    setTimeout(() => {
-      const element = document.getElementById(`feed-post-${activity.feedId}`);
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        element.style.transition = 'all 0.4s ease';
-        element.style.boxShadow = '0 0 25px rgba(127, 119, 221, 0.45)';
-        element.style.borderColor = 'var(--point-violet)';
-        element.style.transform = 'scale(1.01)';
-        setTimeout(() => {
-          element.style.boxShadow = '';
-          element.style.borderColor = '';
-          element.style.transform = '';
-        }, 1800);
-      } else {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }
-    }, 400);
+    setPendingScrollFeedId(activity.feedId);
   };
 
   const [notifications, setNotifications] = useState<NotificationResult[]>([]);
@@ -809,6 +795,31 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     })();
   }, [selectedArtist?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 활동 내역 클릭 시 해당 피드 게시글로 스크롤 및 하이라이트 효과 적용
+  useEffect(() => {
+    if (pendingScrollFeedId !== null && !feedsLoading) {
+      const timer = setTimeout(() => {
+        const element = document.getElementById(`feed-post-${pendingScrollFeedId}`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          element.style.transition = 'all 0.4s ease';
+          element.style.boxShadow = '0 0 25px rgba(127, 119, 221, 0.45)';
+          element.style.borderColor = 'var(--point-violet)';
+          element.style.transform = 'scale(1.01)';
+          setTimeout(() => {
+            element.style.boxShadow = '';
+            element.style.borderColor = '';
+            element.style.transform = '';
+          }, 1800);
+        } else {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        setPendingScrollFeedId(null);
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [feeds, feedsLoading, pendingScrollFeedId]);
+
   const handleLoadMore = () => {
     if (!storeNextCursor || storeLoading) return;
     const artistId = storeArtist !== 'ALL' ? Number(storeArtist) : undefined;
@@ -1301,12 +1312,20 @@ export default function App({ role = 'FAN' }: { role?: string }) {
         }
 
         .mp-followed-artist-item {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 10px;
+          cursor: pointer;
+          text-align: center;
+        }
+        .mp-followed-artist-item > *:first-child {
           transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
-        .mp-followed-artist-item:hover {
+        .mp-followed-artist-item:hover > *:first-child {
           transform: scale(1.06);
         }
-        .mp-followed-artist-item:active {
+        .mp-followed-artist-item:active > *:first-child {
           transform: scale(0.96);
         }
 

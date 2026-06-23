@@ -17,7 +17,7 @@ import { getStoreBanners, getMainBanners } from '../api/banners';
 import type { StoreBannerResponse, BannerResponse } from '../types/banner';
 import { getCart, addCartItem, updateCartItem, removeCartItem } from '../api/cart';
 import type { CartItemResponse } from '../types/cart';
-import { getFeeds, createFeed, createComment, likeFeed, unlikeFeed, followArtist, unfollowArtist, getJoinedArtists, likeComment, unlikeComment } from '../api/community';
+import { getFeeds, createFeed, createComment, likeFeed, unlikeFeed, followArtist, unfollowArtist, getJoinedArtists, likeComment, unlikeComment, getComments } from '../api/community';
 import type { FeedResponse } from '../types/feed';
 import { getCalendar, getLives } from '../api/schedule';
 import type { ScheduleResult } from '../types/schedule';
@@ -773,7 +773,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     }
   }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 선택한 아티스트 피드 로드 + memberId→name 맵 갱신
+  // 선택한 아티스트 피드 로드 + memberId→name 맵 갱신 + 댓글 로드
   useEffect(() => {
     if (!selectedArtist) return;
     void (async () => {
@@ -787,13 +787,62 @@ export default function App({ role = 'FAN' }: { role?: string }) {
         const map: Record<number, { name: string; profileImageUrl?: string }> = {};
         members.forEach(m => { map[m.id] = { name: m.memberName, profileImageUrl: m.profileImageUrl }; });
         setMemberMap(map);
+
+        // 각 피드에 대한 댓글 비동기 일괄 조회
+        const currentFanId = fanProfile?.fanId ?? getSubFromToken() ?? 0;
+        const commentsData = await Promise.all(
+          res.items.map(feed => getComments(feed.id).catch(() => ({ items: [] })))
+        );
+
+        const newCommentsMap: Record<string, any[]> = {};
+        res.items.forEach((feed, index) => {
+          const rawComments = commentsData[index]?.items || [];
+          const formattedComments: any[] = [];
+          rawComments.forEach((item: any) => {
+            const c = item.comment;
+            let author = '익명';
+            if (c.artistMemberId != null) {
+              author = map[c.artistMemberId]?.name ?? '아티스트';
+            } else if (c.fanId != null) {
+              author = (c.fanId === currentFanId) ? (fanProfile?.nickname || '나') : `팬 #${c.fanId}`;
+            }
+            formattedComments.push({
+              id: c.id,
+              author: author,
+              content: c.content,
+              isLiked: false,
+              likes: 0
+            });
+
+            // 답글(대댓글) 플래트닝 처리
+            if (item.replies && item.replies.length > 0) {
+              item.replies.forEach((r: any) => {
+                let rAuthor = '익명';
+                if (r.artistMemberId != null) {
+                  rAuthor = map[r.artistMemberId]?.name ?? '아티스트';
+                } else if (r.fanId != null) {
+                  rAuthor = (r.fanId === currentFanId) ? (fanProfile?.nickname || '나') : `팬 #${r.fanId}`;
+                }
+                formattedComments.push({
+                  id: r.id,
+                  author: `↳ ${rAuthor}`,
+                  content: r.content,
+                  isLiked: false,
+                  likes: 0
+                });
+              });
+            }
+          });
+          newCommentsMap[String(feed.id)] = formattedComments;
+        });
+        setCommentsMap(newCommentsMap);
       } catch (e) {
         console.error(e);
       } finally {
         setFeedsLoading(false);
       }
     })();
-  }, [selectedArtist?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedArtist?.id, fanProfile?.fanId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 활동 내역 클릭 시 해당 피드 게시글로 스크롤 및 하이라이트 효과 적용
   useEffect(() => {

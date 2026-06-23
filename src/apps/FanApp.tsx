@@ -2565,9 +2565,27 @@ export default function App({ role = 'FAN' }: { role?: string }) {
 
                 {productTab === 'DETAIL' && (
                   <div>
-                    <div style={{ width: '100%', height: '600px', background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ccc', borderRadius: '16px', marginBottom: '48px' }}>
-                      [상품 상세 이미지 영역]
-                    </div>
+                    {selectedProduct.thumbnailUrl ? (
+                      <div style={{ width: '100%', borderRadius: '16px', overflow: 'hidden', marginBottom: '48px', background: '#F7F3EE' }}>
+                        <img 
+                          src={selectedProduct.thumbnailUrl} 
+                          alt={selectedProduct.name} 
+                          style={{ width: '100%', maxHeight: '600px', objectFit: 'contain', display: 'block' }} 
+                        />
+                      </div>
+                    ) : productImages.length > 0 ? (
+                      <div style={{ width: '100%', borderRadius: '16px', overflow: 'hidden', marginBottom: '48px', background: '#F7F3EE' }}>
+                        <img 
+                          src={productImages.sort((a, b) => a.sortOrder - b.sortOrder)[0]?.imageUrl} 
+                          alt={selectedProduct.name} 
+                          style={{ width: '100%', maxHeight: '600px', objectFit: 'contain', display: 'block' }} 
+                        />
+                      </div>
+                    ) : (
+                      <div style={{ width: '100%', height: '600px', background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ccc', borderRadius: '16px', marginBottom: '48px' }}>
+                        [상품 상세 이미지 영역]
+                      </div>
+                    )}
                     <h3 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '24px' }}>상품 스펙</h3>
                     <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '48px', fontSize: '14px' }}>
                       <tbody>

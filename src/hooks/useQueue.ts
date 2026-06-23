@@ -104,7 +104,13 @@ export function useQueue() {
     setQueueState({ ...INITIAL, phase: 'WAITING' })
 
     try {
-      await joinQueue(productId)
+      const res = await joinQueue(productId)
+      setQueueState({
+        phase: res.status === 'PROCESSING' ? 'PROCESSING' : 'WAITING',
+        position: res.position,
+        estimatedWaitSec: res.position * 3, // 3 seconds per position
+        accessTicket: null,
+      })
     } catch {
       setQueueState({ ...INITIAL, phase: 'EXPIRED' })
       return

@@ -245,7 +245,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     handlePay, resetCheckout,
   } = useCheckout(setActiveTab);
 
-  const { queueState, resetQueue } = useQueue();
+  const { queueState, startQueue, resetQueue } = useQueue();
 
   // 대기열 PROCESSING 전이 시 accessTicket을 checkoutData에 담아 결제 화면으로 이동
   useEffect(() => {
@@ -292,6 +292,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   // New Filter & Sort States
   const [storeArtist, setStoreArtist] = useState('ALL');
   const [storeCategory, setStoreCategory] = useState('전체');
+  const [storeProductType, setStoreProductType] = useState<'regular' | 'drops'>('regular');
   const [storeSort, setStoreSort] = useState('낮은가격순');
   const [storeSearch, setStoreSearch] = useState('');
   const [storePage, setStorePage] = useState(1);
@@ -543,18 +544,14 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     localStorage.setItem('fd_collected_cards', JSON.stringify(collectedCards));
   }, [collectedCards]);
 
-  // 상품 목록 로드 — 아티스트 필터 변경 시 재fetch
+  // 상품 목록 로드 — 아티스트 필터 또는 상품 타입 변경 시 재fetch
   useEffect(() => {
     const artistId = storeArtist !== 'ALL' ? Number(storeArtist) : undefined;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setStoreLoading(true);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setStoreItems([]);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setStoreNextCursor(null);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setStoreHasMore(false);
-    getProducts('regular', undefined, 20, artistId)
+    getProducts(storeProductType, undefined, 20, artistId)
       .then(res => {
         setStoreItems(res.items ?? []);
         setStoreNextCursor(res.nextCursor ?? null);
@@ -562,7 +559,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       })
       .catch(console.error)
       .finally(() => setStoreLoading(false));
-  }, [storeArtist]);
+  }, [storeArtist, storeProductType]);
 
   // 스토어 배너 로드
   useEffect(() => {
@@ -731,13 +728,14 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     setSearchParams(params, { replace: false });
   }, [selectedProduct?.id, selectedNotice?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 상품 상세 진입 시 images[] 로드
+  // 상품 상세 진입 시 images[] 로드 및 상세 정보 업데이트
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!selectedProduct) { setProductImages([]); setProductMainImg(0); return; }
     getProduct(selectedProduct.id).then(res => {
       setProductImages(res.images ?? []);
       setProductMainImg(0);
+      setSelectedProduct((prev: ProductListItem | null) => prev && prev.id === res.id ? { ...prev, ...res } : prev);
     }).catch(() => setProductImages([]));
   }, [selectedProduct?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -889,7 +887,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     if (!storeNextCursor || storeLoading) return;
     const artistId = storeArtist !== 'ALL' ? Number(storeArtist) : undefined;
     setStoreLoading(true);
-    getProducts('regular', storeNextCursor, 20, artistId)
+    getProducts(storeProductType, storeNextCursor, 20, artistId)
       .then(res => {
         setStoreItems(prev => [...prev, ...(res.items ?? [])]);
         setStoreNextCursor(res.nextCursor ?? null);
@@ -2784,9 +2782,15 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                         style={{ flex: 1, padding: '16px', borderRadius: '12px', border: '1px solid #C2507A', color: '#C2507A', fontWeight: 800, textAlign: 'center', cursor: 'pointer' }}
                       >장바구니 담기</button>
                       <button
-                        onClick={() => {
+                        onClick={async () => {
+                          const isDrops = selectedProduct.dropsStartAt != null;
                           setCheckoutData({ type: 'product', title: selectedProduct.name, price: Number(selectedProduct.price), qty: productQty, option: productOption, productId: selectedProduct.id, accessTicket: null });
-                          setActiveTab('CHECKOUT');
+                          if (isDrops) {
+                            setActiveTab('QUEUE_WAIT');
+                            await startQueue(selectedProduct.id);
+                          } else {
+                            setActiveTab('CHECKOUT');
+                          }
                         }}
                         style={{ flex: 1, padding: '16px', borderRadius: '12px', background: 'linear-gradient(135deg, #C2507A, #7F77DD)', color: 'white', fontWeight: 800, textAlign: 'center', cursor: 'pointer' }}
                       >바로 구매하기</button>
@@ -3023,8 +3027,45 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   </div>
   <div style={{ padding: '16px 0 32px 0' }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', gap: '20px', flexWrap: 'wrap' }}>
-      {/* 카테고리 필터: BE API에 category 필드 추가 후 활성화 예정 */}
-      <div />
+      {/* 카테고리 필터: 상시 상품 및 드롭스 탭 분리 및 강조 */}
+      <div style={{ display: 'flex', gap: '8px' }}>
+        <button 
+          onClick={() => { setStoreProductType('regular'); setStorePage(1); }}
+          style={{
+            padding: '8px 18px',
+            borderRadius: '20px',
+            border: storeProductType === 'regular' ? '1px solid var(--text-main)' : '1px solid #EDE8E2',
+            background: storeProductType === 'regular' ? 'var(--text-main)' : 'white',
+            color: storeProductType === 'regular' ? 'white' : 'var(--text-main)',
+            fontSize: '13px',
+            fontWeight: 800,
+            cursor: 'pointer',
+            transition: 'all 0.25s ease'
+          }}
+        >
+          상시 상품
+        </button>
+        <button 
+          onClick={() => { setStoreProductType('drops'); setStorePage(1); }}
+          style={{
+            padding: '8px 18px',
+            borderRadius: '20px',
+            border: storeProductType === 'drops' ? '1px solid var(--point-rose)' : '1px solid #EDE8E2',
+            background: storeProductType === 'drops' ? 'linear-gradient(135deg, #C2507A, #7F77DD)' : 'white',
+            color: storeProductType === 'drops' ? 'white' : 'var(--point-rose)',
+            fontSize: '13px',
+            fontWeight: 800,
+            cursor: 'pointer',
+            boxShadow: storeProductType === 'drops' ? '0 4px 12px rgba(194, 80, 122, 0.2)' : 'none',
+            transition: 'all 0.25s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px'
+          }}
+        >
+          드롭스 🔥
+        </button>
+      </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1, minWidth: '300px', justifyContent: 'flex-end' }}>
         <div style={{ position: 'relative', flex: 1, maxWidth: '240px' }}>
           <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#888' }} />
@@ -3157,8 +3198,13 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                     onClick={(e) => {
                       e.stopPropagation();
                       if (!isSoldOut) {
-                        setCheckoutData({ type: 'product', title: item.name, price: Number(item.price), qty: 1, option: 'Version A', productId: item.id, accessTicket: null });
-                        setActiveTab('CHECKOUT');
+                        const isDrops = item.dropsStartAt != null || storeProductType === 'drops';
+                        if (isDrops) {
+                          setSelectedProduct(item);
+                        } else {
+                          setCheckoutData({ type: 'product', title: item.name, price: Number(item.price), qty: 1, option: 'Version A', productId: item.id, accessTicket: null });
+                          setActiveTab('CHECKOUT');
+                        }
                       }
                     }}
                     style={{ background: isSoldOut ? '#ccc' : '#111', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 700, cursor: isSoldOut ? 'not-allowed' : 'pointer' }}
@@ -3569,16 +3615,34 @@ export default function App({ role = 'FAN' }: { role?: string }) {
 
                               {/* Comments Sub-section */}
                               {group.comments.length > 0 && (
-                                <div style={{ marginBottom: group.likes.length > 0 ? '20px' : '0' }}>
-                                  <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--point-violet)', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <div style={{ marginBottom: group.likes.length > 0 ? '24px' : '0' }}>
+                                  <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--point-violet)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                     <MessageSquare size={14} /> 작성한 댓글 ({group.comments.length})
                                   </div>
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                                     {group.comments.map(a => (
-                                      <div key={a.id} className="mp-activity-item" onClick={() => handleActivityClick(a)} style={{ margin: 0, padding: '12px 16px', borderBottom: 'none', background: 'rgba(255,255,255,0.6)', borderRadius: '12px' }}>
-                                        <div style={{ flex: 1 }}>
-                                          <div style={{ fontSize: '13px', color: 'var(--text-main)', fontWeight: 600, marginBottom: '4px' }}>{a.content}</div>
-                                          <div style={{ fontSize: '11px', color: 'var(--text-sub)' }}>{formatTime(a.createdAt)}</div>
+                                      <div key={a.id} className="mp-activity-item" onClick={() => handleActivityClick(a)} style={{ 
+                                        margin: 0, 
+                                        padding: '16px 20px', 
+                                        borderBottom: 'none', 
+                                        background: 'rgba(255,255,255,0.7)', 
+                                        borderRadius: '16px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        gap: '16px',
+                                        boxShadow: '0 4px 12px rgba(0,0,0,0.01)'
+                                      }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
+                                          <div style={{ flexShrink: 0, color: 'var(--point-violet)', background: 'rgba(127, 119, 221, 0.1)', padding: '8px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            <MessageSquare size={16} />
+                                          </div>
+                                          <div style={{ fontSize: '14px', color: 'var(--text-main)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            {a.content}
+                                          </div>
+                                        </div>
+                                        <div style={{ fontSize: '12px', color: 'var(--text-sub)', fontWeight: 500, flexShrink: 0 }}>
+                                          {formatTime(a.createdAt)}
                                         </div>
                                       </div>
                                     ))}
@@ -3589,15 +3653,33 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                               {/* Likes Sub-section */}
                               {group.likes.length > 0 && (
                                 <div>
-                                  <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--point-rose)', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--point-rose)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                     <Heart size={14} /> 좋아요 한 피드 ({group.likes.length})
                                   </div>
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                                     {group.likes.map(a => (
-                                      <div key={a.id} className="mp-activity-item" onClick={() => handleActivityClick(a)} style={{ margin: 0, padding: '12px 16px', borderBottom: 'none', background: 'rgba(255,255,255,0.6)', borderRadius: '12px' }}>
-                                        <div style={{ flex: 1 }}>
-                                          <div style={{ fontSize: '13px', color: 'var(--text-main)', fontWeight: 600, marginBottom: '4px' }}>{a.content}</div>
-                                          <div style={{ fontSize: '11px', color: 'var(--text-sub)' }}>{formatTime(a.createdAt)}</div>
+                                      <div key={a.id} className="mp-activity-item" onClick={() => handleActivityClick(a)} style={{ 
+                                        margin: 0, 
+                                        padding: '16px 20px', 
+                                        borderBottom: 'none', 
+                                        background: 'rgba(255,255,255,0.7)', 
+                                        borderRadius: '16px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        gap: '16px',
+                                        boxShadow: '0 4px 12px rgba(0,0,0,0.01)'
+                                      }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
+                                          <div style={{ flexShrink: 0, color: 'var(--point-rose)', background: 'rgba(194, 80, 122, 0.1)', padding: '8px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            <Heart size={16} fill="currentColor" />
+                                          </div>
+                                          <div style={{ fontSize: '14px', color: 'var(--text-main)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            피드에 좋아요를 남겼습니다.
+                                          </div>
+                                        </div>
+                                        <div style={{ fontSize: '12px', color: 'var(--text-sub)', fontWeight: 500, flexShrink: 0 }}>
+                                          {formatTime(a.createdAt)}
                                         </div>
                                       </div>
                                     ))}

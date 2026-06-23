@@ -60,15 +60,31 @@ export function subscribeQueueStream(
 
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
+      let buffer = ''
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-        const chunk = decoder.decode(value)
-        for (const line of chunk.split('\n')) {
-          if (line.startsWith('data:')) {
+        buffer += decoder.decode(value, { stream: true })
+
+        // Split by double newline which separates SSE messages
+        const parts = buffer.split(/\n\n|\r\n\r\n/)
+        // Save the last incomplete part back to buffer
+        buffer = parts.pop() || ''
+
+        for (const message of parts) {
+          if (!message.trim()) continue
+
+          let eventData = ''
+          for (const line of message.split('\n')) {
+            if (line.trim().startsWith('data:')) {
+              eventData += line.slice(line.indexOf('data:') + 5).trim()
+            }
+          }
+
+          if (eventData) {
             try {
-              const data = JSON.parse(line.slice(5).trim()) as QueueStreamEvent
+              const data = JSON.parse(eventData) as QueueStreamEvent
               onEvent(data)
             } catch { /* 파싱 실패 무시 */ }
           }

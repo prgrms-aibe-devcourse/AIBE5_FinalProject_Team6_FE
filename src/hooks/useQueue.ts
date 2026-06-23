@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { getQueueStatus, joinQueue, subscribeQueueStream } from '../api/queue'
+import { exitQueue, getQueueStatus, joinQueue, subscribeQueueStream } from '../api/queue'
 
 export type QueuePhase = 'IDLE' | 'WAITING' | 'PROCESSING' | 'EXPIRED'
 
@@ -120,6 +120,9 @@ export function useQueue() {
   }, [cleanup, connectSse])
 
   const resetQueue = useCallback(() => {
+    if (productIdRef.current !== null) {
+      exitQueue(productIdRef.current).catch(() => {})
+    }
     cleanup()
     retryCountRef.current = 0
     productIdRef.current = null

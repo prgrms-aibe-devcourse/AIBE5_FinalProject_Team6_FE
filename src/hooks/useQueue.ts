@@ -103,6 +103,9 @@ export function useQueue() {
     productIdRef.current = productId
     setQueueState({ ...INITIAL, phase: 'WAITING' })
 
+    // 이전 세션의 스테일 WAITING entry 제거 후 신규 진입 보장
+    try { await exitQueue(productId) } catch { /* 미가입 상태면 무시 */ }
+
     try {
       const res = await joinQueue(productId)
       setQueueState({

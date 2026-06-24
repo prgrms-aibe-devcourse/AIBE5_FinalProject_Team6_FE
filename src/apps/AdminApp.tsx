@@ -339,7 +339,7 @@ export default function AdminApp() {
           ))}
         </div>
         <div className="p-4 border-t border-[#333]">
-          <button onClick={() => { logout(); localStorage.removeItem(ROLE_KEY); navigate('/login', { replace: true }); }} className={`flex items-center justify-center gap-2 w-full py-2 rounded-lg text-[#888] hover:text-white hover:bg-white/5 transition-colors ${sidebarOpen ? '' : 'px-0'}`}>
+          <button onClick={() => { logout(); localStorage.removeItem(ROLE_KEY); navigate('/admin/login', { replace: true }); }} className={`flex items-center justify-center gap-2 w-full py-2 rounded-lg text-[#888] hover:text-white hover:bg-white/5 transition-colors ${sidebarOpen ? '' : 'px-0'}`}>
             <XCircle className="w-4 h-4 shrink-0" />
             {sidebarOpen && <span className="text-sm">Logout</span>}
           </button>

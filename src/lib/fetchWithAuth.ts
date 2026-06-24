@@ -1,4 +1,4 @@
-import { getAuthHeaders, refresh, clearToken } from '../api/auth';
+import { getAuthHeaders, refresh, clearToken, getRefreshToken } from '../api/auth';
 
 let refreshing: Promise<void> | null = null;
 
@@ -17,11 +17,14 @@ export async function fetchWithAuth(
   const res = await fetch(input, injectAuth(init));
   if (res.status !== 401) return res;
 
+  // 비로그인 상태(리프레시 토큰 없음) — redirect 없이 401 그대로 반환
+  if (!getRefreshToken()) return res;
+
   // 동시 다발 401 시 refresh를 단 한 번만 호출
   if (!refreshing) {
     refreshing = refresh()
       .then(() => {})
-      .catch(() => { clearToken(); window.location.replace('/login'); })
+      .catch(() => { clearToken(); window.location.replace('/fan'); })
       .finally(() => { refreshing = null; });
   }
   await refreshing;

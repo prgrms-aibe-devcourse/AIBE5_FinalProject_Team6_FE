@@ -18,7 +18,7 @@ export default function OAuthCallbackPage() {
     const provider = sessionStorage.getItem(PROVIDER_KEY);
 
     if (!code || !provider) {
-      navigate('/login', { replace: true });
+      navigate('/fan', { replace: true });
       return;
     }
 
@@ -39,7 +39,7 @@ export default function OAuthCallbackPage() {
         {error ? (
           <>
             <p className="text-[#C2507A] font-bold mb-4">{error}</p>
-            <button onClick={() => navigate('/login')} className="text-[#111] underline">로그인으로 돌아가기</button>
+            <button onClick={() => navigate('/fan')} className="text-[#111] underline">로그인으로 돌아가기</button>
           </>
         ) : (
           <p className="text-[#888] font-bold">로그인 처리 중...</p>

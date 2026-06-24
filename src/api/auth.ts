@@ -57,7 +57,7 @@ export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY)
 }
 
-function getRefreshToken(): string | null {
+export function getRefreshToken(): string | null {
   return localStorage.getItem(REFRESH_KEY)
 }
 

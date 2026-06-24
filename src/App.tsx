@@ -6,8 +6,6 @@ import FanApp from './apps/FanApp';
 import AgencyApp from './apps/AgencyApp';
 import AdminApp from './apps/AdminApp';
 import AdminLoginPage from './apps/AdminLoginPage';
-import LoginPage from './apps/LoginPage';
-import SignupPage from './apps/SignupPage';
 import PasswordResetPage from './apps/PasswordResetPage';
 import OAuthCallbackPage from './apps/OAuthCallbackPage';
 import PartnershipApplication from './apps/PartnershipApplication';
@@ -20,12 +18,12 @@ export { ROLE_KEY };
 
 function RequireRole({ allowed, children }: { allowed: Role[]; children: ReactElement }) {
   if (!getToken()) {
-    const loginPath = allowed.length === 1 && allowed[0] === 'ADMIN' ? '/admin/login' : '/login';
+    const loginPath = allowed.length === 1 && allowed[0] === 'ADMIN' ? '/admin/login' : '/fan';
     return <Navigate to={loginPath} replace />;
   }
   const role = getAppRole();
   if (!role || !allowed.includes(role)) {
-    return <Navigate to={role ? getRoleHomePath(role) : '/login'} replace />;
+    return <Navigate to={role ? getRoleHomePath(role) : '/fan'} replace />;
   }
   return children;
 }
@@ -52,9 +50,9 @@ export default function App() {
       {import.meta.env.DEV && <DevSwitcher />}
       <Routes>
         <Route path="/" element={<RootRedirect />} />
-        <Route path="/login" element={<LoginPage />} />
+        <Route path="/login" element={<Navigate to="/fan" replace />} />
         <Route path="/admin/login" element={<AdminLoginPage />} />
-        <Route path="/signup" element={<SignupPage />} />
+        <Route path="/signup" element={<Navigate to="/fan" replace />} />
         <Route path="/reset-password" element={<PasswordResetPage />} />
         <Route path="/oauth/callback" element={<OAuthCallbackPage />} />
         <Route path="/apply" element={<ApplyWrapper />} />

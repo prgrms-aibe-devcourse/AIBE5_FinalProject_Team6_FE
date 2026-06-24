@@ -82,7 +82,7 @@ export default function AgencyApp() {
   const handleLogout = () => {
     logout();
     localStorage.removeItem(ROLE_KEY);
-    navigate('/login', { replace: true });
+    navigate('/fan', { replace: true });
   };
   const [showEventModal, setShowEventModal] = useState(false);
   const [showProductModal, setShowProductModal] = useState(false);

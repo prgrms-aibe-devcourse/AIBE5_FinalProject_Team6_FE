@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LayoutDashboard, PenTool, Image, Calendar as CalendarIcon, Package, ShoppingCart, Users, UserCircle, LogOut, CheckCircle2, Activity, ArrowUpRight, ArrowDownRight, Clock, Plus, Upload, X } from 'lucide-react';
 import { logout } from '../api/auth';
-import { ROLE_KEY } from '../App';
 import { getCalendar, createEvent, registerLive, startLive } from '../api/schedule';
 import type { ScheduleResult } from '../types/schedule';
 import { getNotices, getNotice, createNotice } from '../api/notices';

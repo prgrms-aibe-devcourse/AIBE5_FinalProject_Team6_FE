@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { logout, getSubFromToken, getToken, login, setToken, syncAppRole, signup, requestPasswordReset, getRoleHomePath } from '../api/auth';
 import { ROLE_KEY } from '../App';
 import { AnimatePresence, motion } from 'motion/react';
-import { Plus, Search, Calendar, Heart, Share2, Image as ImageIcon, Smile, MoreHorizontal, MessageSquare, Bell, Pin, Play, Youtube, ChevronLeft, ChevronRight, X, User, ShoppingBag, LogOut, Ticket, Settings, ThumbsUp, CheckCircle2, Gift, Link } from 'lucide-react';
+import { Plus, Search, Calendar, Heart, Share2, Image as ImageIcon, Smile, MoreHorizontal, MessageSquare, Bell, Pin, Play, Youtube, ChevronLeft, ChevronRight, X, User, ShoppingBag, LogOut, Ticket, Settings, CheckCircle2, Gift, Link } from 'lucide-react';
 import { useCheckout } from '../hooks/useCheckout';
 import { useQueue } from '../hooks/useQueue';
 import { getProducts, getProduct, subscribeRestock, unsubscribeRestock } from '../api/products';
@@ -431,7 +431,6 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   // Rank Game State (Removed as per user request)
   
   const [goodsVotes, setGoodsVotes] = useState<GoodsVoteResult[]>([]);
-  const [hasVoted, setHasVoted] = useState<number[]>([]);
   const [collectedCards, setCollectedCards] = useState<any[]>(() => {
     try { return JSON.parse(localStorage.getItem('fd_collected_cards') ?? '[]'); } catch { return []; }
   });
@@ -523,6 +522,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
 
   useEffect(() => {
     if (!isLoggedIn) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setNotifications([]);
       return;
     }
@@ -767,6 +767,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
         setMainBanners(defaultBanners as any as BannerResponse[]);
       });
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMainBannerIdx(0);
   }, [activeTab]);
 
@@ -783,10 +784,10 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   useEffect(() => {
     if (!showCart) return;
     if (!isLoggedIn) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCartItems([]);
       return;
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCartLoading(true);
     getCart()
       .then(res => setCartItems(res.items))
@@ -800,6 +801,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       getCart().then(res => setCartItems(res.items)).catch(() => {});
       getNotifications().then(setNotifications).catch(() => {});
     } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCartItems([]);
       setNotifications([]);
     }
@@ -2120,7 +2122,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                       try {
                         const saved = localStorage.getItem('fd_restock_subscribed');
                         if (saved) setRestockSubscribed(new Set(JSON.parse(saved)));
-                      } catch {}
+                      } catch { /* ignore */ }
                       showToast('로그인이 완료되었습니다.');
                     }
                   } catch {
@@ -2226,7 +2228,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                   try {
                     const saved = localStorage.getItem('fd_restock_subscribed');
                     if (saved) setRestockSubscribed(new Set(JSON.parse(saved)));
-                  } catch {}
+                  } catch { /* ignore */ }
                   showToast('회원가입 및 로그인이 완료되었습니다.');
                   setShowLoginModal(false);
                   setAuthMode('LOGIN');

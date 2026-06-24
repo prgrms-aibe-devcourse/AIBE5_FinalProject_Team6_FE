@@ -11,7 +11,6 @@ import OAuthCallbackPage from './apps/OAuthCallbackPage';
 import PartnershipApplication from './apps/PartnershipApplication';
 import TermsPage from './apps/TermsPage';
 import PrivacyPage from './apps/PrivacyPage';
-import DevSwitcher from './components/DevSwitcher';
 
 export type Role = AppRole;
 export { ROLE_KEY };

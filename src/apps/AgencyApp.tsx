@@ -79,9 +79,8 @@ export default function AgencyApp() {
     setSearchParams({ menu }, { replace: false });
   };
 
-  const handleLogout = () => {
-    logout();
-    localStorage.removeItem(ROLE_KEY);
+  const handleLogout = async () => {
+    await logout();
     navigate('/fan', { replace: true });
   };
   const [showEventModal, setShowEventModal] = useState(false);

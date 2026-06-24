@@ -1844,7 +1844,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
           )}
           {role === 'ARTIST' && (
             <button 
-              onClick={() => { logout(); localStorage.removeItem(ROLE_KEY); navigate('/fan', { replace: true }); }}
+              onClick={async () => { await logout(); navigate('/fan', { replace: true }); }}
               style={{ padding: '8px 12px', background: '#F7F3EE', border: '1px solid #EDE8E2', borderRadius: '12px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
             >
               로그아웃
@@ -2611,7 +2611,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                   <div className="bh-stats">Artist · {(storeArtists.find(a => a.id === selectedArtist.id)?.fanCount ?? 0).toLocaleString()} 팔로워</div>
                 </div>
                 {role === 'ARTIST' ? (
-                  <button className="bh-join-btn" onClick={() => { logout(); localStorage.removeItem(ROLE_KEY); navigate('/fan', { replace: true }); }} style={{ background: '#333' }}>로그아웃</button>
+                  <button className="bh-join-btn" onClick={async () => { await logout(); navigate('/fan', { replace: true }); }} style={{ background: '#333' }}>로그아웃</button>
                 ) : (
                   <button 
                     className="bh-join-btn" 

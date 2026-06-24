@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LayoutDashboard, PenTool, Image, Calendar as CalendarIcon, Package, ShoppingCart, Users, UserCircle, LogOut, CheckCircle2, Activity, ArrowUpRight, ArrowDownRight, Clock, Plus, Upload, X } from 'lucide-react';
 import { logout } from '../api/auth';
-import { ROLE_KEY } from '../App';
 import { getCalendar, createEvent, registerLive, startLive } from '../api/schedule';
 import type { ScheduleResult } from '../types/schedule';
 import { getNotices, getNotice, createNotice } from '../api/notices';
@@ -79,9 +78,8 @@ export default function AgencyApp() {
     setSearchParams({ menu }, { replace: false });
   };
 
-  const handleLogout = () => {
-    logout();
-    localStorage.removeItem(ROLE_KEY);
+  const handleLogout = async () => {
+    await logout();
     navigate('/fan', { replace: true });
   };
   const [showEventModal, setShowEventModal] = useState(false);
@@ -507,16 +505,6 @@ export default function AgencyApp() {
 
             {activeMenu === 'dashboard' && (
               <div className="space-y-8">
-                {/* Notice Banner */}
-                <div className="bg-gradient-to-r from-[#1A1A1A] to-[#333] text-white rounded-2xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-lg">
-                   <div>
-                     <div className="text-xs uppercase tracking-[2px] text-[#7F77DD] font-bold mb-2">공지사항</div>
-                     <h3 className="text-lg font-bold">새로운 플랫폼 기능: 핫딜 대기열 기능이 활성화되었습니다!</h3>
-                     <p className="text-sm text-[#888] mt-1">트래픽 급증을 방지하기 위해 새로운 확장형 대기열 시스템으로 상품 드롭을 구성해보세요.</p>
-                   </div>
-                   <button className="bg-[#C2507A] text-white px-6 py-2 rounded-xl text-sm font-bold shrink-0 hover:opacity-90 transition-opacity shadow-lg shadow-pink-900/10">가이드 읽기</button>
-                </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   {/* Stat Cards */}
                   <div className="bg-white p-6 rounded-2xl border border-[#EDE8E2]">

@@ -299,6 +299,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [signupNickname, setSignupNickname] = useState('');
+  const [signupIntroduction, setSignupIntroduction] = useState('');
   const [signupProfileImg, setSignupProfileImg] = useState('');
   const [signupError, setSignupError] = useState('');
   const [signupLoading, setSignupLoading] = useState(false);
@@ -2222,6 +2223,10 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                   if (signupProfileImg) {
                     localStorage.setItem('fan_profile_image', signupProfileImg);
                   }
+                  if (signupIntroduction.trim()) {
+                    localStorage.setItem('fan_introduction', signupIntroduction.trim());
+                    setIntroduction(signupIntroduction.trim());
+                  }
                   setIsLoggedIn(true);
                   getCart().then(res => setCartItems(res.items)).catch(() => {});
                   getNotifications().then(setNotifications).catch(() => {});
@@ -2303,6 +2308,20 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                   className="form-input"
                   style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--bg-cream)', padding: '12px 16px', borderRadius: '12px', fontSize: '14px', outline: 'none' }}
                 />
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '6px', color: 'var(--text-sub)' }}>
+                    한 줄 자기소개 <span style={{ fontWeight: 500 }}>(선택)</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="자기소개를 입력해주세요"
+                    value={signupIntroduction}
+                    onChange={e => setSignupIntroduction(e.target.value)}
+                    maxLength={100}
+                    className="form-input"
+                    style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--bg-cream)', padding: '12px 16px', borderRadius: '12px', fontSize: '14px', outline: 'none' }}
+                  />
+                </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--text-sub)', padding: '0 4px' }}>
                   <input type="checkbox" id="signup-agree" checked={agreeTerms} onChange={e => setAgreeTerms(e.target.checked)} style={{ accentColor: 'var(--point-rose)', cursor: 'pointer' }} />
@@ -4491,15 +4510,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                   </div>
                 </section>
 
-                {/* Section 4: Coupons */}
-                <section style={{ marginBottom: '48px' }}>
-                  <h3 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '16px', borderBottom: '2px solid #111', paddingBottom: '12px' }}>할인 혜택</h3>
-                  <div style={{ padding: '16px 20px', background: 'var(--bg-cream)', borderRadius: '12px', fontSize: '14px', color: 'var(--text-sub)', fontWeight: 600, textAlign: 'center' }}>
-                    준비 중입니다
-                  </div>
-                </section>
-
-                {/* Section 5: Toss */}
+                {/* Section 4: Agreement */}
                 <section style={{ marginBottom: '48px' }}>
                   <div style={{ padding: '24px', background: 'var(--bg-cream)', borderRadius: '12px' }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 800, fontSize: '16px', marginBottom: '16px', cursor: 'pointer' }}>

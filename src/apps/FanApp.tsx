@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { logout, getSubFromToken } from '../api/auth';
+import { logout, getSubFromToken, getToken, login, setToken, syncAppRole, signup, requestPasswordReset } from '../api/auth';
 import { ROLE_KEY } from '../App';
 import { AnimatePresence, motion } from 'motion/react';
 import { Plus, Search, Calendar, Heart, Share2, Image as ImageIcon, Smile, MoreHorizontal, MessageSquare, Bell, Pin, Play, Youtube, ChevronLeft, ChevronRight, X, User, ShoppingBag, LogOut, Ticket, Settings, ThumbsUp, CheckCircle2, Gift } from 'lucide-react';
@@ -116,6 +116,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [commentsMap, setCommentsMap] = useState<{[key: string]: any[]}>({});
 
   const handleCommentSubmit = async (postId: number) => {
+    if (!getToken()) { setShowLoginModal(true); return; }
     const key = String(postId);
     const content = commentInputs[key];
     if (!content?.trim() || !selectedArtist) return;
@@ -158,6 +159,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [feedsLoading, setFeedsLoading] = useState(false);
 
   const handlePostSubmit = async () => {
+    if (!getToken()) { setShowLoginModal(true); return; }
     if (!postInput.trim() || !selectedArtist) return;
     const content = postInput.trim();
     setPostInput('');
@@ -174,6 +176,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const currentOfficialPosts = feeds.filter(f => f.artistMemberId != null);
 
   const handleLikeFeed = async (post: FeedResponse) => {
+    if (!getToken()) { setShowLoginModal(true); return; }
     if (!selectedArtist) return;
     const newIsLiked = !post.isLiked;
     setFeeds(prev => prev.map(f => f.id === post.id
@@ -195,6 +198,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   };
 
   const handleFollowToggle = async () => {
+    if (!getToken()) { setShowLoginModal(true); return; }
     if (!selectedArtist || role === 'ARTIST') return;
     const isFollowing = favoriteArtists.some(a => a.id === selectedArtist.id);
     if (isFollowing) {
@@ -281,6 +285,28 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [unfollowedArtist, setUnfollowedArtist] = useState<FanArtistEntry | null>(null);
   const [agreeOrder, setAgreeOrder] = useState(false);
   const [agreePrivacy, setAgreePrivacy] = useState(false);
+
+  // Guest & Login Modal state
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+
+  const [authMode, setAuthMode] = useState<'LOGIN' | 'SIGNUP' | 'RESET_PASSWORD'>('LOGIN');
+  // Signup State
+  const [signupEmail, setSignupEmail] = useState('');
+  const [signupPassword, setSignupPassword] = useState('');
+  const [signupNickname, setSignupNickname] = useState('');
+  const [signupProfileImg, setSignupProfileImg] = useState('');
+  const [signupError, setSignupError] = useState('');
+  const [signupLoading, setSignupLoading] = useState(false);
+  const [agreeTerms, setAgreeTerms] = useState(false);
+  // Reset Password State
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetSuccess, setResetSuccess] = useState(false);
+  const [resetError, setResetError] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
 
   const [myPageTab, setMyPageTab] = useState<string>(() => {
     const s = searchParams.get('sub');
@@ -634,15 +660,21 @@ export default function App({ role = 'FAN' }: { role?: string }) {
         }
       })();
     } else {
-      getJoinedArtists()
-        .then(res => {
-          setFavoriteArtists(res.items.map(a => toFanArtistEntry({
-            id: a.artistId,
-            name: a.artistName ?? `Artist #${a.artistId}`,
-            profileImageUrl: a.profileImageUrl,
-          })));
-        })
-        .catch(console.error);
+      if (getToken()) {
+        getJoinedArtists()
+          .then(res => {
+            setFavoriteArtists(res.items.map(a => toFanArtistEntry({
+              id: a.artistId,
+              name: a.artistName ?? `Artist #${a.artistId}`,
+              profileImageUrl: a.profileImageUrl,
+            })));
+          })
+          .catch(console.error);
+      } else {
+        setTimeout(() => {
+          setFavoriteArtists([]);
+        }, 0);
+      }
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1417,6 +1449,31 @@ export default function App({ role = 'FAN' }: { role?: string }) {
           background: rgba(127, 119, 221, 0.1);
           transform: translateX(2px);
         }
+
+        /* Marquee Left Infinite Scroll Animation */
+        @keyframes marquee-left {
+          0% {
+            transform: translate3d(0, 0, 0);
+          }
+          100% {
+            transform: translate3d(-50%, 0, 0);
+          }
+        }
+        .artist-marquee-wrapper {
+          overflow: hidden;
+          white-space: nowrap;
+          display: flex;
+          position: relative;
+          width: 100%;
+          backface-visibility: hidden;
+          perspective: 1000px;
+        }
+        .artist-marquee-content {
+          display: inline-flex;
+          gap: 20px;
+          animation: marquee-left 20s linear infinite;
+          will-change: transform;
+        }
       `}</style>
 
       {/* Shared Header */}
@@ -1437,6 +1494,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
               className={`n-item ${(activeTab === tab && !selectedArtist) || (role === 'ARTIST' && tab === 'WORKSPACE') ? 'active' : ''}`}
               onClick={() => { 
                 if (role === 'ARTIST') return;
+                if (tab === 'MY PAGE' && !getToken()) { setShowLoginModal(true); return; }
                 setActiveTab(tab); 
                 setSelectedArtist(null); 
                 setSelectedProduct(null); 
@@ -1449,7 +1507,13 @@ export default function App({ role = 'FAN' }: { role?: string }) {
         <div className="h-icons">
           {role !== 'ARTIST' && (
             <>
-              <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => setActiveTab('NOTIFICATIONS')}>
+              <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => {
+                 if (!getToken()) {
+                   setShowLoginModal(true);
+                 } else {
+                   setActiveTab('NOTIFICATIONS');
+                 }
+               }}>
                 <Bell size={20} color="var(--text-main)" />
                 {notifications.filter(n => !n.isRead).length > 0 && (
                   <div style={{ position: 'absolute', top: '-4px', right: '-4px', background: 'var(--point-rose)', color: 'white', fontSize: '10px', fontWeight: 800, width: '16px', height: '16px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1457,7 +1521,13 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                   </div>
                 )}
               </div>
-              <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => setShowCart(true)}>
+              <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => {
+                if (!getToken()) {
+                  setShowLoginModal(true);
+                } else {
+                  setShowCart(true);
+                }
+              }}>
                 <ShoppingBag size={20} color="var(--text-main)" />
                 {cartItems.length > 0 && (
                   <div style={{ position: 'absolute', top: '-4px', right: '-4px', background: 'var(--point-rose)', color: 'white', fontSize: '10px', fontWeight: 800, width: '16px', height: '16px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{cartItems.length}</div>
@@ -1468,17 +1538,43 @@ export default function App({ role = 'FAN' }: { role?: string }) {
           {role !== 'ARTIST' && (
             <div
               onClick={() => {
-                setActiveTab('MY PAGE');
-                setSelectedArtist(null);
+                if (!getToken()) {
+                  setShowLoginModal(true);
+                } else {
+                  setActiveTab('MY PAGE');
+                  setSelectedArtist(null);
+                }
               }}
               style={{ cursor: 'pointer' }}
             >
-              <FanAvatar
-                fanId={fanProfile?.fanId ?? getSubFromToken() ?? 0}
-                size={32}
-                border="2px solid white"
-                customImageUrl={profileImageUrl}
-              />
+              {getToken() ? (
+                <FanAvatar
+                  fanId={fanProfile?.fanId ?? getSubFromToken() ?? 0}
+                  size={32}
+                  border="2px solid white"
+                  customImageUrl={profileImageUrl}
+                />
+              ) : (
+                <button
+                  type="button"
+                  style={{
+                    padding: '8px 20px',
+                    background: 'linear-gradient(135deg, var(--point-rose), var(--point-violet))',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '20px',
+                    fontSize: '12px',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 12px rgba(194, 80, 122, 0.2)',
+                    transition: 'transform 0.2s',
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                  onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                >
+                  로그인
+                </button>
+              )}
             </div>
           )}
           {role === 'ARTIST' && (
@@ -1623,6 +1719,311 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       )}
 
       {/* --- AUTH MODAL --- */}
+      {showLoginModal && (
+        <div className="modal-overlay" style={{ zIndex: 3000 }} onClick={() => { setShowLoginModal(false); setAuthMode('LOGIN'); }}>
+          <div className="modal-content" style={{ padding: '32px', maxWidth: '460px', width: '90%', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div style={{ position: 'absolute', top: 24, right: 24, cursor: 'pointer', color: 'var(--text-sub)' }} onClick={() => { setShowLoginModal(false); setAuthMode('LOGIN'); }}>
+              <X size={24} />
+            </div>
+
+            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+              <h2 style={{ fontSize: '20px', fontWeight: 800, letterSpacing: '4px', marginBottom: '8px' }}>FANDROPS</h2>
+              <p style={{ fontSize: '13px', color: 'var(--text-sub)' }}>
+                {authMode === 'LOGIN' && '당신의 최애와 더 가까이'}
+                {authMode === 'SIGNUP' && '새로운 덕질의 시작'}
+                {authMode === 'RESET_PASSWORD' && '비밀번호 재설정 요청'}
+              </p>
+            </div>
+
+            {/* 아티스트 무한 왼쪽 스크롤 홍보 마키 영역 (로그인 화면일 때만 표시 및 디자인 업그레이드) */}
+            {authMode === 'LOGIN' && (
+              <div style={{ marginBottom: '24px', background: 'linear-gradient(135deg, rgba(127,119,221,0.05), rgba(194,80,122,0.05))', border: '1px solid rgba(194,80,122,0.1)', borderRadius: '16px', padding: '16px 0', overflow: 'hidden', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
+                <div style={{ padding: '0 16px', marginBottom: '10px', fontSize: '11px', fontWeight: 800, letterSpacing: '0.5px', background: 'linear-gradient(90deg, var(--point-rose), var(--point-violet))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', textAlign: 'center' }}>
+                  새로운 아티스트를 만나보세요!
+                </div>
+                <div className="artist-marquee-wrapper" style={{ overflow: 'hidden', whiteSpace: 'nowrap', display: 'flex', position: 'relative', width: '100%' }}>
+                  <div className="artist-marquee-content" style={{ display: 'inline-flex', gap: '20px' }}>
+                    {/* 실제 아티스트 목록 (2배 곱하여 무한 반복처럼 효과) */}
+                    {[...storeArtists, ...storeArtists].map((artist, index) => (
+                      <div key={`${artist.id}-${index}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.7)', border: '1px solid var(--border)', padding: '6px 12px', borderRadius: '20px', color: 'var(--text-main)', flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+                        {artist.profileImageUrl ? (
+                          <img src={artist.profileImageUrl} alt={artist.name} style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover' }} />
+                        ) : (
+                          <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'rgba(0,0,0,0.05)', fontSize: '9px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
+                            {artist.name.substring(0, 1)}
+                          </div>
+                        )}
+                        <span style={{ fontSize: '12px', fontWeight: 800 }}>{artist.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* --- 1. 로그인 폼 --- */}
+            {authMode === 'LOGIN' && (
+              <>
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  setLoginError('');
+                  setLoginLoading(true);
+                  try {
+                    const token = await login(loginEmail, loginPassword);
+                    setToken(token);
+                    syncAppRole(token.accessToken);
+                    setShowLoginModal(false);
+                    setLoginEmail('');
+                    setLoginPassword('');
+                    showToast('로그인이 완료되었습니다.');
+                    window.location.reload();
+                  } catch {
+                    setLoginError('이메일 또는 비밀번호가 올바르지 않습니다.');
+                  } finally {
+                    setLoginLoading(false);
+                  }
+                }} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <input
+                    type="text"
+                    placeholder="이메일 또는 아이디"
+                    value={loginEmail}
+                    onChange={e => setLoginEmail(e.target.value)}
+                    required
+                    className="form-input"
+                    style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--bg-cream)', padding: '12px 16px', borderRadius: '12px', fontSize: '14px', outline: 'none' }}
+                  />
+                  <input
+                    type="password"
+                    placeholder="비밀번호"
+                    value={loginPassword}
+                    onChange={e => setLoginPassword(e.target.value)}
+                    required
+                    className="form-input"
+                    style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--bg-cream)', padding: '12px 16px', borderRadius: '12px', fontSize: '14px', outline: 'none' }}
+                  />
+                  {loginError && <p style={{ color: 'var(--point-rose)', fontSize: '12px', textAlign: 'center', margin: 0, fontWeight: 700 }}>{loginError}</p>}
+                  <button
+                    type="submit"
+                    disabled={loginLoading}
+                    className="btn-primary"
+                    style={{ width: '100%', background: 'linear-gradient(135deg, var(--point-rose), var(--point-violet))', color: 'white', padding: '14px', borderRadius: '12px', fontSize: '14px', fontWeight: 800, cursor: 'pointer', border: 'none', boxShadow: '0 4px 12px rgba(194, 80, 122, 0.2)' }}
+                  >
+                    {loginLoading ? '로그인 중...' : '로그인'}
+                  </button>
+                </form>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '16px 0' }}>
+                  <div style={{ flex: 1, height: '1px', background: 'var(--border)' }}></div>
+                  <span style={{ fontSize: '11px', color: '#BBB', fontWeight: 'bold' }}>또는</span>
+                  <div style={{ flex: 1, height: '1px', background: 'var(--border)' }}></div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <button
+                    onClick={() => {
+                      const clientId = import.meta.env.VITE_KAKAO_CLIENT_ID;
+                      const REDIRECT_URI = import.meta.env.VITE_OAUTH_REDIRECT_URI ?? 'http://localhost:5173/oauth/callback';
+                      sessionStorage.setItem('oauth_provider', 'KAKAO');
+                      window.location.href = `https://kauth.kakao.com/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code`;
+                    }}
+                    style={{ width: '100%', background: '#FEE500', color: '#191919', fontFamily: 'sans-serif', fontWeight: 800, padding: '14px', borderRadius: '12px', border: 'none', cursor: 'pointer', fontSize: '13px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+                  >
+                    카카오로 1초 로그인
+                  </button>
+                  <button
+                    onClick={() => {
+                      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+                      const REDIRECT_URI = import.meta.env.VITE_OAUTH_REDIRECT_URI ?? 'http://localhost:5173/oauth/callback';
+                      sessionStorage.setItem('oauth_provider', 'GOOGLE');
+                      window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=email%20profile`;
+                    }}
+                    style={{ width: '100%', background: 'white', border: '1px solid #E5E5E5', color: '#111', fontWeight: 800, padding: '14px', borderRadius: '12px', cursor: 'pointer', fontSize: '13px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}
+                  >
+                    <svg style={{ width: '16px', height: '16px' }} viewBox="0 0 24 24">
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                    </svg>
+                    구글로 로그인
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginTop: '16px', fontSize: '12px', color: 'var(--text-sub)' }}>
+                  <span onClick={() => setAuthMode('RESET_PASSWORD')} style={{ cursor: 'pointer' }}>비밀번호 찾기</span>
+                  <span>|</span>
+                  <span onClick={() => setAuthMode('SIGNUP')} style={{ cursor: 'pointer', color: 'var(--text-main)', fontWeight: 700 }}>회원가입</span>
+                </div>
+              </>
+            )}
+
+            {/* --- 2. 회원가입 폼 (프로필 이미지 포함) --- */}
+            {authMode === 'SIGNUP' && (
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                setSignupError('');
+                if (!agreeTerms) {
+                  setSignupError('이용약관에 동의하셔야 가입이 가능합니다.');
+                  return;
+                }
+                setSignupLoading(true);
+                try {
+                  const token = await signup(signupEmail, signupPassword, signupNickname, agreeTerms);
+                  setToken(token);
+                  syncAppRole(token.accessToken);
+                  if (signupProfileImg) {
+                    localStorage.setItem('fan_profile_image', signupProfileImg);
+                  }
+                  showToast('회원가입 및 로그인이 완료되었습니다.');
+                  setShowLoginModal(false);
+                  setAuthMode('LOGIN');
+                  window.location.reload();
+                } catch {
+                  setSignupError('회원가입 도중 에러가 발생했거나 이미 존재하는 이메일입니다.');
+                } finally {
+                  setSignupLoading(false);
+                }
+              }} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                
+                {/* 프로필 이미지 선택기 */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '8px' }}>
+                  <div 
+                    onClick={() => document.getElementById('signup-file-input')?.click()}
+                    style={{ position: 'relative', width: '80px', height: '80px', borderRadius: '50%', cursor: 'pointer', overflow: 'hidden', border: '2px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F7F3EE' }}
+                  >
+                    {signupProfileImg ? (
+                      <img src={signupProfileImg} alt="Signup Profile Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <User size={36} color="var(--text-sub)" />
+                    )}
+                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.2s' }} className="avatar-hover-overlay">
+                      <ImageIcon size={18} color="white" />
+                    </div>
+                  </div>
+                  <span style={{ fontSize: '11px', color: 'var(--point-rose)', fontWeight: 700, marginTop: '6px', cursor: 'pointer' }}>프로필 사진 추가 (선택)</span>
+                  <input 
+                    type="file" 
+                    id="signup-file-input"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (file.size > 5 * 1024 * 1024) {
+                        showToast('이미지 크기는 최대 5MB까지 가능합니다.', 'error');
+                        return;
+                      }
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        setSignupProfileImg(reader.result as string);
+                      };
+                      reader.readAsDataURL(file);
+                    }} 
+                    accept="image/*" 
+                    style={{ display: 'none' }} 
+                  />
+                </div>
+
+                <input
+                  type="email"
+                  placeholder="이메일 주소"
+                  value={signupEmail}
+                  onChange={e => setSignupEmail(e.target.value)}
+                  required
+                  className="form-input"
+                  style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--bg-cream)', padding: '12px 16px', borderRadius: '12px', fontSize: '14px', outline: 'none' }}
+                />
+                <input
+                  type="password"
+                  placeholder="비밀번호"
+                  value={signupPassword}
+                  onChange={e => setSignupPassword(e.target.value)}
+                  required
+                  className="form-input"
+                  style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--bg-cream)', padding: '12px 16px', borderRadius: '12px', fontSize: '14px', outline: 'none' }}
+                />
+                <input
+                  type="text"
+                  placeholder="닉네임"
+                  value={signupNickname}
+                  onChange={e => setSignupNickname(e.target.value)}
+                  required
+                  className="form-input"
+                  style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--bg-cream)', padding: '12px 16px', borderRadius: '12px', fontSize: '14px', outline: 'none' }}
+                />
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--text-sub)', padding: '0 4px' }}>
+                  <input type="checkbox" id="signup-agree" checked={agreeTerms} onChange={e => setAgreeTerms(e.target.checked)} style={{ accentColor: 'var(--point-rose)', cursor: 'pointer' }} />
+                  <label htmlFor="signup-agree" style={{ cursor: 'pointer' }}>
+                    <span onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.open('/terms', '_blank'); }} style={{ textDecoration: 'underline', color: 'var(--point-rose)', fontWeight: 700 }}>이용약관</span> 및 <span onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.open('/privacy', '_blank'); }} style={{ textDecoration: 'underline', color: 'var(--point-rose)', fontWeight: 700 }}>개인정보처리방침</span>에 동의합니다.
+                  </label>
+                </div>
+
+                {signupError && <p style={{ color: 'var(--point-rose)', fontSize: '12px', textAlign: 'center', margin: 0, fontWeight: 700 }}>{signupError}</p>}
+                
+                <button
+                  type="submit"
+                  disabled={signupLoading}
+                  className="btn-primary"
+                  style={{ width: '100%', background: 'linear-gradient(135deg, var(--point-rose), var(--point-violet))', color: 'white', padding: '14px', borderRadius: '12px', fontSize: '14px', fontWeight: 800, cursor: 'pointer', border: 'none', boxShadow: '0 4px 12px rgba(194, 80, 122, 0.2)' }}
+                >
+                  {signupLoading ? '가입 중...' : '회원가입 완료'}
+                </button>
+
+                <div style={{ textAlign: 'center', marginTop: '8px' }}>
+                  <span onClick={() => { setAuthMode('LOGIN'); setSignupError(''); }} style={{ cursor: 'pointer', fontSize: '13px', color: 'var(--text-sub)', textDecoration: 'underline' }}>이미 계정이 있으신가요? 로그인하기</span>
+                </div>
+              </form>
+            )}
+
+            {/* --- 3. 비밀번호 찾기 폼 --- */}
+            {authMode === 'RESET_PASSWORD' && (
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                setResetError('');
+                setResetSuccess(false);
+                setResetLoading(true);
+                try {
+                  await requestPasswordReset(resetEmail);
+                  setResetSuccess(true);
+                  showToast('비밀번호 재설정 이메일을 발송했습니다.');
+                } catch {
+                  setResetError('해당 이메일로 등록된 사용자를 찾을 수 없습니다.');
+                } finally {
+                  setResetLoading(false);
+                }
+              }} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <p style={{ fontSize: '13px', color: 'var(--text-sub)', lineHeight: 1.5, textAlign: 'center', padding: '0 12px' }}>
+                  가입하신 이메일 주소를 입력하시면 비밀번호를 재설정할 수 있는 링크를 보내드립니다.
+                </p>
+                <input
+                  type="email"
+                  placeholder="이메일 주소"
+                  value={resetEmail}
+                  onChange={e => setResetEmail(e.target.value)}
+                  required
+                  className="form-input"
+                  style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--bg-cream)', padding: '12px 16px', borderRadius: '12px', fontSize: '14px', outline: 'none' }}
+                />
+                
+                {resetError && <p style={{ color: 'var(--point-rose)', fontSize: '12px', textAlign: 'center', margin: 0, fontWeight: 700 }}>{resetError}</p>}
+                {resetSuccess && <p style={{ color: '#10B981', fontSize: '12px', textAlign: 'center', margin: 0, fontWeight: 700 }}>재설정 이메일이 전송되었습니다. 메일함을 확인해주세요.</p>}
+                
+                <button
+                  type="submit"
+                  disabled={resetLoading}
+                  className="btn-primary"
+                  style={{ width: '100%', background: 'linear-gradient(135deg, var(--point-rose), var(--point-violet))', color: 'white', padding: '14px', borderRadius: '12px', fontSize: '14px', fontWeight: 800, cursor: 'pointer', border: 'none', boxShadow: '0 4px 12px rgba(194, 80, 122, 0.2)' }}
+                >
+                  {resetLoading ? '전송 중...' : '재설정 메일 발송'}
+                </button>
+
+                <div style={{ textAlign: 'center', marginTop: '8px' }}>
+                  <span onClick={() => { setAuthMode('LOGIN'); setResetError(''); setResetSuccess(false); }} style={{ cursor: 'pointer', fontSize: '13px', color: 'var(--text-sub)', textDecoration: 'underline' }}>로그인 화면으로 돌아가기</span>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="wrapper">
         {/* --- NOTIFICATION STACK --- */}
@@ -1812,7 +2213,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
               <p style={{ fontSize: '14px', color: 'var(--text-sub)', marginBottom: '32px' }}>정말 로그아웃하시겠어요?</p>
               <div style={{ display: 'flex', gap: '12px' }}>
                 <button onClick={() => setShowLogoutModal(false)} style={{ flex: 1, padding: '14px', border: '1px solid var(--border)', borderRadius: '12px', background: 'white', fontSize: '15px', fontWeight: 700, cursor: 'pointer' }}>취소</button>
-                <button onClick={() => { setShowLogoutModal(false); logout(); localStorage.removeItem(ROLE_KEY); navigate('/login', { replace: true }); }} style={{ flex: 1, padding: '14px', border: 'none', borderRadius: '12px', background: 'var(--text-main)', color: 'white', fontSize: '15px', fontWeight: 700, cursor: 'pointer' }}>나가기</button>
+                <button onClick={() => { setShowLogoutModal(false); logout(); localStorage.removeItem(ROLE_KEY); window.location.href = '/fan'; }} style={{ flex: 1, padding: '14px', border: 'none', borderRadius: '12px', background: 'var(--text-main)', color: 'white', fontSize: '15px', fontWeight: 700, cursor: 'pointer' }}>나가기</button>
               </div>
             </div>
           </div>
@@ -1919,6 +2320,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                           padding: '20px 24px'
                         }}
                         onClick={async () => {
+                          if (!getToken()) { setShowLoginModal(true); return; }
                           setShowAttendance(true);
                           setAttendanceStep('STAMPING');
                           setTriggeredArtists(prev => [...prev, selectedArtist.id]);
@@ -2206,6 +2608,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                               className={`vote-btn ${hasVoted.includes(voteId) ? 'disabled' : 'active'}`}
                               disabled={hasVoted.includes(voteId)}
                               onClick={async () => {
+                                if (!getToken()) { setShowLoginModal(true); return; }
                                 await castBallot(voteId, opt.id).catch(() => {});
                                 setHasVoted(prev => [...prev, voteId]);
                               }}
@@ -2497,30 +2900,32 @@ export default function App({ role = 'FAN' }: { role?: string }) {
             })()}
 
             {/* My Artist Section */}
-            <section className="community-bar reveal">
-              <div className="section-header" style={{ marginBottom: 20 }}>
-                <div className="s-title-group">
-                  <h2 style={{ fontSize: '18px' }}>마이 아티스트</h2>
-                  <p style={{ fontSize: '13px' }}>즐겨찾기한 아티스트로 빠르게 이동</p>
-                </div>
-              </div>
-              <div className="community-scroll">
-                <button className="c-add-btn" onClick={() => setShowArtistSearch(true)}>
-                  <Plus size={24} />
-                </button>
-                
-                {favoriteArtists.map((artist, idx) => {
-                  const displayArtist = enrichFanArtist(artist, storeArtists);
-                  return (
-                  <div key={idx} className="c-artist-item" onClick={() => { setSelectedArtist(displayArtist); setBoardTab('FEED'); }}>
-                    <div style={{ position: 'relative' }}>
-                      <ArtistAvatar artist={displayArtist} className="c-artist-avatar" />
-                    </div>
-                    <span>{displayArtist.name}</span>
+            {getToken() && (
+              <section className="community-bar reveal">
+                <div className="section-header" style={{ marginBottom: 20 }}>
+                  <div className="s-title-group">
+                    <h2 style={{ fontSize: '18px' }}>마이 아티스트</h2>
+                    <p style={{ fontSize: '13px' }}>즐겨찾기한 아티스트로 빠르게 이동</p>
                   </div>
-                )})}
-              </div>
-            </section>
+                </div>
+                <div className="community-scroll">
+                  <button className="c-add-btn" onClick={() => setShowArtistSearch(true)}>
+                    <Plus size={24} />
+                  </button>
+                  
+                  {favoriteArtists.map((artist, idx) => {
+                    const displayArtist = enrichFanArtist(artist, storeArtists);
+                    return (
+                    <div key={idx} className="c-artist-item" onClick={() => { setSelectedArtist(displayArtist); setBoardTab('FEED'); }}>
+                      <div style={{ position: 'relative' }}>
+                        <ArtistAvatar artist={displayArtist} className="c-artist-avatar" />
+                      </div>
+                      <span>{displayArtist.name}</span>
+                    </div>
+                  )})}
+                </div>
+              </section>
+            )}
 
             {/* Trending Drops Grid */}
             <section className="section" style={{ paddingTop: 0 }}>
@@ -2634,6 +3039,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                     <div className="ac-desc">{(artist.fanCount ?? 0).toLocaleString()} 팔로워</div>
                     <button className="ac-btn" onClick={async e => {
                       e.stopPropagation();
+                      if (!getToken()) { setShowLoginModal(true); return; }
                       if (isFollowing) {
                         setFavoriteArtists(prev => prev.filter(a => a.id !== artist.id));
                         setStoreArtists(prev => prev.map(a => a.id === artist.id ? { ...a, fanCount: Math.max(0, (a.fanCount ?? 0) - 1) } : a));
@@ -2758,6 +3164,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                   {selectedProduct.status === 'SOLD_OUT' ? (
                     <button
                       onClick={async () => {
+                        if (!getToken()) { setShowLoginModal(true); return; }
                         const pid = selectedProduct.id;
                         if (restockSubscribed.has(pid)) {
                           await unsubscribeRestock(pid).catch(() => {});
@@ -2775,6 +3182,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                     <>
                       <button
                         onClick={async () => {
+                          if (!getToken()) { setShowLoginModal(true); return; }
                           try {
                             await addCartItem(selectedProduct.id, productQty);
                             setShowCart(true);
@@ -2786,6 +3194,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                       >장바구니 담기</button>
                       <button
                         onClick={async () => {
+                          if (!getToken()) { setShowLoginModal(true); return; }
                           const isDrops = selectedProduct.dropsStartAt != null;
                           setCheckoutData({ type: 'product', title: selectedProduct.name, price: Number(selectedProduct.price), qty: productQty, option: productOption, productId: selectedProduct.id, accessTicket: null });
                           if (isDrops) {
@@ -3162,6 +3571,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                       type="button"
                       onClick={async (e) => {
                         e.stopPropagation();
+                        if (!getToken()) { setShowLoginModal(true); return; }
                         try {
                           await addCartItem(item.id, 1);
                           setShowCart(true);
@@ -3201,16 +3611,11 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                     onClick={(e) => {
                       e.stopPropagation();
                       if (!isSoldOut) {
-                        const isDrops = item.dropsStartAt != null || storeProductType === 'drops';
-                        if (isDrops) {
-                          setSelectedProduct(item);
-                        } else {
-                          setCheckoutData({ type: 'product', title: item.name, price: Number(item.price), qty: 1, option: 'Version A', productId: item.id, accessTicket: null });
-                          setActiveTab('CHECKOUT');
-                        }
+                        setSelectedProduct(item);
+                        window.scrollTo({ top: 0, behavior: 'instant' });
                       }
                     }}
-                    style={{ background: isSoldOut ? '#ccc' : '#111', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 700, cursor: isSoldOut ? 'not-allowed' : 'pointer' }}
+                    style={{ background: isSoldOut ? '#ccc' : 'linear-gradient(135deg, var(--point-rose), var(--point-violet))', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 700, cursor: isSoldOut ? 'not-allowed' : 'pointer', boxShadow: isSoldOut ? 'none' : '0 4px 10px rgba(194, 80, 122, 0.2)' }}
                   >
                     구매
                   </button>
@@ -4074,23 +4479,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
 
       {/* Subtle Footer Placeholder */}
       
-        <div style={{ position: 'fixed', bottom: '24px', left: '24px', zIndex: 100 }}>
-          <button style={{ 
-            background: 'white', 
-            border: '1px solid var(--border)', 
-            padding: '8px 16px', 
-            borderRadius: '20px', 
-            fontSize: '12px', 
-            fontWeight: 800, 
-            cursor: 'pointer',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px'
-          }}>
-            KOR | ENG
-          </button>
-        </div>
+        {/* Language switcher removed */}
 
       {/* Schedule Detail Modal */}
       {showScheduleModal && selectedSchedule && (
@@ -4308,8 +4697,8 @@ export default function App({ role = 'FAN' }: { role?: string }) {
           <div style={{ fontSize: '12px', color: 'var(--text-sub)', marginBottom: '32px' }}>© 2026 FANDROPS. All rights reserved.</div>
           
           <div style={{ display: 'flex', gap: '24px', fontSize: '13px', fontWeight: 600, color: 'var(--text-sub)', marginBottom: '40px' }}>
-            <span style={{ cursor: 'pointer' }}>서비스 이용약관</span>
-            <span style={{ cursor: 'pointer', color: 'var(--text-main)' }}>개인정보처리방침</span>
+            <span onClick={() => navigate('/terms')} style={{ cursor: 'pointer' }}>서비스 이용약관</span>
+            <span onClick={() => navigate('/privacy')} style={{ cursor: 'pointer', color: 'var(--text-main)' }}>개인정보처리방침</span>
             <span style={{ cursor: 'pointer' }}>고객센터</span>
             <span style={{ cursor: 'pointer' }}>공지사항</span>
           </div>
@@ -4317,7 +4706,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
           <hr style={{ width: '100%', borderTop: '1px solid var(--border)', borderBottom: 'none', margin: '0 0 32px 0' }} />
 
           <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-sub)', marginBottom: '16px' }}>비즈니스 문의</div>
-          <button onClick={() => navigate('/apply')} style={{ background: '#111', color: 'white', padding: '12px 24px', borderRadius: '8px', fontSize: '13px', fontWeight: 800, marginBottom: '16px' }}>
+          <button onClick={() => navigate('/apply')} style={{ background: 'linear-gradient(135deg, var(--point-rose), var(--point-violet))', color: 'white', padding: '12px 28px', borderRadius: '12px', fontSize: '13px', fontWeight: 800, border: 'none', cursor: 'pointer', marginBottom: '16px', boxShadow: '0 4px 12px rgba(194, 80, 122, 0.2)', transition: 'transform 0.2s' }} onMouseOver={e => e.currentTarget.style.transform = 'scale(1.03)'} onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}>
             파트너 입점 신청 →
           </button>
           <div style={{ fontSize: '12px', color: 'var(--text-sub)' }}>기획사/아티스트 전용 플랫폼입니다</div>

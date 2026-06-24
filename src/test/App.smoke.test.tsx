@@ -13,11 +13,13 @@ beforeAll(() => {
 
 describe('App', () => {
   it('FANDROPS 헤더가 렌더링된다', () => {
+    window.history.pushState({}, '', '/fan')
     render(<App />)
-    expect(screen.getByText('FANDROPS')).toBeInTheDocument()
+    expect(screen.getAllByText('FANDROPS').length).toBeGreaterThan(0)
   })
 
   it('로그인 페이지가 렌더링된다', () => {
+    window.history.pushState({}, '', '/login')
     render(<App />)
     expect(screen.getByText('카카오로 1초 로그인')).toBeInTheDocument()
   })

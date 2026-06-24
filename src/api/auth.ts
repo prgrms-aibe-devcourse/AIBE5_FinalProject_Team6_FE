@@ -70,6 +70,10 @@ export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(REFRESH_KEY)
   localStorage.removeItem(ROLE_KEY)
+  localStorage.removeItem('fd_collected_cards')
+  localStorage.removeItem('fan_profile_image')
+  localStorage.removeItem('fan_introduction')
+  localStorage.removeItem('fd_fan_id')
 }
 
 export function getAuthHeaders(): Record<string, string> {

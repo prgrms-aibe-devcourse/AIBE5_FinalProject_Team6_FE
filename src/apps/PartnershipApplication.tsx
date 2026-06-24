@@ -157,15 +157,18 @@ export default function PartnershipApplication({ onBack, onSubmit }: Partnership
         </div>
       )}
       <header className="h-[72px] bg-white/88 backdrop-blur-[10px] border-b border-[#EDE8E2] px-6 lg:px-10 flex items-center justify-between sticky top-0 z-50">
-        <div className="font-bold tracking-[3px] text-lg">FANDROPS <span className="text-[#C2507A]">AGENCIES</span></div>
+        <div className="font-bold tracking-[3px] text-lg text-[#111]">FANDROPS <span className="text-[#C2507A]">AGENCIES</span></div>
         <button onClick={onBack} className="text-sm font-medium text-[#888] hover:text-[#111]">Cancel</button>
       </header>
 
       <div className="flex-1 flex flex-col items-center p-8">
         <div className="w-full max-w-2xl text-center mb-12">
-          <h1 className="text-4xl font-black mb-4 tracking-tight text-[#111]">기획사 입점 신청</h1>
-          <p className="text-[#555] mb-2">중소/버추얼 아티스트를 위한 전용 플랫폼</p>
-          <p className="text-[#888] text-sm">FANDROPS에 입점하여 팬과 함께하세요</p>
+          <div className="inline-block bg-gradient-to-r from-[#C2507A] to-[#7F77DD] text-white text-[11px] font-black tracking-[1.5px] px-3.5 py-1.5 rounded-full uppercase mb-4 shadow-md shadow-[#C2507A]/15">
+            Partnership Application
+          </div>
+          <h1 className="text-4xl font-black mb-3 tracking-tight text-[#111]">기획사 입점 신청</h1>
+          <p className="text-[#C2507A] font-extrabold mb-1 text-sm tracking-wide">중소 / 버추얼 아티스트를 위한 전용 플랫폼</p>
+          <p className="text-[#888] text-xs font-semibold">FANDROPS에 입점하여 특별한 팬덤 경험을 설계하고 함께 성장하세요.</p>
         </div>
 
         <div className="bg-white rounded-[32px] w-full max-w-2xl border border-[#EDE8E2] shadow-sm overflow-hidden">
@@ -273,7 +276,7 @@ export default function PartnershipApplication({ onBack, onSubmit }: Partnership
                 </div>
 
                 <div ref={el => { errorRefs.current.artistType = el }}>
-                  <label className="block text-sm font-bold mb-4">활동 유형 *</label>
+                  <label className="block text-sm font-bold mb-4 text-[#111]">활동 유형 *</label>
                   <div className="grid grid-cols-2 gap-3">
                     {['중소 아이돌', '버추얼 아이돌', '솔로 아티스트', '기타'].map(type => (
                       <button
@@ -293,7 +296,7 @@ export default function PartnershipApplication({ onBack, onSubmit }: Partnership
                 </div>
 
                 <div>
-                  <label className="block text-sm font-bold mb-4">주요 활동 플랫폼 (복수 선택)</label>
+                  <label className="block text-sm font-bold mb-4 text-[#111]">주요 활동 플랫폼 (복수 선택)</label>
                   <div className="grid grid-cols-3 gap-3">
                     {['유튜브', '치지직', '트위치', '인스타그램', '트위터/X', '틱톡'].map(p => (
                       <button
@@ -393,8 +396,8 @@ export default function PartnershipApplication({ onBack, onSubmit }: Partnership
                     onChange={e => setForm({...form, termsAgreed: e.target.checked})}
                     className="w-5 h-5 rounded border-[#EDE8E2]"
                   />
-                  <span className="text-sm font-medium group-hover:text-[#111] transition-colors flex items-center gap-1">
-                    서비스 이용약관 동의 <span className="text-[#C2507A]">(필수)</span>
+                  <span className="text-sm font-medium text-[#111] transition-colors flex items-center gap-1">
+                    <span onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.open('/terms', '_blank'); }} className="underline hover:text-[#C2507A]">서비스 이용약관</span> 동의 <span className="text-[#C2507A] font-bold">(필수)</span>
                   </span>
                </label>
                <label className="flex items-center gap-3 cursor-pointer group">
@@ -404,8 +407,8 @@ export default function PartnershipApplication({ onBack, onSubmit }: Partnership
                     onChange={e => setForm({...form, privacyAgreed: e.target.checked})}
                     className="w-5 h-5 rounded border-[#EDE8E2]"
                   />
-                  <span className="text-sm font-medium group-hover:text-[#111] transition-colors flex items-center gap-1">
-                    개인정보 수집 및 이용 동의 <span className="text-[#C2507A]">(필수)</span>
+                  <span className="text-sm font-medium text-[#111] transition-colors flex items-center gap-1">
+                    <span onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.open('/privacy', '_blank'); }} className="underline hover:text-[#C2507A]">개인정보 수집 및 이용</span> 동의 <span className="text-[#C2507A] font-bold">(필수)</span>
                   </span>
                </label>
                <label className="flex items-center gap-3 cursor-pointer group">

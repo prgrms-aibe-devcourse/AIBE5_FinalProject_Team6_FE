@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { logout, getSubFromToken, getToken, login, setToken, syncAppRole, signup, requestPasswordReset } from '../api/auth';
 import { ROLE_KEY } from '../App';
 import { AnimatePresence, motion } from 'motion/react';
-import { Plus, Search, Calendar, Heart, Share2, Image as ImageIcon, Smile, MoreHorizontal, MessageSquare, Bell, Pin, Play, Youtube, ChevronLeft, ChevronRight, X, User, ShoppingBag, LogOut, Ticket, Settings, ThumbsUp, CheckCircle2, Gift } from 'lucide-react';
+import { Plus, Search, Calendar, Heart, Share2, Image as ImageIcon, Smile, MoreHorizontal, MessageSquare, Bell, Pin, Play, Youtube, ChevronLeft, ChevronRight, X, User, ShoppingBag, LogOut, Ticket, Settings, ThumbsUp, CheckCircle2, Gift, Link } from 'lucide-react';
 import { useCheckout } from '../hooks/useCheckout';
 import { useQueue } from '../hooks/useQueue';
 import { getProducts, getProduct, subscribeRestock, unsubscribeRestock } from '../api/products';
@@ -279,6 +279,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [editIntroduction, setEditIntroduction] = useState('');
   const [editImageUrl, setEditImageUrl] = useState('');
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [sharePost, setSharePost] = useState<FeedResponse | null>(null);
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [welcomeArtist, setWelcomeArtist] = useState<FanArtistEntry | null>(null);
   const [showUnfollowModal, setShowUnfollowModal] = useState(false);
@@ -2432,7 +2433,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                                 <Heart size={18} fill={post.isLiked ? 'currentColor' : 'none'} /> {formatCount(post.likeCount)}
                               </div>
                               <div className="fp-action"><MessageSquare size={18} /> {String(post.commentCount)}</div>
-                              <div className="fp-action"><Share2 size={18} /> Share</div>
+                              <div className="fp-action" style={{ cursor: 'pointer' }} onClick={() => setSharePost(post)}><Share2 size={18} /> Share</div>
                             </div>
 
                             {/* Comment Section */}
@@ -2544,7 +2545,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                               <Heart size={18} fill={post.isLiked ? 'currentColor' : 'none'} /> {formatCount(post.likeCount)}
                             </div>
                             <div className="fp-action"><MessageSquare size={18} /> {String(post.commentCount)}</div>
-                            <div className="fp-action"><Share2 size={18} /> Share</div>
+                            <div className="fp-action" style={{ cursor: 'pointer' }} onClick={() => setSharePost(post)}><Share2 size={18} /> Share</div>
                           </div>
 
                           {/* Comment Section */}
@@ -4713,6 +4714,107 @@ export default function App({ role = 'FAN' }: { role?: string }) {
         </div>
       </footer>
 
+      {/* --- SHARE MODAL --- */}
+      {sharePost && (
+        <div className="modal-overlay" style={{ zIndex: 2000 }} onClick={() => setSharePost(null)}>
+          <div className="modal-content" style={{ maxWidth: '400px', padding: '28px' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ fontSize: '17px', fontWeight: 800, margin: 0 }}>공유하기</h3>
+              <X size={20} style={{ cursor: 'pointer', color: 'var(--text-sub)' }} onClick={() => setSharePost(null)} />
+            </div>
+
+            {/* URL 표시 + 복사 */}
+            <div style={{ display: 'flex', gap: '8px', background: '#F7F3EE', borderRadius: '12px', padding: '12px 16px', marginBottom: '24px', alignItems: 'center', border: '1px solid #EDE8E2' }}>
+              <span style={{ flex: 1, fontSize: '12px', color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {window.location.href}
+              </span>
+              <button
+                onClick={async () => { await navigator.clipboard.writeText(window.location.href); showToast('링크가 복사되었습니다!'); }}
+                style={{ flexShrink: 0, padding: '5px 12px', background: '#111', color: 'white', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
+              >
+                복사
+              </button>
+            </div>
+
+            {/* 공유 옵션 */}
+            <div style={{ display: 'flex', justifyContent: 'space-around' }}>
+              {/* 링크 복사 */}
+              <button
+                onClick={async () => { await navigator.clipboard.writeText(window.location.href); showToast('링크가 복사되었습니다!'); setSharePost(null); }}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', background: 'none', border: 'none', cursor: 'pointer', padding: '8px' }}
+              >
+                <div style={{ width: '52px', height: '52px', borderRadius: '50%', background: '#F0F0F0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Link size={22} color="#555" />
+                </div>
+                <span style={{ fontSize: '11px', color: '#555', fontWeight: 600 }}>링크 복사</span>
+              </button>
+
+              {/* 카카오톡 */}
+              <button
+                onClick={() => {
+                  const url = window.location.href;
+                  const title = `${selectedArtist?.name ?? 'FANDROPS'} — FANDROPS`;
+                  const kakao = (window as any).Kakao;
+                  if (kakao?.isInitialized?.()) {
+                    kakao.Share.sendDefault({ objectType: 'feed', content: { title, description: sharePost.content?.substring(0, 100) ?? '', link: { mobileWebUrl: url, webUrl: url } } });
+                  } else if (typeof navigator.share === 'function') {
+                    navigator.share({ title, url }).catch(() => {});
+                  } else {
+                    navigator.clipboard.writeText(url);
+                    showToast('링크를 복사했어요. 카카오톡에서 붙여넣기 해주세요.');
+                  }
+                  setSharePost(null);
+                }}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', background: 'none', border: 'none', cursor: 'pointer', padding: '8px' }}
+              >
+                <div style={{ width: '52px', height: '52px', borderRadius: '50%', background: '#FEE500', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+                    <path fillRule="evenodd" clipRule="evenodd" d="M12 3C6.477 3 2 6.477 2 10.5c0 2.533 1.448 4.765 3.636 6.18-.16.592-.58 2.148-.665 2.487-.104.416.153.41.32.298.132-.089 2.096-1.421 2.946-2.001.568.084 1.15.128 1.763.128 5.523 0 10-3.358 10-7.5S17.523 3 12 3z" fill="#191919"/>
+                  </svg>
+                </div>
+                <span style={{ fontSize: '11px', color: '#555', fontWeight: 600 }}>카카오톡</span>
+              </button>
+
+              {/* 트위터/X */}
+              <button
+                onClick={() => {
+                  const url = encodeURIComponent(window.location.href);
+                  const text = encodeURIComponent(`${selectedArtist?.name ?? 'FANDROPS'} — FANDROPS`);
+                  window.open(`https://twitter.com/intent/tweet?url=${url}&text=${text}`, '_blank', 'noopener,noreferrer');
+                  setSharePost(null);
+                }}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', background: 'none', border: 'none', cursor: 'pointer', padding: '8px' }}
+              >
+                <div style={{ width: '52px', height: '52px', borderRadius: '50%', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.738l7.737-8.84L1.254 2.25H8.08l4.258 5.628 5.906-5.628zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                  </svg>
+                </div>
+                <span style={{ fontSize: '11px', color: '#555', fontWeight: 600 }}>트위터/X</span>
+              </button>
+
+              {/* 더 보기 */}
+              <button
+                onClick={() => {
+                  if (typeof navigator.share === 'function') {
+                    navigator.share({ title: `${selectedArtist?.name ?? 'FANDROPS'} — FANDROPS`, url: window.location.href }).catch(() => {});
+                  } else {
+                    showToast('공유 기능을 지원하지 않는 환경입니다.');
+                  }
+                  setSharePost(null);
+                }}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', background: 'none', border: 'none', cursor: 'pointer', padding: '8px' }}
+              >
+                <div style={{ width: '52px', height: '52px', borderRadius: '50%', background: '#F0F0F0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <MoreHorizontal size={22} color="#555" />
+                </div>
+                <span style={{ fontSize: '11px', color: '#555', fontWeight: 600 }}>더 보기</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Welcome Onboarding Modal */}
       {showWelcomeModal && welcomeArtist && (
         <div className="modal-overlay" style={{ zIndex: 1100 }} onClick={() => setShowWelcomeModal(false)}>
@@ -4780,31 +4882,33 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                 >
                   나중에 하기
                 </button>
-                <button 
-                  onClick={() => {
-                    setSelectedArtist(welcomeArtist);
-                    setBoardTab('FEED');
-                    setShowWelcomeModal(false);
-                    window.scrollTo({ top: 0, behavior: 'instant' });
-                  }}
-                  style={{ 
-                    flex: 1, 
-                    padding: '16px', 
-                    borderRadius: '16px', 
-                    border: 'none', 
-                    background: 'linear-gradient(135deg, #C2507A, #7F77DD)', 
-                    color: 'white', 
-                    fontSize: '15px', 
-                    fontWeight: 800, 
-                    cursor: 'pointer',
-                    boxShadow: '0 8px 20px rgba(194, 80, 122, 0.25)',
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; }}
-                  onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
-                >
-                  지금 가기
-                </button>
+                {selectedArtist?.id !== welcomeArtist?.id && (
+                  <button
+                    onClick={() => {
+                      setSelectedArtist(welcomeArtist);
+                      setBoardTab('FEED');
+                      setShowWelcomeModal(false);
+                      window.scrollTo({ top: 0, behavior: 'instant' });
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: '16px',
+                      borderRadius: '16px',
+                      border: 'none',
+                      background: 'linear-gradient(135deg, #C2507A, #7F77DD)',
+                      color: 'white',
+                      fontSize: '15px',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      boxShadow: '0 8px 20px rgba(194, 80, 122, 0.25)',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; }}
+                    onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
+                  >
+                    지금 가기
+                  </button>
+                )}
               </div>
             </div>
           </div>

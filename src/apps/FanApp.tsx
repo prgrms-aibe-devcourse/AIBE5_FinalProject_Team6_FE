@@ -3535,39 +3535,50 @@ export default function App({ role = 'FAN' }: { role?: string }) {
 
       const renderGridCard = (item: ProductListItem) => {
         const isSoldOut = item.status === 'SOLD_OUT';
+        const isDrops = item.dropsStartAt != null;
         const progress = isSoldOut ? 100 : item.totalQty > 0 ? (item.availableQty / item.totalQty) * 100 : 0;
         return (
           <div
             key={item.id}
             className="card reveal"
-            style={{ opacity: isSoldOut ? 0.6 : 1, cursor: 'pointer' }}
+            style={{
+              opacity: isSoldOut ? 0.6 : 1,
+              cursor: 'pointer',
+              ...(isDrops && {
+                background: 'linear-gradient(160deg, #13111C 0%, #1E1535 100%)',
+                boxShadow: '0 0 0 1.5px rgba(194,80,122,0.5), 0 8px 32px rgba(127,119,221,0.2)',
+                border: 'none',
+              })
+            }}
             onClick={() => { setSelectedProduct(item); window.scrollTo({ top: 0, behavior: 'instant' }); }}
           >
-            <div style={{ position: 'relative', height: '220px', background: item.thumbnailUrl ? 'transparent' : 'var(--bg-cream)', overflow: 'hidden' }}>
+            {isDrops && <div style={{ height: '3px', background: 'linear-gradient(90deg, #C2507A 0%, #7F77DD 100%)', borderRadius: '999px 999px 0 0' }} />}
+            <div style={{ position: 'relative', height: '220px', background: item.thumbnailUrl ? 'transparent' : (isDrops ? 'linear-gradient(135deg, #0D0A18, #2D1B40)' : 'var(--bg-cream)'), overflow: 'hidden' }}>
+              {isDrops && <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(194,80,122,0.07), rgba(127,119,221,0.1))', zIndex: 1, pointerEvents: 'none' }} />}
               {item.thumbnailUrl && <img src={item.thumbnailUrl} alt={item.name} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
-              <div style={{ position: 'absolute', top: 12, left: 12, background: 'rgba(255,255,255,0.9)', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 800 }}>
+              <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 2, background: isDrops ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.9)', backdropFilter: isDrops ? 'blur(8px)' : undefined, WebkitBackdropFilter: isDrops ? 'blur(8px)' : undefined, color: isDrops ? 'rgba(255,255,255,0.9)' : 'inherit', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 800 }}>
                 {storeArtists.find(a => a.id === item.artistId)?.name ?? `Artist #${item.artistId}`}
               </div>
               {item.availableQty > 0 && !isSoldOut && (
-                <div style={{ position: 'absolute', top: 12, right: 12, background: (item.availableQty / Math.max(1, item.totalQty)) <= 0.3 ? '#E11D48' : '#10B981', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 800 }}>
+                <div style={{ position: 'absolute', top: 12, right: 12, zIndex: 2, background: (item.availableQty / Math.max(1, item.totalQty)) <= 0.3 ? '#E11D48' : '#10B981', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 800 }}>
                   {item.availableQty}개 남음
                 </div>
               )}
               {isSoldOut && (
-                <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2 }}>
                   <span style={{ color: 'white', fontSize: '20px', fontWeight: 900, letterSpacing: '2px' }}>품 절</span>
                 </div>
               )}
             </div>
             <div style={{ padding: '20px' }}>
-              <h3 style={{ fontSize: '14px', fontWeight: 800, marginBottom: '16px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</h3>
+              <h3 style={{ fontSize: '14px', fontWeight: 800, marginBottom: '16px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: isDrops ? 'rgba(255,255,255,0.95)' : '#111' }}>{item.name}</h3>
               <div style={{ marginBottom: '16px' }}>
-                <div style={{ height: '4px', background: '#F0F0F0', borderRadius: '2px', overflow: 'hidden' }}>
+                <div style={{ height: '4px', background: isDrops ? 'rgba(255,255,255,0.12)' : '#F0F0F0', borderRadius: '2px', overflow: 'hidden' }}>
                   <div style={{ height: '100%', width: `${progress}%`, background: isSoldOut ? '#ccc' : 'linear-gradient(90deg, #C2507A, #7F77DD)' }}></div>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <div style={{ fontSize: '18px', fontWeight: 800, color: '#111', flex: 1 }}>₩{Number(item.price).toLocaleString()}</div>
+                <div style={{ fontSize: '18px', fontWeight: 800, color: isDrops ? 'rgba(255,255,255,0.95)' : '#111', flex: 1 }}>₩{Number(item.price).toLocaleString()}</div>
                 <div style={{ display: 'flex', gap: '4px' }}>
                   {!isSoldOut && (
                     <button
@@ -3582,7 +3593,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                           showToast('장바구니 담기에 실패했습니다.', 'error');
                         }
                       }}
-                      style={{ background: 'white', color: '#111', border: '1px solid #EDE8E2', padding: '8px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      style={{ background: isDrops ? 'rgba(255,255,255,0.1)' : 'white', color: isDrops ? 'rgba(255,255,255,0.85)' : '#111', border: isDrops ? '1px solid rgba(255,255,255,0.2)' : '1px solid #EDE8E2', padding: '8px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                       title="장바구니 담기"
                     >
                       <ShoppingBag size={16} />

@@ -218,8 +218,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       setStoreArtists(prev => prev.map(a => a.id === selectedArtist.id ? { ...a, fanCount: (a.fanCount ?? 0) + 1 } : a));
       try {
         await followArtist(selectedArtist.id);
-        setWelcomeArtist(selectedArtist);
-        setShowWelcomeModal(true);
+        showToast(`${selectedArtist.name}님을 팔로우했습니다!`);
       } catch {
         setFavoriteArtists(prev => prev.filter(a => a.id !== selectedArtist.id));
         setStoreArtists(prev => prev.map(a => a.id === selectedArtist.id ? { ...a, fanCount: Math.max(0, (a.fanCount ?? 0) - 1) } : a));
@@ -3057,12 +3056,15 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                       } else {
                         setFavoriteArtists(prev => [...prev, displayArtist]);
                         setStoreArtists(prev => prev.map(a => a.id === artist.id ? { ...a, fanCount: (a.fanCount ?? 0) + 1 } : a));
-                        try { 
-                          await followArtist(artist.id);
-                          setWelcomeArtist(displayArtist);
-                          setShowWelcomeModal(true);
+                        try {
+                          const followedId = artist.id;
+                          await followArtist(followedId);
+                          if ((selectedArtist as FanArtistEntry | null)?.id !== followedId) {
+                            setWelcomeArtist(displayArtist);
+                            setShowWelcomeModal(true);
+                          }
                         }
-                        catch { 
+                        catch {
                           setFavoriteArtists(prev => prev.filter(a => a.id !== artist.id));
                           setStoreArtists(prev => prev.map(a => a.id === artist.id ? { ...a, fanCount: Math.max(0, (a.fanCount ?? 0) - 1) } : a));
                           showToast('팔로우 처리에 실패했습니다.', 'error');
@@ -4992,8 +4994,10 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                     setShowUnfollowModal(false);
                     try {
                       await followArtist(artist.id);
-                      setWelcomeArtist(artist);
-                      setShowWelcomeModal(true);
+                      if (selectedArtist?.id !== artist.id) {
+                        setWelcomeArtist(artist);
+                        setShowWelcomeModal(true);
+                      }
                     } catch {
                       setFavoriteArtists(prev => prev.filter(a => a.id !== artist.id));
                       setStoreArtists(prev => prev.map(a => a.id === artist.id ? { ...a, fanCount: Math.max(0, (a.fanCount ?? 0) - 1) } : a));

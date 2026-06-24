@@ -47,7 +47,6 @@ function ApplyWrapper() {
 export default function App() {
   return (
     <BrowserRouter>
-      {import.meta.env.DEV && <DevSwitcher />}
       <Routes>
         <Route path="/" element={<RootRedirect />} />
         <Route path="/login" element={<Navigate to="/fan" replace />} />

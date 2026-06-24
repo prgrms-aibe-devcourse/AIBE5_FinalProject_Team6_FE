@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { logout, getSubFromToken, getToken, login, setToken, syncAppRole, signup, requestPasswordReset } from '../api/auth';
+import { logout, getSubFromToken, getToken, login, setToken, syncAppRole, signup, requestPasswordReset, getRoleHomePath } from '../api/auth';
 import { ROLE_KEY } from '../App';
 import { AnimatePresence, motion } from 'motion/react';
 import { Plus, Search, Calendar, Heart, Share2, Image as ImageIcon, Smile, MoreHorizontal, MessageSquare, Bell, Pin, Play, Youtube, ChevronLeft, ChevronRight, X, User, ShoppingBag, LogOut, Ticket, Settings, ThumbsUp, CheckCircle2, Gift, Link } from 'lucide-react';
@@ -287,6 +287,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [agreePrivacy, setAgreePrivacy] = useState(false);
 
   // Guest & Login Modal state
+  const [isLoggedIn, setIsLoggedIn] = useState(!!getToken());
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -318,7 +319,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   // New Filter & Sort States
   const [storeArtist, setStoreArtist] = useState('ALL');
   const [storeCategory, setStoreCategory] = useState('전체');
-  const [storeProductType, setStoreProductType] = useState<'regular' | 'drops'>('regular');
+  const [storeProductType, setStoreProductType] = useState<'regular' | 'drops' | 'soldout'>('regular');
   const [storeSort, setStoreSort] = useState('낮은가격순');
   const [storeSearch, setStoreSearch] = useState('');
   const [storePage, setStorePage] = useState(1);
@@ -336,11 +337,80 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [storeArtists, setStoreArtists] = useState<ArtistItem[]>([]);
   const boardArtist = selectedArtist ? enrichFanArtist(selectedArtist, storeArtists) : null;
   const [recommendedProducts, setRecommendedProducts] = useState<ProductListItem[]>([]);
+  const [recommendedProductsLoading, setRecommendedProductsLoading] = useState(false);
   const [artistSearchQuery, setArtistSearchQuery] = useState('');
   const [fanToast, setFanToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const [subscribedProducts, setSubscribedProducts] = useState<ProductListItem[]>([]);
+  const [notifSubTab, setNotifSubTab] = useState<'ACTIVITY' | 'RESTOCK'>('ACTIVITY');
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
     setFanToast({ msg, type });
     setTimeout(() => setFanToast(null), 3000);
+  };
+
+  const handleBannerClick = async (banner: any) => {
+    if (banner.id === 101) {
+      try {
+        const novaArtist = storeArtists.find(a => a.id === 1) || { id: 1, name: 'NOVA' };
+        setSelectedArtist(toFanArtistEntry(novaArtist));
+        setBoardTab('NOTICE');
+        setSearchParams({ artistId: '1', board: 'notice' }, { replace: false });
+        const res = await getNotices(1);
+        if (res.items && res.items.length > 0) {
+          const targetNotice = res.items.find((n: any) => n.title.includes('1주년') || n.title.includes('이벤트')) || res.items[0];
+          setSelectedNotice(targetNotice);
+          setSearchParams({ artistId: '1', board: 'notice', noticeId: String(targetNotice.id) }, { replace: false });
+        }
+      } catch (e) {
+        console.error('Failed to route to NOVA notice banner', e);
+      }
+    }
+    else if (banner.id === 102) {
+      try {
+        const res = await getProducts('regular', undefined, 10, 2);
+        if (res.items && res.items.length > 0) {
+          const product = res.items[0];
+          setSelectedProduct(product);
+          setActiveTab('STORE');
+          setStoreArtist('2');
+          setSearchParams({ tab: 'store', productId: String(product.id), storeArtist: '2' }, { replace: false });
+        } else {
+          setActiveTab('STORE');
+          setStoreArtist('2');
+        }
+      } catch (e) {
+        console.error('Failed to route to LUNA product banner', e);
+        setActiveTab('STORE');
+        setStoreArtist('2');
+      }
+    }
+    else if (banner.id === 103) {
+      try {
+        const res = await getProducts('drops', undefined, 10, 7);
+        setActiveTab('STORE');
+        setStoreProductType('drops');
+        setStoreArtist('7');
+        if (res.items && res.items.length > 0) {
+          const product = res.items[0];
+          setSelectedProduct(product);
+          setSearchParams({ tab: 'store', productId: String(product.id), storeArtist: '7', productType: 'drops' }, { replace: false });
+        } else {
+          setSearchParams({ tab: 'store', storeArtist: '7', productType: 'drops' }, { replace: false });
+        }
+      } catch (e) {
+        console.error('Failed to route to Drops banner', e);
+        setActiveTab('STORE');
+        setStoreProductType('drops');
+      }
+    }
+    else if (banner.id === 104) {
+      const liaArtist = storeArtists.find(a => a.id === 12) || { id: 12, name: '리아' };
+      setSelectedArtist(toFanArtistEntry(liaArtist));
+      setBoardTab('FEED');
+      setSearchParams({ artistId: '12', board: 'feed' }, { replace: false });
+    }
+    else if (banner.landingUrl) {
+      window.open(banner.landingUrl, '_blank');
+    }
   };
 
   useEffect(() => {
@@ -372,7 +442,14 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [showAttendance, setShowAttendance] = useState(false);
   const [isAllowNotification, setIsAllowNotification] = useState(true);
   const [isNotifUpdating, setIsNotifUpdating] = useState(false);
-  const [restockSubscribed, setRestockSubscribed] = useState<Set<number>>(new Set());
+  const [restockSubscribed, setRestockSubscribed] = useState<Set<number>>(() => {
+    try {
+      const saved = localStorage.getItem('fd_restock_subscribed');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
   const [fanProfile, setFanProfile] = useState<FanResult | null>(null);
   const [profileImageUrl, setProfileImageUrl] = useState<string>(() => {
     return localStorage.getItem('fan_profile_image') ?? '';
@@ -445,9 +522,32 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   }, [selectedArtist]);
 
   useEffect(() => {
-    if (activeTab !== 'NOTIFICATIONS') return;
+    if (!isLoggedIn) {
+      setNotifications([]);
+      return;
+    }
     getNotifications().then(setNotifications).catch(() => {});
-  }, [activeTab]);
+  }, [activeTab, isLoggedIn]);
+
+  useEffect(() => {
+    if (activeTab !== 'NOTIFICATIONS') return;
+    const loadSubscribedProducts = async () => {
+      const ids = Array.from(restockSubscribed);
+      try {
+        const products = await Promise.all(
+          ids.map(id => getProduct(id).catch(() => null))
+        );
+        setSubscribedProducts(products.filter((p): p is any => p !== null) as any as ProductListItem[]);
+      } catch (e) {
+        console.error('Failed to load subscribed products', e);
+      }
+    };
+    loadSubscribedProducts();
+  }, [activeTab, restockSubscribed]);
+
+  useEffect(() => {
+    localStorage.setItem('fd_restock_subscribed', JSON.stringify(Array.from(restockSubscribed)));
+  }, [restockSubscribed]);
 
   useEffect(() => {
     if (activeTab !== 'MY PAGE') return;
@@ -533,7 +633,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       observer.disconnect();
       clearTimeout(timer);
     };
-  }, [activeTab, selectedArtist, boardTab, myPageTab, storeArtist, storePage]);
+  }, [activeTab, selectedArtist, boardTab, myPageTab, storeArtist, storePage, favoriteArtists, recommendedProducts, recommendedProductsLoading, homeDrops, storeItems]);
 
   // HOME 드롭 상품 로드
   useEffect(() => {
@@ -565,7 +665,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     localStorage.setItem('fd_collected_cards', JSON.stringify(collectedCards));
   }, [collectedCards]);
 
-  // 상품 목록 로드 — 아티스트 필터 또는 상품 타입 변경 시 재fetch
+  // 상품 목록 로드 — 아티스트 필터, 상품 타입, 또는 스토어 탭 재진입 시 재fetch
   useEffect(() => {
     const artistId = storeArtist !== 'ALL' ? Number(storeArtist) : undefined;
     let cancelled = false;
@@ -575,11 +675,25 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       setStoreNextCursor(null);
       setStoreHasMore(false);
       try {
-        const res = await getProducts(storeProductType, undefined, 20, artistId);
-        if (cancelled) return;
-        setStoreItems(res.items ?? []);
-        setStoreNextCursor(res.nextCursor ?? null);
-        setStoreHasMore(res.hasMore ?? false);
+        if (storeProductType === 'soldout') {
+          const [regRes, dropsRes] = await Promise.all([
+            getProducts('regular', undefined, 100, artistId),
+            getProducts('drops', undefined, 100, artistId)
+          ]);
+          if (cancelled) return;
+          const allItems = [...(regRes.items ?? []), ...(dropsRes.items ?? [])];
+          const soldOutItems = allItems.filter(item => item.status === 'SOLD_OUT' || item.availableQty <= 0);
+          setStoreItems(soldOutItems);
+          setStoreNextCursor(null);
+          setStoreHasMore(false);
+        } else {
+          const res = await getProducts(storeProductType, undefined, 20, artistId);
+          if (cancelled) return;
+          const activeItems = (res.items ?? []).filter(item => item.status !== 'SOLD_OUT' && item.availableQty > 0);
+          setStoreItems(activeItems);
+          setStoreNextCursor(res.nextCursor ?? null);
+          setStoreHasMore(res.hasMore ?? false);
+        }
       } catch (e) {
         console.error(e);
       } finally {
@@ -588,7 +702,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     }
     load();
     return () => { cancelled = true; };
-  }, [storeArtist, storeProductType]);
+  }, [storeArtist, storeProductType, activeTab]);
 
   // 스토어 배너 로드
   useEffect(() => {
@@ -597,13 +711,63 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       .catch(console.error);
   }, []);
 
-  // HOME 메인 배너 로드
+  // HOME 메인 배너 로드 (백엔드 등록 배너 + 하드코딩 기본 배너)
   useEffect(() => {
     if (activeTab !== 'HOME') return;
-    getMainBanners().then(data => {
-      setMainBanners(data);
-      setMainBannerIdx(0);
-    }).catch(() => {});
+    const defaultBanners = [
+      {
+        id: 101,
+        title: "[공지] 팬클럽 1주년 기념 이벤트",
+        imageUrl: "",
+        landingUrl: "linear-gradient(135deg, var(--point-violet), var(--point-rose))",
+        subtitle: "NOVA와 함께하는 특별한 1주년 축제에 초대합니다! 지금 공지를 확인해보세요.",
+        badge: "NOTICE",
+        badgeColor: "rgba(255, 255, 255, 0.2)",
+      },
+      {
+        id: 102,
+        title: "LUNA 1주년 기념 포토북 오픈",
+        imageUrl: "",
+        landingUrl: "linear-gradient(135deg, #A5B4FC, #F472B6)",
+        subtitle: "오직 FANDROPS에서만 만나볼 수 있는 루나의 한정판 포토북 독점 발매!",
+        badge: "MERCH",
+        badgeColor: "rgba(255, 255, 255, 0.2)",
+      },
+      {
+        id: 103,
+        title: "VORTEX × Drops 단독 스트릿 캡슐 한정 세트 출시!",
+        imageUrl: "",
+        landingUrl: "linear-gradient(135deg, #1E293B, #475569)",
+        subtitle: "보텍스만의 힙하고 강렬한 무드가 돋보이는 캡슐 컬렉션을 만나보세요.",
+        badge: "DROPS 🔥",
+        badgeColor: "rgba(255, 255, 255, 0.15)",
+      },
+      {
+        id: 104,
+        title: "신규 버튜버 LIA 데뷔! 공식 커뮤니티 피드 바로가기",
+        imageUrl: "",
+        landingUrl: "linear-gradient(135deg, #FDE68A, #FCA5A5)",
+        subtitle: "귀여운 마법소녀 비주얼의 신예 버튜버 리아의 데뷔 피드가 공개되었습니다.",
+        badge: "NEW VTUBER",
+        badgeColor: "rgba(255, 255, 255, 0.3)",
+      }
+    ];
+
+    getMainBanners()
+      .then((fetched: BannerResponse[]) => {
+        // [Admin] 제목 배너 제외, 활성 상태인 것만 노출
+        const activeFetched = fetched.filter((b: BannerResponse) => b.isActive && !b.title.includes('[Admin]'));
+        if (activeFetched.length > 0) {
+          setMainBanners([...activeFetched, ...defaultBanners] as any as BannerResponse[]);
+        } else {
+          setMainBanners(defaultBanners as any as BannerResponse[]);
+        }
+      })
+      .catch(() => {
+        setMainBanners(defaultBanners as any as BannerResponse[]);
+      });
+
+    setMainBannerIdx(0);
   }, [activeTab]);
 
   // HOME 배너 자동 슬라이드
@@ -618,13 +782,28 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   // 장바구니 열릴 때 항목 로드
   useEffect(() => {
     if (!showCart) return;
+    if (!isLoggedIn) {
+      setCartItems([]);
+      return;
+    }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setCartLoading(true);
     getCart()
       .then(res => setCartItems(res.items))
       .catch(() => setCartItems([]))
       .finally(() => setCartLoading(false));
-  }, [showCart]);
+  }, [showCart, isLoggedIn]);
+
+  // 마운트 시 장바구니/알림 데이터 초기 동기화 (배지 노출용)
+  useEffect(() => {
+    if (isLoggedIn) {
+      getCart().then(res => setCartItems(res.items)).catch(() => {});
+      getNotifications().then(setNotifications).catch(() => {});
+    } else {
+      setCartItems([]);
+      setNotifications([]);
+    }
+  }, [isLoggedIn]);
 
   // 아티스트 목록 로드 — ARTIST role은 JWT sub + artists/members 2단계 조회, FAN은 팔로우 목록
   useEffect(() => {
@@ -660,7 +839,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
         }
       })();
     } else {
-      if (getToken()) {
+      if (isLoggedIn) {
         getJoinedArtists()
           .then(res => {
             setFavoriteArtists(res.items.map(a => toFanArtistEntry({
@@ -676,16 +855,45 @@ export default function App({ role = 'FAN' }: { role?: string }) {
         }, 0);
       }
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isLoggedIn, role]);
 
-  // 팔로우 첫 번째 아티스트 상품 추천
+  // 팔로우 아티스트 상품 추천 (최대 3개 아티스트의 상품을 병렬 로드하여 결합)
   useEffect(() => {
-    const id = favoriteArtists[0]?.id;
-    if (!id) return;
-    getProducts('regular', undefined, 4, id)
-      .then(res => setRecommendedProducts(res.items.slice(0, 4)))
-      .catch(() => setRecommendedProducts([]));
-  }, [favoriteArtists]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (favoriteArtists.length === 0) {
+      setTimeout(() => {
+        setRecommendedProducts([]);
+        setRecommendedProductsLoading(false);
+      }, 0);
+      return;
+    }
+
+    setTimeout(() => {
+      setRecommendedProductsLoading(true);
+    }, 0);
+
+    const artistIds = favoriteArtists.slice(0, 3).map(a => a.id);
+
+    Promise.all(
+      artistIds.map(id =>
+        getProducts('regular', undefined, 4, id)
+          .then(res => res.items)
+          .catch(() => [] as ProductListItem[])
+      )
+    )
+      .then(results => {
+        const merged = results.flat();
+        const unique = merged.filter((item, index, self) =>
+          self.findIndex(t => t.id === item.id) === index
+        );
+        setRecommendedProducts(unique.slice(0, 4));
+      })
+      .catch(() => {
+        setRecommendedProducts([]);
+      })
+      .finally(() => {
+        setRecommendedProductsLoading(false);
+      });
+  }, [favoriteArtists]);
 
   // 스토어 아티스트 필터 목록 로드 (GET /api/v1/artists, 팬 수 내림차순)
   useEffect(() => {
@@ -748,11 +956,26 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     setSearchParams(params, { replace: false });
   }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // state → URL: 상품/공지 상세 진입 시 history 항목 생성
+  // state → URL: 상품/공지 상세 진입/이탈 시 history 항목 생성
   const isDetailMounted = useRef(false);
   useEffect(() => {
     if (!isDetailMounted.current) { isDetailMounted.current = true; return; }
-    if (!selectedProduct && !selectedNotice) return;
+    // 상세 해제 시 productId / noticeId 파라미터 제거
+    if (!selectedProduct && !selectedNotice) {
+      if (searchParams.get('productId') || searchParams.get('noticeId')) {
+        const params: Record<string, string> = { tab: TAB_TO_URL[activeTab] ?? 'home' };
+        if (selectedArtist) params.artistId = String(selectedArtist.id);
+        if (selectedArtist && boardTab !== 'FEED') params.board = boardTab.toLowerCase();
+        if (activeTab === 'STORE') {
+          if (storeArtist !== 'ALL') params.storeArtist = storeArtist;
+          if (storeCategory !== '전체') params.category = storeCategory;
+          if (storeSort !== '낮은가격순') params.sort = storeSort;
+          if (storeSearch) params.q = storeSearch;
+        }
+        setSearchParams(params, { replace: false });
+      }
+      return;
+    }
     if (selectedProduct && searchParams.get('productId') === String(selectedProduct.id)) return;
     if (selectedNotice && searchParams.get('noticeId') === String(selectedNotice.id)) return;
     const params: Record<string, string> = { tab: TAB_TO_URL[activeTab] ?? 'home' };
@@ -924,7 +1147,8 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     setStoreLoading(true);
     getProducts(storeProductType, storeNextCursor, 20, artistId)
       .then(res => {
-        setStoreItems(prev => [...prev, ...(res.items ?? [])]);
+        const activeItems = (res.items ?? []).filter(item => item.status !== 'SOLD_OUT' && item.availableQty > 0);
+        setStoreItems(prev => [...prev, ...activeItems]);
         setStoreNextCursor(res.nextCursor ?? null);
         setStoreHasMore(res.hasMore ?? false);
       })
@@ -1046,6 +1270,34 @@ export default function App({ role = 'FAN' }: { role?: string }) {
         .c-btn { background: var(--bg-cream); color: var(--text-main); border: 1px solid var(--border); padding: 10px 20px; border-radius: 10px; font-size: 12px; font-weight: 800; cursor: pointer; transition: all 0.2s; }
         .card:hover .c-btn { background: var(--point-rose); color: white; border-color: var(--point-rose); }
 
+        /* Drops Card Specific Styles */
+        .card.is-drops {
+          background: linear-gradient(135deg, #FFF6F9 0%, #F5F7FF 100%) !important;
+          border: 1px solid rgba(194, 80, 122, 0.25) !important;
+          box-shadow: 0 8px 24px rgba(194, 80, 122, 0.06) !important;
+        }
+        .card.is-drops:hover {
+          box-shadow: 0 20px 40px rgba(194, 80, 122, 0.16), 0 0 16px rgba(194, 80, 122, 0.08) !important;
+          border-color: rgba(194, 80, 122, 0.6) !important;
+        }
+        .card.is-drops.is-upcoming {
+          background: linear-gradient(135deg, #F5F7FF 0%, #FAFAFF 100%) !important;
+          border: 1px solid rgba(127, 119, 221, 0.25) !important;
+          box-shadow: 0 8px 24px rgba(127, 119, 221, 0.06) !important;
+        }
+        .card.is-drops.is-upcoming:hover {
+          box-shadow: 0 20px 40px rgba(127, 119, 221, 0.16), 0 0 16px rgba(127, 119, 221, 0.08) !important;
+          border-color: rgba(127, 119, 221, 0.6) !important;
+        }
+        .card.is-drops .c-btn {
+          border-color: rgba(0, 0, 0, 0.08) !important;
+        }
+        .card.is-drops:hover .c-btn {
+          background: linear-gradient(135deg, var(--point-rose), var(--point-violet)) !important;
+          border-color: transparent !important;
+          color: white !important;
+        }
+
         /* Artist Card */
         .artist-card { background: var(--bg-white); border-radius: 24px; padding: 32px 24px; text-align: center; border: 1px solid var(--border); transition: all 0.3s ease; display: flex; flex-direction: column; align-items: center; cursor: pointer; }
         .artist-card:hover { transform: translateY(-6px); box-shadow: 0 20px 40px rgba(194, 80, 122, 0.1); border-color: var(--point-rose); }
@@ -1158,6 +1410,10 @@ export default function App({ role = 'FAN' }: { role?: string }) {
         .vote-btn { width: 100%; padding: 14px; border-radius: 12px; font-weight: 800; font-size: 15px; cursor: pointer; transition: all 0.2s; border: none; }
         .vote-btn.active { background: var(--point-rose); color: white; }
         .vote-btn.disabled { background: var(--border); color: var(--text-sub); cursor: default; }
+        .vote-card.closed { opacity: 0.7; pointer-events: none; position: relative; }
+        .vote-card.closed:hover { transform: none; box-shadow: none; }
+        .vote-closed-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.55); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); z-index: 5; display: flex; align-items: center; justify-content: center; border-radius: 20px; }
+        .vote-closed-badge { background: linear-gradient(135deg, #94A3B8, #64748B); color: white; padding: 10px 28px; border-radius: 24px; font-size: 15px; font-weight: 800; letter-spacing: 1px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); }
 
         /* Attendance Modal Styles */
         .attendance-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 32px 0; }
@@ -1474,6 +1730,15 @@ export default function App({ role = 'FAN' }: { role?: string }) {
           animation: marquee-left 20s linear infinite;
           will-change: transform;
         }
+        @keyframes shimmer {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
+        }
+        .shimmer-card {
+          background: linear-gradient(90deg, #F0EDE9 25%, #E5E1DA 50%, #F0EDE9 75%);
+          background-size: 200% 100%;
+          animation: shimmer 1.5s infinite;
+        }
       `}</style>
 
       {/* Shared Header */}
@@ -1515,9 +1780,9 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                  }
                }}>
                 <Bell size={20} color="var(--text-main)" />
-                {notifications.filter(n => !n.isRead).length > 0 && (
+                {isLoggedIn && (notifications.filter(n => !n.isRead).length + restockSubscribed.size) > 0 && (
                   <div style={{ position: 'absolute', top: '-4px', right: '-4px', background: 'var(--point-rose)', color: 'white', fontSize: '10px', fontWeight: 800, width: '16px', height: '16px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {notifications.filter(n => !n.isRead).length}
+                    {notifications.filter(n => !n.isRead).length + restockSubscribed.size}
                   </div>
                 )}
               </div>
@@ -1529,7 +1794,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                 }
               }}>
                 <ShoppingBag size={20} color="var(--text-main)" />
-                {cartItems.length > 0 && (
+                {isLoggedIn && cartItems.length > 0 && (
                   <div style={{ position: 'absolute', top: '-4px', right: '-4px', background: 'var(--point-rose)', color: 'white', fontSize: '10px', fontWeight: 800, width: '16px', height: '16px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{cartItems.length}</div>
                 )}
               </div>
@@ -1538,7 +1803,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
           {role !== 'ARTIST' && (
             <div
               onClick={() => {
-                if (!getToken()) {
+                if (!isLoggedIn) {
                   setShowLoginModal(true);
                 } else {
                   setActiveTab('MY PAGE');
@@ -1547,7 +1812,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
               }}
               style={{ cursor: 'pointer' }}
             >
-              {getToken() ? (
+              {isLoggedIn ? (
                 <FanAvatar
                   fanId={fanProfile?.fanId ?? getSubFromToken() ?? 0}
                   size={32}
@@ -1600,7 +1865,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       {activeTab === 'NOTIFICATIONS' && (
         <div style={{ background: 'var(--bg-white)', minHeight: '100vh', padding: '120px 40px 60px' }}>
           <div style={{ maxWidth: '600px', margin: '0 auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
               <h1 style={{ fontSize: '32px', fontWeight: 900 }}>알림</h1>
               <button 
                 onClick={() => setActiveTab('HOME')} 
@@ -1609,29 +1874,100 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                 닫기
               </button>
             </div>
+
+            {/* Sub Tabs */}
+            <div style={{ display: 'flex', gap: '24px', borderBottom: '1px solid var(--border)', marginBottom: '32px' }}>
+              <button
+                onClick={() => setNotifSubTab('ACTIVITY')}
+                style={{
+                  padding: '12px 4px',
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '15px',
+                  fontWeight: 800,
+                  color: notifSubTab === 'ACTIVITY' ? 'var(--text-main)' : 'var(--text-sub)',
+                  borderBottom: notifSubTab === 'ACTIVITY' ? '2.5px solid var(--text-main)' : '2.5px solid transparent',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                활동 알림 ({notifications.length})
+              </button>
+              <button
+                onClick={() => setNotifSubTab('RESTOCK')}
+                style={{
+                  padding: '12px 4px',
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '15px',
+                  fontWeight: 800,
+                  color: notifSubTab === 'RESTOCK' ? 'var(--text-main)' : 'var(--text-sub)',
+                  borderBottom: notifSubTab === 'RESTOCK' ? '2.5px solid var(--text-main)' : '2.5px solid transparent',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                대기 중인 알림 ({restockSubscribed.size})
+              </button>
+            </div>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {notifications.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--text-sub)', fontWeight: 600 }}>새로운 알림이 없습니다.</div>
+              {notifSubTab === 'ACTIVITY' ? (
+                notifications.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--text-sub)', fontWeight: 600 }}>새로운 알림이 없습니다.</div>
+                ) : (
+                  [...notifications]
+                    .sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime())
+                    .map(n => (
+                    <div
+                      key={n.id}
+                      onClick={async () => {
+                        if (n.isRead) return;
+                        await markAsRead(n.id).catch(() => {});
+                        setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, isRead: true } : x));
+                      }}
+                      style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '20px', padding: '24px', position: 'relative', opacity: n.isRead ? 0.7 : 1, cursor: n.isRead ? 'default' : 'pointer' }}
+                    >
+                      {!n.isRead && <div style={{ position: 'absolute', top: 24, right: 24, width: '8px', height: '8px', background: 'var(--point-rose)', borderRadius: '50%' }}></div>}
+                      <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--point-rose)', marginBottom: '8px' }}>{n.type}</div>
+                      <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '8px', color: 'var(--text-main)' }}>{n.message}</div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-sub)', fontWeight: 600 }}>{formatTime(n.sentAt)}</div>
+                    </div>
+                  ))
+                )
               ) : (
-                [...notifications]
-                  .sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime())
-                  .map(n => (
-                  <div
-                    key={n.id}
-                    onClick={async () => {
-                      if (n.isRead) return;
-                      await markAsRead(n.id).catch(() => {});
-                      setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, isRead: true } : x));
-                    }}
-                    style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '20px', padding: '24px', position: 'relative', opacity: n.isRead ? 0.7 : 1, cursor: n.isRead ? 'default' : 'pointer' }}
-                  >
-                    {!n.isRead && <div style={{ position: 'absolute', top: 24, right: 24, width: '8px', height: '8px', background: 'var(--point-rose)', borderRadius: '50%' }}></div>}
-                    <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--point-rose)', marginBottom: '8px' }}>{n.type}</div>
-                    <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '8px', color: 'var(--text-main)' }}>{n.message}</div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-sub)', fontWeight: 600 }}>{formatTime(n.sentAt)}</div>
-                  </div>
-                ))
+                subscribedProducts.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--text-sub)', fontWeight: 600 }}>알림 신청한 상품이 없습니다.</div>
+                ) : (
+                  subscribedProducts.map(p => (
+                    <div
+                      key={p.id}
+                      style={{ display: 'flex', gap: '16px', background: 'white', border: '1px solid var(--border)', borderRadius: '20px', padding: '20px', alignItems: 'center' }}
+                    >
+                      <div style={{ width: '64px', height: '64px', borderRadius: '12px', background: p.thumbnailUrl ? 'transparent' : 'var(--bg-cream)', overflow: 'hidden', flexShrink: 0 }}>
+                        {p.thumbnailUrl && <img src={p.thumbnailUrl} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '12px', fontWeight: 800, color: 'var(--point-rose)', marginBottom: '4px' }}>
+                          {storeArtists.find(a => a.id === p.artistId)?.name ?? '아티스트'}
+                        </div>
+                        <h4 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '4px' }}>{p.name}</h4>
+                        <p style={{ fontSize: '13px', color: 'var(--text-sub)' }}>재입고 시 알림이 발송됩니다.</p>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          await unsubscribeRestock(p.id).catch(() => {});
+                          setRestockSubscribed(prev => { const s = new Set(prev); s.delete(p.id); return s; });
+                        }}
+                        style={{ padding: '8px 16px', border: '1px solid #EDE8E2', borderRadius: '8px', background: 'white', fontSize: '12px', fontWeight: 700, color: '#C2507A', cursor: 'pointer', transition: 'all 0.2s' }}
+                        onMouseOver={(e) => { e.currentTarget.style.background = '#FFF5F5'; e.currentTarget.style.borderColor = '#C2507A'; }}
+                        onMouseOut={(e) => { e.currentTarget.style.background = 'white'; e.currentTarget.style.borderColor = '#EDE8E2'; }}
+                      >
+                        신청 취소
+                      </button>
+                    </div>
+                  ))
+                )
               )}
             </div>
           </div>
@@ -1771,12 +2107,22 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                   try {
                     const token = await login(loginEmail, loginPassword);
                     setToken(token);
-                    syncAppRole(token.accessToken);
-                    setShowLoginModal(false);
-                    setLoginEmail('');
-                    setLoginPassword('');
-                    showToast('로그인이 완료되었습니다.');
-                    window.location.reload();
+                    const userRole = syncAppRole(token.accessToken);
+                    if (userRole !== 'FAN') {
+                      navigate(getRoleHomePath(userRole), { replace: true });
+                    } else {
+                      setIsLoggedIn(true);
+                      setShowLoginModal(false);
+                      setLoginEmail('');
+                      setLoginPassword('');
+                      getCart().then(res => setCartItems(res.items)).catch(() => {});
+                      getNotifications().then(setNotifications).catch(() => {});
+                      try {
+                        const saved = localStorage.getItem('fd_restock_subscribed');
+                        if (saved) setRestockSubscribed(new Set(JSON.parse(saved)));
+                      } catch {}
+                      showToast('로그인이 완료되었습니다.');
+                    }
                   } catch {
                     setLoginError('이메일 또는 비밀번호가 올바르지 않습니다.');
                   } finally {
@@ -1874,10 +2220,16 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                   if (signupProfileImg) {
                     localStorage.setItem('fan_profile_image', signupProfileImg);
                   }
+                  setIsLoggedIn(true);
+                  getCart().then(res => setCartItems(res.items)).catch(() => {});
+                  getNotifications().then(setNotifications).catch(() => {});
+                  try {
+                    const saved = localStorage.getItem('fd_restock_subscribed');
+                    if (saved) setRestockSubscribed(new Set(JSON.parse(saved)));
+                  } catch {}
                   showToast('회원가입 및 로그인이 완료되었습니다.');
                   setShowLoginModal(false);
                   setAuthMode('LOGIN');
-                  window.location.reload();
                 } catch {
                   setSignupError('회원가입 도중 에러가 발생했거나 이미 존재하는 이메일입니다.');
                 } finally {
@@ -2207,13 +2559,26 @@ export default function App({ role = 'FAN' }: { role?: string }) {
         {/* --- LOGOUT CONFIRM MODAL --- */}
         {showLogoutModal && (
           <div className="cart-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowLogoutModal(false)}>
-            <div style={{ width: '100%', maxWidth: '400px', background: 'white', borderRadius: '32px', padding: '40px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-              <div style={{ fontSize: '40px', marginBottom: '16px' }}>🥺</div>
-              <h2 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '8px' }}>떠나신다니 아쉬워요</h2>
-              <p style={{ fontSize: '14px', color: 'var(--text-sub)', marginBottom: '32px' }}>정말 로그아웃하시겠어요?</p>
+            <div style={{ width: '100%', maxWidth: '400px', background: 'white', borderRadius: '32px', padding: '40px', textAlign: 'center', boxShadow: '0 20px 48px rgba(0,0,0,0.1)' }} onClick={e => e.stopPropagation()}>
+              <div style={{ fontSize: '40px', marginBottom: '16px' }}>✨</div>
+              <h2 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '12px', letterSpacing: '-0.5px' }}>최애와의 만남을 잠시 멈추시나요?</h2>
+              <p style={{ fontSize: '14px', color: 'var(--text-sub)', marginBottom: '32px', lineHeight: 1.5 }}>아티스트들의 새로운 소식과 한정판 드롭스가<br />팬님을 계속해서 기다리고 있을게요! 💖</p>
               <div style={{ display: 'flex', gap: '12px' }}>
-                <button onClick={() => setShowLogoutModal(false)} style={{ flex: 1, padding: '14px', border: '1px solid var(--border)', borderRadius: '12px', background: 'white', fontSize: '15px', fontWeight: 700, cursor: 'pointer' }}>취소</button>
-                <button onClick={() => { setShowLogoutModal(false); logout(); localStorage.removeItem(ROLE_KEY); window.location.href = '/fan'; }} style={{ flex: 1, padding: '14px', border: 'none', borderRadius: '12px', background: 'var(--text-main)', color: 'white', fontSize: '15px', fontWeight: 700, cursor: 'pointer' }}>나가기</button>
+                <button onClick={() => setShowLogoutModal(false)} style={{ flex: 1, padding: '14px', border: 'none', borderRadius: '12px', background: '#F3F4F6', color: '#4B5563', fontSize: '15px', fontWeight: 700, cursor: 'pointer', transition: 'background 0.2s' }} onMouseOver={(e) => e.currentTarget.style.background = '#E5E7EB'} onMouseOut={(e) => e.currentTarget.style.background = '#F3F4F6'}>돌아가기</button>
+                <button onClick={() => {
+                  setShowLogoutModal(false);
+                  logout();
+                  localStorage.removeItem(ROLE_KEY);
+                  setIsLoggedIn(false);
+                  setFavoriteArtists([]);
+                  setSelectedArtist(null);
+                  setCartItems([]);
+                  setNotifications([]);
+                  setRestockSubscribed(new Set());
+                  setSelectedProduct(null);
+                  setActiveTab('HOME');
+                  showToast('로그아웃되었습니다.');
+                }} style={{ flex: 1, padding: '14px', border: 'none', borderRadius: '12px', background: 'linear-gradient(135deg, var(--point-rose), var(--point-violet))', color: 'white', fontSize: '15px', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(194, 80, 122, 0.25)', transition: 'opacity 0.2s' }} onMouseOver={(e) => e.currentTarget.style.opacity = '0.9'} onMouseOut={(e) => e.currentTarget.style.opacity = '1'}>로그아웃하기</button>
               </div>
             </div>
           </div>
@@ -2587,38 +2952,107 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                       <h2 style={{ fontSize: '24px', fontWeight: 800, marginBottom: '8px' }}>굿즈 투표</h2>
                       <p style={{ color: 'var(--text-sub)', fontSize: '15px' }}>아티스트에게 제작을 제안할 신규 굿즈 디자인을 선택해주세요!</p>
                     </div>
-                    
-                    <div className="vote-grid">
-                      {goodsVotes.flatMap(vote =>
-                        vote.options.map(opt => ({ voteId: vote.id, voteTitle: vote.title, opt }))
-                      ).map(({ voteId, voteTitle, opt }) => (
-                        <div key={`${voteId}-${opt.id}`} className="vote-card">
-                          <div className="vote-img">
-                            {opt.imageUrl && <img src={opt.imageUrl} alt={opt.label} />}
-                          </div>
-                          <div className="vote-body">
-                            <div className="vote-info">
-                              <div className="vote-category">{voteTitle}</div>
-                              <div className="vote-title">{opt.label}</div>
-                              <div className="vote-count">
-                                <ThumbsUp size={14} /> {opt.voteCount.toLocaleString()} 투표됨
-                              </div>
+                    {goodsVotes.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-sub)' }}>
+                        <p style={{ fontSize: '48px', marginBottom: '16px' }}>🗳️</p>
+                        <p style={{ fontSize: '16px', fontWeight: 600 }}>현재 진행 중인 투표가 없습니다</p>
+                        <p style={{ fontSize: '13px', marginTop: '8px', opacity: 0.7 }}>새로운 투표가 열리면 알려드릴게요!</p>
+                      </div>
+                    ) : (
+                      [...goodsVotes].sort((a, b) => (a.active === b.active ? 0 : a.active ? -1 : 1)).map(vote => {
+                        const isClosed = !vote.active;
+                        const totalVotes = vote.options.reduce((sum, o) => sum + o.voteCount, 0);
+                        return (
+                          <div key={vote.id} style={{ marginBottom: '32px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                              <h3 style={{ fontSize: '18px', fontWeight: 800 }}>{vote.title}</h3>
+                              {isClosed ? (
+                                <span style={{
+                                  background: 'linear-gradient(135deg, #94A3B8, #64748B)',
+                                  color: 'white',
+                                  padding: '4px 14px',
+                                  borderRadius: '20px',
+                                  fontSize: '11px',
+                                  fontWeight: 800,
+                                  letterSpacing: '0.5px'
+                                }}>투표 마감</span>
+                              ) : (
+                                <span style={{
+                                  background: 'linear-gradient(135deg, var(--point-rose), var(--point-violet))',
+                                  color: 'white',
+                                  padding: '4px 14px',
+                                  borderRadius: '20px',
+                                  fontSize: '11px',
+                                  fontWeight: 800,
+                                  letterSpacing: '0.5px'
+                                }}>투표 진행중</span>
+                              )}
                             </div>
-                            <button
-                              className={`vote-btn ${hasVoted.includes(voteId) ? 'disabled' : 'active'}`}
-                              disabled={hasVoted.includes(voteId)}
-                              onClick={async () => {
-                                if (!getToken()) { setShowLoginModal(true); return; }
-                                await castBallot(voteId, opt.id).catch(() => {});
-                                setHasVoted(prev => [...prev, voteId]);
-                              }}
-                            >
-                              {hasVoted.includes(voteId) ? '투표 완료' : '투표하기'}
-                            </button>
+                            {!isClosed && (
+                              <p style={{ fontSize: '13px', color: 'var(--text-sub)', marginBottom: '16px' }}>
+                                마감일: {new Date(vote.endsAt).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                            )}
+                            <div className="vote-grid">
+                              {vote.options.map(option => {
+                                const pct = totalVotes > 0 ? Math.round((option.voteCount / totalVotes) * 100) : 0;
+                                return (
+                                  <div key={option.id} className={`vote-card${isClosed ? ' closed' : ''}`}>
+                                    {isClosed && (
+                                      <div className="vote-closed-overlay">
+                                        <div className="vote-closed-badge">투표 마감</div>
+                                      </div>
+                                    )}
+                                    <div className="vote-img" style={{ background: `hsl(${option.id * 60}, 30%, 92%)` }}>
+                                      {option.imageUrl ? (
+                                        <img src={option.imageUrl} alt={option.label} />
+                                      ) : (
+                                        <span style={{ fontSize: '64px', opacity: 0.5 }}>🎁</span>
+                                      )}
+                                    </div>
+                                    <div className="vote-body">
+                                      <div className="vote-info">
+                                        <div className="vote-category">{isClosed ? '마감' : '투표'}</div>
+                                        <div className="vote-title">{option.label}</div>
+                                        <div className="vote-count">
+                                          <span>🗳️ {option.voteCount}표</span>
+                                          {totalVotes > 0 && <span style={{ opacity: 0.7 }}>({pct}%)</span>}
+                                        </div>
+                                        {totalVotes > 0 && (
+                                          <div style={{ marginTop: '12px', height: '6px', borderRadius: '3px', background: 'var(--border)', overflow: 'hidden' }}>
+                                            <div style={{ width: `${pct}%`, height: '100%', borderRadius: '3px', background: isClosed ? '#94A3B8' : 'var(--point-rose)', transition: 'width 0.5s ease' }} />
+                                          </div>
+                                        )}
+                                      </div>
+                                      {!isClosed ? (
+                                        <button
+                                          className="vote-btn active"
+                                          onClick={async () => {
+                                            if (!getToken()) { setShowLoginModal(true); return; }
+                                            try {
+                                              await castBallot(vote.id, option.id);
+                                              const id = selectedArtist!.id as number;
+                                              const res = await getVotes(id);
+                                              setGoodsVotes(res.items);
+                                            } catch { /* already voted or error */ }
+                                          }}
+                                        >
+                                          투표하기
+                                        </button>
+                                      ) : (
+                                        <button className="vote-btn disabled" disabled>
+                                          투표 마감
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
+                        );
+                      })
+                    )}
                   </div>
                 )}
 
@@ -2797,23 +3231,49 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                     {mainBanners.map((banner, i) => (
                       <div
                         key={banner.id}
-                        onClick={() => { if (banner.landingUrl) window.open(banner.landingUrl, '_blank'); }}
+                        onClick={() => handleBannerClick(banner)}
                         style={{
                           position: 'absolute',
                           inset: 0,
                           background: banner.imageUrl
                             ? `url(${banner.imageUrl}) center/cover no-repeat`
-                            : 'linear-gradient(135deg, #C8BEB6, #A89890)',
+                            : (banner.landingUrl && banner.landingUrl.startsWith('linear-gradient')
+                                ? banner.landingUrl
+                                : 'linear-gradient(135deg, #C8BEB6, #A89890)'),
                           opacity: mainBannerIdx === i ? 1 : 0,
                           transition: 'opacity 0.55s ease',
                           pointerEvents: mainBannerIdx === i ? 'auto' : 'none',
-                          cursor: banner.landingUrl ? 'pointer' : 'default',
+                          cursor: 'pointer',
                         }}
                       >
-                        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(26,26,26,0.5) 0%, transparent 50%)' }} />
-                        <div style={{ position: 'absolute', bottom: '40px', left: '40px', textAlign: 'left', color: 'white' }}>
-                          <span style={{ background: 'white', color: 'var(--text-main)', padding: '6px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: 800, letterSpacing: '2px', display: 'inline-block', marginBottom: '16px' }}>FANDROPS</span>
-                          <h2 style={{ fontSize: '32px', fontWeight: 800, letterSpacing: '-1px' }}>{banner.title}</h2>
+                        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.4) 100%)' }} />
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '0 60px', color: 'white', textAlign: 'left' }}>
+                          <div style={{ marginBottom: '16px' }}>
+                            <span style={{
+                              background: (banner as any).badgeColor || 'rgba(255,255,255,0.2)',
+                              color: 'white',
+                              border: '1px solid rgba(255, 255, 255, 0.3)',
+                              backdropFilter: 'blur(8px)',
+                              WebkitBackdropFilter: 'blur(8px)',
+                              padding: '6px 14px',
+                              borderRadius: '20px',
+                              fontSize: '11px',
+                              fontWeight: 800,
+                              letterSpacing: '2px',
+                              display: 'inline-block',
+                              boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                            }}>
+                              {(banner as any).badge || 'FANDROPS'}
+                            </span>
+                          </div>
+                          <h2 style={{ fontSize: '36px', fontWeight: 900, letterSpacing: '-1.5px', marginBottom: '12px', lineHeight: 1.2, textShadow: '0 4px 16px rgba(0,0,0,0.2)' }}>
+                            {banner.title}
+                          </h2>
+                          {(banner as any).subtitle && (
+                            <p style={{ fontSize: '15px', fontWeight: 500, opacity: 0.85, letterSpacing: '-0.3px', maxWidth: '640px', lineHeight: 1.5, textShadow: '0 2px 8px rgba(0,0,0,0.15)' }}>
+                              {(banner as any).subtitle}
+                            </p>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -2891,16 +3351,32 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                     <button
                       style={{ background: 'white', color: 'var(--point-rose)', border: 'none', padding: '16px 32px', borderRadius: '12px', fontSize: '14px', fontWeight: 800, cursor: 'pointer', transition: 'transform 0.25s', boxShadow: '0 8px 16px rgba(0,0,0,0.1)' }}
                       onClick={() => {
-                        subscribeRestock(nextDrop.id).then(() => showToast('알림 신청 완료')).catch(() => showToast('알림 신청 실패', 'error'));
+                        if (!getToken()) { setShowLoginModal(true); return; }
+                        const pid = nextDrop.id;
+                        if (restockSubscribed.has(pid)) {
+                          unsubscribeRestock(pid)
+                            .then(() => {
+                              setRestockSubscribed(prev => { const s = new Set(prev); s.delete(pid); return s; });
+                              showToast('알림 취소 완료');
+                            })
+                            .catch(() => showToast('알림 취소 실패', 'error'));
+                        } else {
+                          subscribeRestock(pid)
+                            .then(() => {
+                              setRestockSubscribed(prev => new Set(prev).add(pid));
+                              showToast('알림 신청 완료');
+                            })
+                            .catch(() => showToast('알림 신청 실패', 'error'));
+                        }
                       }}
-                    >알림 받기</button>
+                    >{(isLoggedIn && restockSubscribed.has(nextDrop.id)) ? '알림 취소' : '알림 받기'}</button>
                   </div>
                 </div>
               );
             })()}
 
             {/* My Artist Section */}
-            {getToken() && (
+            {isLoggedIn && (
               <section className="community-bar reveal">
                 <div className="section-header" style={{ marginBottom: 20 }}>
                   <div className="s-title-group">
@@ -2992,7 +3468,11 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                   <div className="view-all" onClick={() => setActiveTab('STORE')} style={{ fontSize: '13px', fontWeight: 700, color: 'var(--point-rose)', cursor: 'pointer' }}>전체 보기 →</div>
                 </div>
                 <div className="grid-3">
-                  {recommendedProducts.length === 0 ? (
+                  {recommendedProductsLoading ? (
+                    Array.from({ length: 3 }).map((_, idx) => (
+                      <div key={`shimmer-${idx}`} className="card shimmer-card" style={{ height: '320px', borderRadius: '24px' }}></div>
+                    ))
+                  ) : recommendedProducts.length === 0 ? (
                     <p style={{ color: 'var(--text-sub)', fontSize: '14px', gridColumn: '1 / -1', textAlign: 'center', padding: '32px 0' }}>등록된 상품이 없습니다.</p>
                   ) : recommendedProducts.map((item, idx) => (
                     <div key={item.id} className={`card reveal delay-${(idx % 3) * 100}`} style={{ cursor: 'pointer' }}
@@ -3018,73 +3498,134 @@ export default function App({ role = 'FAN' }: { role?: string }) {
         )}
 
         {/* --- ARTISTS PAGE --- */}
-        {!selectedArtist && activeTab === 'ARTISTS' && (
-          <div className="page-content reveal wrapper">
-            <div className="section-header">
-              <div className="s-title-group">
-                <h1 style={{fontSize: '36px', fontWeight: 800, letterSpacing: '-1px', marginBottom: 12}}>아티스트 & 크리에이터</h1>
-                <p style={{fontSize: '16px', color: 'var(--text-sub)'}}>좋아하는 버추얼 그룹과 아이돌을 찾아보고 팔로우하세요.</p>
-              </div>
-            </div>
+        {!selectedArtist && activeTab === 'ARTISTS' && (() => {
+          const artistMetadata: Record<number, { agency: string; category: '아티스트' | '크리에이터' | '버튜버' }> = {
+            1: { agency: 'starlight 엔터', category: '아티스트' },
+            2: { agency: 'starlight 엔터', category: '아티스트' },
+            3: { agency: 'starlight 엔터', category: '아티스트' },
+            4: { agency: '글로벌 스타 엔터', category: '아티스트' },
+            5: { agency: '스타뮤직 엔터테인먼트', category: '아티스트' },
+            6: { agency: '스타뮤직 엔터테인먼트', category: '아티스트' },
+            7: { agency: '스타뮤직 엔터테인먼트', category: '아티스트' },
+            8: { agency: '샌드박스 크리에이티브', category: '크리에이터' },
+            9: { agency: '샌드박스 크리에이티브', category: '크리에이터' },
+            10: { agency: '샌드박스 크리에이티브', category: '크리에이터' },
+            11: { agency: '샌드박스 크리에이티브', category: '크리에이터' },
+            12: { agency: '브이유니버스', category: '버튜버' },
+            13: { agency: '브이유니버스', category: '버튜버' },
+            14: { agency: '브이유니버스', category: '버튜버' },
+            15: { agency: '브이유니버스', category: '버튜버' }
+          };
 
-            <div className="grid-4">
-              {storeArtists.map((artist, idx) => {
-                const displayArtist = toFanArtistEntry(artist);
-                const isFollowing = favoriteArtists.some(a => a.id === artist.id);
-                return (
-                  <div className={`artist-card reveal delay-${(idx % 4) * 100}`} key={artist.id}
-                    onClick={() => { setSelectedArtist(displayArtist); setBoardTab('FEED'); }}>
-                    <ArtistAvatar artist={displayArtist} className="ac-avatar" />
-                    <div className="ac-name">{artist.name}</div>
-                    <div className="ac-desc">{(artist.fanCount ?? 0).toLocaleString()} 팔로워</div>
-                    <button className="ac-btn" onClick={async e => {
-                      e.stopPropagation();
-                      if (!getToken()) { setShowLoginModal(true); return; }
-                      if (isFollowing) {
-                        setFavoriteArtists(prev => prev.filter(a => a.id !== artist.id));
-                        setStoreArtists(prev => prev.map(a => a.id === artist.id ? { ...a, fanCount: Math.max(0, (a.fanCount ?? 0) - 1) } : a));
-                        try {
-                          await unfollowArtist(artist.id);
-                          setUnfollowedArtist(displayArtist);
-                          setShowUnfollowModal(true);
-                        }
-                        catch { 
-                          setFavoriteArtists(prev => [...prev, displayArtist]);
-                          setStoreArtists(prev => prev.map(a => a.id === artist.id ? { ...a, fanCount: (a.fanCount ?? 0) + 1 } : a));
-                          showToast('언팔로우 처리에 실패했습니다.', 'error');
-                        }
-                      } else {
-                        setFavoriteArtists(prev => [...prev, displayArtist]);
-                        setStoreArtists(prev => prev.map(a => a.id === artist.id ? { ...a, fanCount: (a.fanCount ?? 0) + 1 } : a));
-                        try {
-                          const followedId = artist.id;
-                          await followArtist(followedId);
-                          if ((selectedArtist as FanArtistEntry | null)?.id !== followedId) {
-                            setWelcomeArtist(displayArtist);
-                            setShowWelcomeModal(true);
-                          }
-                        }
-                        catch {
-                          setFavoriteArtists(prev => prev.filter(a => a.id !== artist.id));
-                          setStoreArtists(prev => prev.map(a => a.id === artist.id ? { ...a, fanCount: Math.max(0, (a.fanCount ?? 0) - 1) } : a));
-                          showToast('팔로우 처리에 실패했습니다.', 'error');
-                        }
-                      }
-                    }}>
-                      {isFollowing ? '✓ 팔로우 중' : '+ 팔로우'}
-                    </button>
+          const groupedByAgency: Record<string, typeof storeArtists> = {};
+          storeArtists.forEach(artist => {
+            const meta = artistMetadata[artist.id] || { agency: '기타 에이전시', category: '아티스트' };
+            if (!groupedByAgency[meta.agency]) {
+              groupedByAgency[meta.agency] = [];
+            }
+            groupedByAgency[meta.agency].push(artist);
+          });
+
+          return (
+            <div className="page-content reveal wrapper">
+              <div className="section-header">
+                <div className="s-title-group">
+                  <h1 style={{fontSize: '36px', fontWeight: 800, letterSpacing: '-1px', marginBottom: 12}}>아티스트 & 크리에이터</h1>
+                  <p style={{fontSize: '16px', color: 'var(--text-sub)'}}>소속 에이전시별로 좋아하는 버추얼 그룹, 크리에이터 및 아티스트를 찾아보고 팔로우하세요.</p>
+                </div>
+              </div>
+
+              {Object.entries(groupedByAgency).map(([agencyName, artists]) => (
+                <section key={agencyName} style={{ marginBottom: '48px' }}>
+                  <h2 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '20px', paddingBottom: '8px', borderBottom: '2px solid var(--border)', color: '#111', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span>{agencyName}</span>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--point-rose)', background: 'rgba(194, 80, 122, 0.08)', padding: '2px 8px', borderRadius: '12px' }}>
+                      {artists.length}
+                    </span>
+                  </h2>
+                  <div className="grid-4">
+                    {artists.map((artist) => {
+                      const displayArtist = toFanArtistEntry(artist);
+                      const isFollowing = favoriteArtists.some(a => a.id === artist.id);
+                      const meta = artistMetadata[artist.id] || { category: '아티스트' };
+                      return (
+                        <div className={`artist-card reveal`} key={artist.id}
+                          onClick={() => { setSelectedArtist(displayArtist); setBoardTab('FEED'); }}
+                          style={{ position: 'relative' }}
+                        >
+                          <span style={{
+                            position: 'absolute',
+                            top: '16px',
+                            right: '16px',
+                            fontSize: '11px',
+                            fontWeight: 800,
+                            padding: '4px 8px',
+                            borderRadius: '12px',
+                            background: meta.category === '버튜버' ? '#E8D7FF' : meta.category === '크리에이터' ? '#FFE3E3' : '#E0F2FE',
+                            color: meta.category === '버튜버' ? '#7F77DD' : meta.category === '크리에이터' ? '#FF6B6B' : '#0284C7',
+                            letterSpacing: '-0.2px'
+                          }}>
+                            {meta.category}
+                          </span>
+                          <ArtistAvatar artist={displayArtist} className="ac-avatar" />
+                          <div className="ac-name">{artist.name}</div>
+                          <div className="ac-desc" style={{ marginBottom: '4px' }}>{(artist.fanCount ?? 0).toLocaleString()} 팔로워</div>
+                          <div style={{ fontSize: '11px', color: 'var(--text-sub)', marginBottom: '16px', fontWeight: 500 }}>
+                            {meta.category === '버튜버' ? 'Virtual YouTuber' : meta.category === '크리에이터' ? 'Content Creator' : 'Musical Artist'}
+                          </div>
+                          <button className="ac-btn" onClick={async e => {
+                            e.stopPropagation();
+                            if (!getToken()) { setShowLoginModal(true); return; }
+                            if (isFollowing) {
+                              setFavoriteArtists(prev => prev.filter(a => a.id !== artist.id));
+                              setStoreArtists(prev => prev.map(a => a.id === artist.id ? { ...a, fanCount: Math.max(0, (a.fanCount ?? 0) - 1) } : a));
+                              try {
+                                await unfollowArtist(artist.id);
+                                setUnfollowedArtist(displayArtist);
+                                setShowUnfollowModal(true);
+                              }
+                              catch { 
+                                setFavoriteArtists(prev => [...prev, displayArtist]);
+                                setStoreArtists(prev => prev.map(a => a.id === artist.id ? { ...a, fanCount: (a.fanCount ?? 0) + 1 } : a));
+                                showToast('언팔로우 처리에 실패했습니다.', 'error');
+                              }
+                            } else {
+                              setFavoriteArtists(prev => [...prev, displayArtist]);
+                              setStoreArtists(prev => prev.map(a => a.id === artist.id ? { ...a, fanCount: (a.fanCount ?? 0) + 1 } : a));
+                              try {
+                                const followedId = artist.id;
+                                await followArtist(followedId);
+                                if ((selectedArtist as FanArtistEntry | null)?.id !== followedId) {
+                                  setWelcomeArtist(displayArtist);
+                                  setShowWelcomeModal(true);
+                                }
+                              }
+                              catch {
+                                setFavoriteArtists(prev => prev.filter(a => a.id !== artist.id));
+                                setStoreArtists(prev => prev.map(a => a.id === artist.id ? { ...a, fanCount: Math.max(0, (a.fanCount ?? 0) - 1) } : a));
+                                showToast('팔로우 처리에 실패했습니다.', 'error');
+                              }
+                            }
+                          }}>
+                            {isFollowing ? '✓ 팔로우 중' : '+ 팔로우'}
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
+                </section>
+              ))}
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* --- STORE PAGE --- */}
         {!selectedArtist && activeTab === 'STORE' && (
           <div className="page-content reveal wrapper">
-            {selectedProduct ? (
-              
+            {selectedProduct ? (() => {
+              const isSoldOut = selectedProduct.status === 'SOLD_OUT' || selectedProduct.availableQty <= 0;
+              const isUpcoming = selectedProduct.dropsStartAt != null && new Date(selectedProduct.dropsStartAt) > new Date();
+              return (
               <div className="store-detail" style={{ maxWidth: '1000px', margin: '0 auto' }}>
                 <button className="c-btn" style={{ background: 'var(--bg-white)', border: '1px solid var(--border)', marginBottom: '32px', whiteSpace: 'nowrap' }} onClick={() => setSelectedProduct(null)}>
                   <ChevronLeft size={16} /> 스토어
@@ -3131,7 +3672,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                       </div>
                       {showOptionDropdown && (
                         <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1px solid var(--border)', borderRadius: '8px', marginTop: '4px', zIndex: 10 }}>
-                          {['버전 A', '버전 B', '버전 C'].map(opt => (
+                          {['Version A', 'Version B', 'Version C'].map(opt => (
                             <div key={opt} onClick={() => { setProductOption(opt); setShowOptionDropdown(false); }} style={{ padding: '16px', cursor: 'pointer', borderBottom: '1px solid var(--border)' }}>{opt}</div>
                           ))}
                         </div>
@@ -3141,7 +3682,11 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                     <hr style={{ borderTop: '1px solid var(--border)', borderBottom: 'none', margin: '24px 0' }} />
                     
                     {/* Quantity & Stock */}
-                    {selectedProduct.status !== 'SOLD_OUT' ? (
+                    {isUpcoming ? (
+                      <div style={{ marginBottom: '24px', fontSize: '18px', fontWeight: 800, color: '#7F77DD' }}>
+                        오픈 예정 ({new Date(selectedProduct.dropsStartAt!).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 오픈)
+                      </div>
+                    ) : !isSoldOut ? (
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
                           <button onClick={() => setProductQty(Math.max(1, productQty - 1))} style={{ padding: '12px 16px', background: 'var(--bg-cream)', fontWeight: 800 }}>-</button>
@@ -3164,7 +3709,14 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                     <hr style={{ borderTop: '1px solid var(--border)', borderBottom: 'none', margin: '24px 0' }} />
 
                 <div style={{ display: 'flex', gap: '12px', marginBottom: '32px' }}>
-                  {selectedProduct.status === 'SOLD_OUT' ? (
+                  {isUpcoming ? (
+                    <button
+                      disabled
+                      style={{ flex: 1, padding: '16px', borderRadius: '12px', background: '#7F77DD', color: 'white', fontWeight: 800, textAlign: 'center', cursor: 'not-allowed', opacity: 0.8 }}
+                    >
+                      오픈 예정
+                    </button>
+                  ) : isSoldOut ? (
                     <button
                       onClick={async () => {
                         if (!getToken()) { setShowLoginModal(true); return; }
@@ -3177,7 +3729,23 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                           setRestockSubscribed(prev => new Set(prev).add(pid));
                         }
                       }}
-                      style={{ flex: 1, padding: '16px', borderRadius: '12px', background: restockSubscribed.has(selectedProduct.id) ? '#888' : '#111', color: 'white', fontWeight: 800, textAlign: 'center', cursor: 'pointer' }}
+                      style={{
+                        flex: 1,
+                        padding: '16px',
+                        borderRadius: '12px',
+                        background: restockSubscribed.has(selectedProduct.id) 
+                          ? '#F3F4F6' 
+                          : 'linear-gradient(135deg, var(--point-rose), var(--point-violet))',
+                        color: restockSubscribed.has(selectedProduct.id) ? '#6B7280' : 'white',
+                        border: restockSubscribed.has(selectedProduct.id) ? '1px solid #E5E7EB' : 'none',
+                        fontWeight: 800,
+                        textAlign: 'center',
+                        cursor: 'pointer',
+                        boxShadow: restockSubscribed.has(selectedProduct.id) 
+                          ? 'none' 
+                          : '0 4px 12px rgba(194, 80, 122, 0.25)',
+                        transition: 'all 0.2s'
+                      }}
                     >
                       {restockSubscribed.has(selectedProduct.id) ? '알림 취소' : '재입고 알림 신청하기'}
                     </button>
@@ -3315,7 +3883,8 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                   </div>
                 )}
               </div>
-            ) : (
+              );
+            })() : (
               
               <>
 
@@ -3336,7 +3905,11 @@ export default function App({ role = 'FAN' }: { role?: string }) {
               onClick={() => {
                 if (banner.productId) {
                   const product = storeItems.find(p => p.id === banner.productId);
-                  if (product) setSelectedProduct(product);
+                  if (product) {
+                    setSelectedProduct(product);
+                  } else {
+                    getProduct(banner.productId).then(setSelectedProduct).catch(console.error);
+                  }
                 } else if (banner.landingUrl) {
                   window.open(banner.landingUrl, '_blank');
                 }
@@ -3404,40 +3977,79 @@ export default function App({ role = 'FAN' }: { role?: string }) {
        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
          <h3 style={{ fontSize: '18px', fontWeight: '800', color: '#111', margin: 0 }}>마이 아티스트</h3>
        </div>
-       <div style={{ display: 'flex', gap: '20px', overflowX: 'auto', paddingBottom: '40px', marginTop: '-15px', alignItems: 'flex-start', paddingTop: '20px' }} className="hide-scrollbar">
-          {/* ALL option */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', cursor: 'pointer', minWidth: '72px' }} onClick={() => setStoreArtist('ALL')}>
-             <div style={{ width: '64px', height: '64px', borderRadius: '50%', border: (storeArtist === 'ALL') ? '2px solid #111' : '1px solid #E5E5E5', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#FAFAFA', transition: 'all 0.2s' }}>
-                <span style={{ fontSize: '15px', fontWeight: 800 }}>ALL</span>
-             </div>
-             <span style={{ fontSize: '13px', color: '#111', fontWeight: 600 }}>전체</span>
-          </div>
+        <div style={{ display: 'flex', gap: '24px', overflowX: 'auto', paddingBottom: '20px', alignItems: 'flex-start', paddingTop: '10px' }} className="hide-scrollbar">
+           {/* ALL option */}
+           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center', cursor: 'pointer', minWidth: '72px', alignSelf: 'flex-end', paddingBottom: '8px' }} onClick={() => setStoreArtist('ALL')}>
+              <div style={{ width: '64px', height: '64px', borderRadius: '50%', border: (storeArtist === 'ALL') ? '2.5px solid var(--point-rose)' : '1px solid #E5E5E5', display: 'flex', alignItems: 'center', justifyContent: 'center', background: (storeArtist === 'ALL') ? 'linear-gradient(135deg, rgba(194, 80, 122, 0.1), rgba(127, 119, 221, 0.1))' : '#FAFAFA', transition: 'all 0.2s', boxShadow: (storeArtist === 'ALL') ? '0 4px 12px rgba(194, 80, 122, 0.15)' : 'none' }}>
+                 <span style={{ fontSize: '14px', fontWeight: 900, color: (storeArtist === 'ALL') ? 'var(--point-rose)' : '#111' }}>ALL</span>
+              </div>
+              <span style={{ fontSize: '13px', color: '#111', fontWeight: 600 }}>전체</span>
+           </div>
 
-          {storeArtists.map(a => (
-                        <div key={a.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', cursor: 'pointer', minWidth: '72px' }} onClick={() => {
-                          if (activeTab === 'STORE') setStoreArtist(String(a.id));
-                        }}>
-                           <div style={{ position: 'relative' }}>
-                             {a.profileImageUrl ? (
-                               <img src={a.profileImageUrl} alt={a.name} style={{ width: '64px', height: '64px', borderRadius: '50%', objectFit: 'cover', border: (storeArtist === String(a.id)) ? '2px solid #111' : '1px solid #E5E5E5', transition: 'all 0.2s' }} />
-                             ) : (
-                               <div style={{ width: '64px', height: '64px', borderRadius: '50%', border: (storeArtist === String(a.id)) ? '2px solid #111' : '1px solid #E5E5E5', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#FAFAFA', whiteSpace: 'nowrap', transition: 'all 0.2s', fontWeight: 800, fontSize: '14px' }}>
-                                 {a.name.substring(0, 3)}
-                               </div>
-                             )}
+           {/* Grouped by Agency */}
+           {(() => {
+             const artistMetadata: Record<number, { agency: string }> = {
+               1: { agency: '테스트 기획사' },
+               2: { agency: '테스트 기획사' },
+               3: { agency: '테스트 기획사' },
+               4: { agency: '글로벌 스타 엔터' },
+               5: { agency: '스타뮤직 엔터테인먼트' },
+               6: { agency: '스타뮤직 엔터테인먼트' },
+               7: { agency: '스타뮤직 엔터테인먼트' },
+               8: { agency: '샌드박스 크리에이티브' },
+               9: { agency: '샌드박스 크리에이티브' },
+               10: { agency: '샌드박스 크리에이티브' },
+               11: { agency: '샌드박스 크리에이티브' },
+               12: { agency: '브이유니버스' },
+               13: { agency: '브이유니버스' },
+               14: { agency: '브이유니버스' },
+               15: { agency: '브이유니버스' }
+             };
+
+             const grouped: Record<string, typeof storeArtists> = {};
+             storeArtists.forEach(a => {
+               const meta = artistMetadata[a.id] || { agency: '기타 에이전시' };
+               if (!grouped[meta.agency]) {
+                 grouped[meta.agency] = [];
+               }
+               grouped[meta.agency].push(a);
+             });
+
+             return Object.entries(grouped).map(([agency, list]) => (
+               <div key={agency} style={{ display: 'flex', flexDirection: 'column', gap: '10px', borderLeft: '1px solid #E5E5E5', paddingLeft: '20px' }}>
+                 <div style={{ display: 'flex', alignItems: 'center' }}>
+                   <span style={{ fontSize: '11px', fontWeight: 800, color: '#7F77DD', background: '#F5F4FF', padding: '3px 8px', borderRadius: '12px', border: '1px solid rgba(127, 119, 221, 0.15)', letterSpacing: '0.2px', whiteSpace: 'nowrap' }}>
+                     {agency}
+                   </span>
+                 </div>
+                 <div style={{ display: 'flex', gap: '16px' }}>
+                   {list.map(a => (
+                     <div key={a.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', cursor: 'pointer', minWidth: '72px' }} onClick={() => setStoreArtist(String(a.id))}>
+                       <div style={{ position: 'relative' }}>
+                         {a.profileImageUrl ? (
+                           <img src={a.profileImageUrl} alt={a.name} style={{ width: '64px', height: '64px', borderRadius: '50%', objectFit: 'cover', border: (storeArtist === String(a.id)) ? '2.5px solid var(--point-rose)' : '1px solid #E5E5E5', transition: 'all 0.2s', boxShadow: (storeArtist === String(a.id)) ? '0 4px 12px rgba(194, 80, 122, 0.2)' : 'none' }} />
+                         ) : (
+                           <div style={{ width: '64px', height: '64px', borderRadius: '50%', border: (storeArtist === String(a.id)) ? '2.5px solid var(--point-rose)' : '1px solid #E5E5E5', display: 'flex', alignItems: 'center', justifyContent: 'center', background: (storeArtist === String(a.id)) ? 'linear-gradient(135deg, rgba(194, 80, 122, 0.1), rgba(127, 119, 221, 0.1))' : '#FAFAFA', whiteSpace: 'nowrap', transition: 'all 0.2s', fontWeight: 800, fontSize: '14px', color: (storeArtist === String(a.id)) ? 'var(--point-rose)' : '#111' }}>
+                             {a.name.substring(0, 3)}
                            </div>
-                           <span style={{ fontSize: '13px', color: '#111', fontWeight: 600, whiteSpace: 'nowrap' }}>{a.name}</span>
-                        </div>
-          ))}
+                         )}
+                       </div>
+                       <span style={{ fontSize: '13px', color: '#111', fontWeight: (storeArtist === String(a.id)) ? 800 : 600, whiteSpace: 'nowrap' }}>{a.name}</span>
+                     </div>
+                   ))}
+                 </div>
+               </div>
+             ));
+           })()}
 
-          {/* ADD MORE button at the end */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', cursor: 'pointer', minWidth: '72px' }} onClick={() => setShowArtistSearch(true)}>
-             <div style={{ width: '64px', height: '64px', borderRadius: '50%', border: '1px dashed #DDD', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#FAFAFA' }}>
-                <Plus size={24} color="#888" />
-             </div>
-             <span style={{ fontSize: '13px', color: '#888', fontWeight: 600 }}>조회</span>
-          </div>
-       </div>
+           {/* ADD MORE button at the end */}
+           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center', cursor: 'pointer', minWidth: '72px', borderLeft: '1px solid #E5E5E5', paddingLeft: '16px', alignSelf: 'flex-end', paddingBottom: '8px' }} onClick={() => setShowArtistSearch(true)}>
+              <div style={{ width: '64px', height: '64px', borderRadius: '50%', border: '1px dashed #DDD', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#FAFAFA' }}>
+                 <Plus size={24} color="#888" />
+              </div>
+              <span style={{ fontSize: '13px', color: '#888', fontWeight: 600 }}>조회</span>
+           </div>
+        </div>
     </div>
   </div>
   <div style={{ padding: '16px 0 32px 0' }}>
@@ -3449,9 +4061,9 @@ export default function App({ role = 'FAN' }: { role?: string }) {
           style={{
             padding: '8px 18px',
             borderRadius: '20px',
-            border: storeProductType === 'regular' ? '1px solid var(--text-main)' : '1px solid #EDE8E2',
-            background: storeProductType === 'regular' ? 'var(--text-main)' : 'white',
-            color: storeProductType === 'regular' ? 'white' : 'var(--text-main)',
+            border: storeProductType === 'regular' ? '1.5px solid #7F77DD' : '1px solid #EDE8E2',
+            background: storeProductType === 'regular' ? '#7F77DD' : 'white',
+            color: storeProductType === 'regular' ? 'white' : '#7F77DD',
             fontSize: '13px',
             fontWeight: 800,
             cursor: 'pointer',
@@ -3479,6 +4091,26 @@ export default function App({ role = 'FAN' }: { role?: string }) {
           }}
         >
           드롭스 🔥
+        </button>
+        <button 
+          onClick={() => { setStoreProductType('soldout'); setStorePage(1); }}
+          style={{
+            padding: '8px 18px',
+            borderRadius: '20px',
+            border: storeProductType === 'soldout' ? '1px solid #E11D48' : '1px solid #EDE8E2',
+            background: storeProductType === 'soldout' ? '#E11D48' : 'white',
+            color: storeProductType === 'soldout' ? 'white' : '#E11D48',
+            fontSize: '13px',
+            fontWeight: 800,
+            cursor: 'pointer',
+            boxShadow: storeProductType === 'soldout' ? '0 4px 12px rgba(225, 29, 72, 0.2)' : 'none',
+            transition: 'all 0.25s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px'
+          }}
+        >
+          품절 🚫
         </button>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1, minWidth: '300px', justifyContent: 'flex-end' }}>
@@ -3534,105 +4166,135 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       );
 
       const renderGridCard = (item: ProductListItem) => {
-        const isSoldOut = item.status === 'SOLD_OUT';
+        const isSoldOut = item.status === 'SOLD_OUT' || item.availableQty <= 0;
         const isDrops = item.dropsStartAt != null;
+        const isUpcoming = isDrops && item.dropsStartAt && new Date(item.dropsStartAt) > new Date();
         const progress = isSoldOut ? 100 : item.totalQty > 0 ? (item.availableQty / item.totalQty) * 100 : 0;
         return (
           <div
             key={item.id}
-            className="card reveal"
+            className={`card reveal${isDrops ? ' is-drops' : ''}${isUpcoming ? ' is-upcoming' : ''}`}
             style={{
               opacity: isSoldOut ? 0.6 : 1,
-              cursor: 'pointer',
-              ...(isDrops && {
-                background: 'linear-gradient(160deg, #13111C 0%, #1E1535 100%)',
-                boxShadow: '0 0 0 1.5px rgba(194,80,122,0.5), 0 8px 32px rgba(127,119,221,0.2)',
-                border: 'none',
-              })
+              cursor: 'pointer'
             }}
             onClick={() => { setSelectedProduct(item); window.scrollTo({ top: 0, behavior: 'instant' }); }}
           >
-            {isDrops && <div style={{ height: '3px', background: 'linear-gradient(90deg, #C2507A 0%, #7F77DD 100%)', borderRadius: '999px 999px 0 0' }} />}
-            <div style={{ position: 'relative', height: '220px', background: item.thumbnailUrl ? 'transparent' : (isDrops ? 'linear-gradient(135deg, #0D0A18, #2D1B40)' : 'var(--bg-cream)'), overflow: 'hidden' }}>
-              {isDrops && <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(194,80,122,0.07), rgba(127,119,221,0.1))', zIndex: 1, pointerEvents: 'none' }} />}
+            {isDrops && (
+              <div style={{
+                height: '3px',
+                background: isUpcoming
+                  ? 'linear-gradient(90deg, #7F77DD 0%, #A78BFA 100%)'
+                  : 'linear-gradient(90deg, #C2507A 0%, #7F77DD 100%)',
+                borderRadius: '999px 999px 0 0'
+              }} />
+            )}
+            <div style={{ position: 'relative', height: '220px', background: item.thumbnailUrl ? 'transparent' : (isDrops ? 'linear-gradient(135deg, #F9F8FF, #ECE9F7)' : 'var(--bg-cream)'), overflow: 'hidden' }}>
+              {isDrops && <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(194,80,122,0.03), rgba(127,119,221,0.06))', zIndex: 1, pointerEvents: 'none' }} />}
               {item.thumbnailUrl && <img src={item.thumbnailUrl} alt={item.name} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
-              <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 2, background: isDrops ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.9)', backdropFilter: isDrops ? 'blur(8px)' : undefined, WebkitBackdropFilter: isDrops ? 'blur(8px)' : undefined, color: isDrops ? 'rgba(255,255,255,0.9)' : 'inherit', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 800 }}>
+              <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 2, background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', color: '#111', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 800, border: '1px solid rgba(0,0,0,0.05)' }}>
                 {storeArtists.find(a => a.id === item.artistId)?.name ?? `Artist #${item.artistId}`}
               </div>
-              {item.availableQty > 0 && !isSoldOut && (
-                <div style={{ position: 'absolute', top: 12, right: 12, zIndex: 2, background: (item.availableQty / Math.max(1, item.totalQty)) <= 0.3 ? '#E11D48' : '#10B981', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 800 }}>
-                  {item.availableQty}개 남음
+              {isUpcoming ? (
+                <div style={{ position: 'absolute', top: 12, right: 12, zIndex: 2, background: '#7F77DD', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 800 }}>
+                  오픈 예정
                 </div>
-              )}
-              {isSoldOut && (
-                <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2 }}>
-                  <span style={{ color: 'white', fontSize: '20px', fontWeight: 900, letterSpacing: '2px' }}>품 절</span>
-                </div>
+              ) : (
+                <>
+                  {item.availableQty > 0 && !isSoldOut && (
+                    <div style={{ position: 'absolute', top: 12, right: 12, zIndex: 2, background: (item.availableQty / Math.max(1, item.totalQty)) <= 0.3 ? '#E11D48' : '#10B981', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 800 }}>
+                      {item.availableQty}개 남음
+                    </div>
+                  )}
+                  {isSoldOut && (
+                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2 }}>
+                      <span style={{ color: 'white', fontSize: '20px', fontWeight: 900, letterSpacing: '2px' }}>품 절</span>
+                    </div>
+                  )}
+                </>
               )}
             </div>
             <div style={{ padding: '20px' }}>
-              <h3 style={{ fontSize: '14px', fontWeight: 800, marginBottom: '16px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: isDrops ? 'rgba(255,255,255,0.95)' : '#111' }}>{item.name}</h3>
-              <div style={{ marginBottom: '16px' }}>
-                <div style={{ height: '4px', background: isDrops ? 'rgba(255,255,255,0.12)' : '#F0F0F0', borderRadius: '2px', overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${progress}%`, background: isSoldOut ? '#ccc' : 'linear-gradient(90deg, #C2507A, #7F77DD)' }}></div>
-                </div>
+              <h3 style={{ fontSize: '14px', fontWeight: 800, marginBottom: '16px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#111' }}>{item.name}</h3>
+              <div style={{ marginBottom: '16px', minHeight: '20px' }}>
+                {isUpcoming ? (
+                  <div style={{ color: '#7F77DD', fontSize: '12px', fontWeight: 800 }}>
+                    오픈 예정 ({new Date(item.dropsStartAt!).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })})
+                  </div>
+                ) : (
+                  <div style={{ height: '4px', background: '#F0F0F0', borderRadius: '2px', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${progress}%`, background: isSoldOut ? '#ccc' : 'linear-gradient(90deg, #C2507A, #7F77DD)' }}></div>
+                  </div>
+                )}
               </div>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <div style={{ fontSize: '18px', fontWeight: 800, color: isDrops ? 'rgba(255,255,255,0.95)' : '#111', flex: 1 }}>₩{Number(item.price).toLocaleString()}</div>
+                <div style={{ fontSize: '18px', fontWeight: 800, color: '#111', flex: 1 }}>₩{Number(item.price).toLocaleString()}</div>
                 <div style={{ display: 'flex', gap: '4px' }}>
-                  {!isSoldOut && (
+                  {isUpcoming ? (
                     <button
                       type="button"
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        if (!getToken()) { setShowLoginModal(true); return; }
-                        try {
-                          await addCartItem(item.id, 1);
-                          setShowCart(true);
-                        } catch {
-                          showToast('장바구니 담기에 실패했습니다.', 'error');
-                        }
-                      }}
-                      style={{ background: isDrops ? 'rgba(255,255,255,0.1)' : 'white', color: isDrops ? 'rgba(255,255,255,0.85)' : '#111', border: isDrops ? '1px solid rgba(255,255,255,0.2)' : '1px solid #EDE8E2', padding: '8px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                      title="장바구니 담기"
+                      disabled
+                      style={{ background: '#7F77DD', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 700, cursor: 'not-allowed', opacity: 0.8 }}
                     >
-                      <ShoppingBag size={16} />
+                      오픈 예정
                     </button>
+                  ) : (
+                    <>
+                      {!isSoldOut && (
+                        <button
+                          type="button"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (!getToken()) { setShowLoginModal(true); return; }
+                            try {
+                              await addCartItem(item.id, 1);
+                              setShowCart(true);
+                            } catch {
+                              showToast('장바구니 담기에 실패했습니다.', 'error');
+                            }
+                          }}
+                          style={{ background: 'white', color: '#111', border: '1px solid #EDE8E2', padding: '8px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          title="장바구니 담기"
+                        >
+                          <ShoppingBag size={16} />
+                        </button>
+                      )}
+                      {isSoldOut && (
+                        <button
+                          type="button"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            const pid = item.id;
+                            if (restockSubscribed.has(pid)) {
+                              await unsubscribeRestock(pid).catch(() => {});
+                              setRestockSubscribed(prev => { const s = new Set(prev); s.delete(pid); return s; });
+                            } else {
+                              await subscribeRestock(pid).catch(() => {});
+                              setRestockSubscribed(prev => new Set(prev).add(pid));
+                            }
+                          }}
+                          style={{ background: restockSubscribed.has(item.id) ? '#f0f0f0' : 'white', color: restockSubscribed.has(item.id) ? '#888' : '#C2507A', border: '1px solid #EDE8E2', padding: '8px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          title={restockSubscribed.has(item.id) ? '알림 취소' : '재입고 알림'}
+                        >
+                          <Bell size={16} />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        disabled={isSoldOut}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!isSoldOut) {
+                            setSelectedProduct(item);
+                            window.scrollTo({ top: 0, behavior: 'instant' });
+                          }
+                        }}
+                        style={{ background: isSoldOut ? '#ccc' : 'linear-gradient(135deg, var(--point-rose), var(--point-violet))', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 700, cursor: isSoldOut ? 'not-allowed' : 'pointer', boxShadow: isSoldOut ? 'none' : '0 4px 10px rgba(194, 80, 122, 0.2)' }}
+                      >
+                        구매
+                      </button>
+                    </>
                   )}
-                  {isSoldOut && (
-                    <button
-                      type="button"
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        const pid = item.id;
-                        if (restockSubscribed.has(pid)) {
-                          await unsubscribeRestock(pid).catch(() => {});
-                          setRestockSubscribed(prev => { const s = new Set(prev); s.delete(pid); return s; });
-                        } else {
-                          await subscribeRestock(pid).catch(() => {});
-                          setRestockSubscribed(prev => new Set(prev).add(pid));
-                        }
-                      }}
-                      style={{ background: restockSubscribed.has(item.id) ? '#f0f0f0' : 'white', color: restockSubscribed.has(item.id) ? '#888' : '#C2507A', border: '1px solid #EDE8E2', padding: '8px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                      title={restockSubscribed.has(item.id) ? '알림 취소' : '재입고 알림'}
-                    >
-                      <Bell size={16} />
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    disabled={isSoldOut}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (!isSoldOut) {
-                        setSelectedProduct(item);
-                        window.scrollTo({ top: 0, behavior: 'instant' });
-                      }
-                    }}
-                    style={{ background: isSoldOut ? '#ccc' : 'linear-gradient(135deg, var(--point-rose), var(--point-violet))', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 700, cursor: isSoldOut ? 'not-allowed' : 'pointer', boxShadow: isSoldOut ? 'none' : '0 4px 10px rgba(194, 80, 122, 0.2)' }}
-                  >
-                    구매
-                  </button>
                 </div>
               </div>
             </div>
@@ -3944,21 +4606,28 @@ export default function App({ role = 'FAN' }: { role?: string }) {
         {/* --- MY PAGE --- */}
       {!selectedArtist && activeTab === 'MY PAGE' && (
         <div className="page-content reveal wrapper">
-          <div className="board-header" style={{height: '240px', marginBottom: '40px', padding: '40px 60px'}}>
-            <div className="bh-bg-color" style={{ background: '#1A1A1A' }}></div>
+          <div className="board-header" style={{
+            height: '240px',
+            marginBottom: '40px',
+            padding: '40px 60px',
+            background: 'linear-gradient(135deg, #FFF0F2 0%, #FFE4E8 100%)',
+            border: '1px solid rgba(244, 180, 190, 0.4)',
+            boxShadow: '0 12px 30px rgba(244, 180, 190, 0.15)',
+          }}>
+            <div className="bh-bg-color" style={{ background: 'transparent' }}></div>
             <div className="bh-content">
               <FanAvatar
                 fanId={fanProfile?.fanId ?? getSubFromToken() ?? 0}
                 size={120}
-                border="4px solid rgba(255,255,255,0.2)"
+                border="4px solid white"
                 customImageUrl={profileImageUrl}
               />
               <div className="bh-info" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <div className="bh-name" style={{ fontSize: '32px', fontWeight: 800, color: 'white', lineHeight: 1.2 }}>{fanProfile?.nickname ?? '—'}</div>
-                <div style={{ fontSize: '15px', color: 'rgba(255,255,255,0.8)', fontWeight: 500, marginTop: '2px' }}>
+                <div className="bh-name" style={{ fontSize: '32px', fontWeight: 800, color: '#4A3B40', lineHeight: 1.2 }}>{fanProfile?.nickname ?? '—'}</div>
+                <div style={{ fontSize: '15px', color: '#6A565C', fontWeight: 600, marginTop: '2px' }}>
                   {introduction || '자기소개가 아직 등록되지 않았습니다.'}
                 </div>
-                <div className="bh-stats" style={{ fontSize: '13px', opacity: 0.6, color: '#DDD', marginTop: '4px' }}>
+                <div className="bh-stats" style={{ fontSize: '13px', color: '#907D83', fontWeight: 500, marginTop: '4px' }}>
                   {fanProfile ? (() => { const d = new Date(fanProfile.createdAt); return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 가입`; })() : '—'}
                 </div>
               </div>
@@ -3970,7 +4639,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                   setEditImageUrl(profileImageUrl);
                   setShowEditProfile(true); 
                 }} 
-                style={{background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)'}}
+                style={{background: 'white', color: '#4A3B40', border: '1px solid #FFE4E8', boxShadow: '0 2px 6px rgba(244, 180, 190, 0.1)'}}
               >
                 프로필 수정
               </button>
@@ -4321,8 +4990,6 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                       </label>
                     </div>
 
-                    <h4 style={{ fontSize: '16px', fontWeight: 800, marginBottom: '24px', marginTop: '24px' }}>보안</h4>
-                    <p style={{ color: 'var(--text-sub)', fontSize: '14px' }}>계정 보안 설정을 관리하세요.</p>
                   </div>
                 </div>
               )}

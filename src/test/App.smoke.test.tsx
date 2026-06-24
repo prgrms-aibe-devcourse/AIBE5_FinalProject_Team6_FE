@@ -18,9 +18,11 @@ describe('App', () => {
     expect(screen.getAllByText('FANDROPS').length).toBeGreaterThan(0)
   })
 
-  it('로그인 페이지가 렌더링된다', () => {
-    window.history.pushState({}, '', '/login')
+  it('로그인 페이지가 렌더링된다', async () => {
+    window.history.pushState({}, '', '/fan')
     render(<App />)
-    expect(screen.getByText('카카오로 1초 로그인')).toBeInTheDocument()
+    const loginButton = screen.getByRole('button', { name: /로그인/ })
+    loginButton.click()
+    expect(await screen.findByText('카카오로 1초 로그인')).toBeInTheDocument()
   })
 })

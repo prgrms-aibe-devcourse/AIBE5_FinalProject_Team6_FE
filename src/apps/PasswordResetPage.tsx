@@ -73,7 +73,7 @@ export default function PasswordResetPage() {
                   : '이메일을 확인해주세요. 재설정 링크를 발송했습니다.'}
               </p>
               <button
-                onClick={() => navigate('/login')}
+                onClick={() => navigate('/fan')}
                 className="w-full py-4 rounded-xl font-bold text-white transition-opacity hover:opacity-90 shadow-md active:scale-[0.98]"
                 style={{ background: '#111' }}
               >
@@ -133,7 +133,7 @@ export default function PasswordResetPage() {
           {!done && (
             <div className="text-center mt-6">
               <button
-                onClick={() => navigate('/login')}
+                onClick={() => navigate('/fan')}
                 className="text-sm text-[#888] hover:text-[#111]"
               >
                 ← 로그인으로 돌아가기

@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { logout, getSubFromToken, getToken, login, setToken, syncAppRole, signup, requestPasswordReset } from '../api/auth';
 import { ROLE_KEY } from '../App';
 import { AnimatePresence, motion } from 'motion/react';
-import { Plus, Search, Calendar, Heart, Share2, Image as ImageIcon, Smile, MoreHorizontal, MessageSquare, Bell, Pin, Play, Youtube, ChevronLeft, ChevronRight, X, User, ShoppingBag, LogOut, Ticket, Settings, ThumbsUp, CheckCircle2, Gift } from 'lucide-react';
+import { Plus, Search, Calendar, Heart, Share2, Image as ImageIcon, Smile, MoreHorizontal, MessageSquare, Bell, Pin, Play, Youtube, ChevronLeft, ChevronRight, X, User, ShoppingBag, LogOut, Ticket, Settings, ThumbsUp, CheckCircle2, Gift, Link } from 'lucide-react';
 import { useCheckout } from '../hooks/useCheckout';
 import { useQueue } from '../hooks/useQueue';
 import { getProducts, getProduct, subscribeRestock, unsubscribeRestock } from '../api/products';
@@ -218,8 +218,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       setStoreArtists(prev => prev.map(a => a.id === selectedArtist.id ? { ...a, fanCount: (a.fanCount ?? 0) + 1 } : a));
       try {
         await followArtist(selectedArtist.id);
-        setWelcomeArtist(selectedArtist);
-        setShowWelcomeModal(true);
+        showToast(`${selectedArtist.name}님을 팔로우했습니다!`);
       } catch {
         setFavoriteArtists(prev => prev.filter(a => a.id !== selectedArtist.id));
         setStoreArtists(prev => prev.map(a => a.id === selectedArtist.id ? { ...a, fanCount: Math.max(0, (a.fanCount ?? 0) - 1) } : a));
@@ -279,6 +278,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [editIntroduction, setEditIntroduction] = useState('');
   const [editImageUrl, setEditImageUrl] = useState('');
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [sharePost, setSharePost] = useState<FeedResponse | null>(null);
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [welcomeArtist, setWelcomeArtist] = useState<FanArtistEntry | null>(null);
   const [showUnfollowModal, setShowUnfollowModal] = useState(false);
@@ -1579,7 +1579,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
           )}
           {role === 'ARTIST' && (
             <button 
-              onClick={() => { logout(); localStorage.removeItem(ROLE_KEY); navigate('/login', { replace: true }); }}
+              onClick={() => { logout(); localStorage.removeItem(ROLE_KEY); navigate('/fan', { replace: true }); }}
               style={{ padding: '8px 12px', background: '#F7F3EE', border: '1px solid #EDE8E2', borderRadius: '12px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
             >
               로그아웃
@@ -2246,7 +2246,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                   <div className="bh-stats">Artist · {(storeArtists.find(a => a.id === selectedArtist.id)?.fanCount ?? 0).toLocaleString()} 팔로워</div>
                 </div>
                 {role === 'ARTIST' ? (
-                  <button className="bh-join-btn" onClick={() => { logout(); localStorage.removeItem(ROLE_KEY); navigate('/login', { replace: true }); }} style={{ background: '#333' }}>로그아웃</button>
+                  <button className="bh-join-btn" onClick={() => { logout(); localStorage.removeItem(ROLE_KEY); navigate('/fan', { replace: true }); }} style={{ background: '#333' }}>로그아웃</button>
                 ) : (
                   <button 
                     className="bh-join-btn" 
@@ -2432,7 +2432,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                                 <Heart size={18} fill={post.isLiked ? 'currentColor' : 'none'} /> {formatCount(post.likeCount)}
                               </div>
                               <div className="fp-action"><MessageSquare size={18} /> {String(post.commentCount)}</div>
-                              <div className="fp-action"><Share2 size={18} /> Share</div>
+                              <div className="fp-action" style={{ cursor: 'pointer' }} onClick={() => setSharePost(post)}><Share2 size={18} /> Share</div>
                             </div>
 
                             {/* Comment Section */}
@@ -2544,7 +2544,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                               <Heart size={18} fill={post.isLiked ? 'currentColor' : 'none'} /> {formatCount(post.likeCount)}
                             </div>
                             <div className="fp-action"><MessageSquare size={18} /> {String(post.commentCount)}</div>
-                            <div className="fp-action"><Share2 size={18} /> Share</div>
+                            <div className="fp-action" style={{ cursor: 'pointer' }} onClick={() => setSharePost(post)}><Share2 size={18} /> Share</div>
                           </div>
 
                           {/* Comment Section */}
@@ -3056,12 +3056,15 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                       } else {
                         setFavoriteArtists(prev => [...prev, displayArtist]);
                         setStoreArtists(prev => prev.map(a => a.id === artist.id ? { ...a, fanCount: (a.fanCount ?? 0) + 1 } : a));
-                        try { 
-                          await followArtist(artist.id);
-                          setWelcomeArtist(displayArtist);
-                          setShowWelcomeModal(true);
+                        try {
+                          const followedId = artist.id;
+                          await followArtist(followedId);
+                          if ((selectedArtist as FanArtistEntry | null)?.id !== followedId) {
+                            setWelcomeArtist(displayArtist);
+                            setShowWelcomeModal(true);
+                          }
                         }
-                        catch { 
+                        catch {
                           setFavoriteArtists(prev => prev.filter(a => a.id !== artist.id));
                           setStoreArtists(prev => prev.map(a => a.id === artist.id ? { ...a, fanCount: Math.max(0, (a.fanCount ?? 0) - 1) } : a));
                           showToast('팔로우 처리에 실패했습니다.', 'error');
@@ -3532,39 +3535,50 @@ export default function App({ role = 'FAN' }: { role?: string }) {
 
       const renderGridCard = (item: ProductListItem) => {
         const isSoldOut = item.status === 'SOLD_OUT';
+        const isDrops = item.dropsStartAt != null;
         const progress = isSoldOut ? 100 : item.totalQty > 0 ? (item.availableQty / item.totalQty) * 100 : 0;
         return (
           <div
             key={item.id}
             className="card reveal"
-            style={{ opacity: isSoldOut ? 0.6 : 1, cursor: 'pointer' }}
+            style={{
+              opacity: isSoldOut ? 0.6 : 1,
+              cursor: 'pointer',
+              ...(isDrops && {
+                background: 'linear-gradient(160deg, #13111C 0%, #1E1535 100%)',
+                boxShadow: '0 0 0 1.5px rgba(194,80,122,0.5), 0 8px 32px rgba(127,119,221,0.2)',
+                border: 'none',
+              })
+            }}
             onClick={() => { setSelectedProduct(item); window.scrollTo({ top: 0, behavior: 'instant' }); }}
           >
-            <div style={{ position: 'relative', height: '220px', background: item.thumbnailUrl ? 'transparent' : 'var(--bg-cream)', overflow: 'hidden' }}>
+            {isDrops && <div style={{ height: '3px', background: 'linear-gradient(90deg, #C2507A 0%, #7F77DD 100%)', borderRadius: '999px 999px 0 0' }} />}
+            <div style={{ position: 'relative', height: '220px', background: item.thumbnailUrl ? 'transparent' : (isDrops ? 'linear-gradient(135deg, #0D0A18, #2D1B40)' : 'var(--bg-cream)'), overflow: 'hidden' }}>
+              {isDrops && <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(194,80,122,0.07), rgba(127,119,221,0.1))', zIndex: 1, pointerEvents: 'none' }} />}
               {item.thumbnailUrl && <img src={item.thumbnailUrl} alt={item.name} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
-              <div style={{ position: 'absolute', top: 12, left: 12, background: 'rgba(255,255,255,0.9)', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 800 }}>
+              <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 2, background: isDrops ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.9)', backdropFilter: isDrops ? 'blur(8px)' : undefined, WebkitBackdropFilter: isDrops ? 'blur(8px)' : undefined, color: isDrops ? 'rgba(255,255,255,0.9)' : 'inherit', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 800 }}>
                 {storeArtists.find(a => a.id === item.artistId)?.name ?? `Artist #${item.artistId}`}
               </div>
               {item.availableQty > 0 && !isSoldOut && (
-                <div style={{ position: 'absolute', top: 12, right: 12, background: (item.availableQty / Math.max(1, item.totalQty)) <= 0.3 ? '#E11D48' : '#10B981', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 800 }}>
+                <div style={{ position: 'absolute', top: 12, right: 12, zIndex: 2, background: (item.availableQty / Math.max(1, item.totalQty)) <= 0.3 ? '#E11D48' : '#10B981', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 800 }}>
                   {item.availableQty}개 남음
                 </div>
               )}
               {isSoldOut && (
-                <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2 }}>
                   <span style={{ color: 'white', fontSize: '20px', fontWeight: 900, letterSpacing: '2px' }}>품 절</span>
                 </div>
               )}
             </div>
             <div style={{ padding: '20px' }}>
-              <h3 style={{ fontSize: '14px', fontWeight: 800, marginBottom: '16px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</h3>
+              <h3 style={{ fontSize: '14px', fontWeight: 800, marginBottom: '16px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: isDrops ? 'rgba(255,255,255,0.95)' : '#111' }}>{item.name}</h3>
               <div style={{ marginBottom: '16px' }}>
-                <div style={{ height: '4px', background: '#F0F0F0', borderRadius: '2px', overflow: 'hidden' }}>
+                <div style={{ height: '4px', background: isDrops ? 'rgba(255,255,255,0.12)' : '#F0F0F0', borderRadius: '2px', overflow: 'hidden' }}>
                   <div style={{ height: '100%', width: `${progress}%`, background: isSoldOut ? '#ccc' : 'linear-gradient(90deg, #C2507A, #7F77DD)' }}></div>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <div style={{ fontSize: '18px', fontWeight: 800, color: '#111', flex: 1 }}>₩{Number(item.price).toLocaleString()}</div>
+                <div style={{ fontSize: '18px', fontWeight: 800, color: isDrops ? 'rgba(255,255,255,0.95)' : '#111', flex: 1 }}>₩{Number(item.price).toLocaleString()}</div>
                 <div style={{ display: 'flex', gap: '4px' }}>
                   {!isSoldOut && (
                     <button
@@ -3579,7 +3593,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                           showToast('장바구니 담기에 실패했습니다.', 'error');
                         }
                       }}
-                      style={{ background: 'white', color: '#111', border: '1px solid #EDE8E2', padding: '8px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      style={{ background: isDrops ? 'rgba(255,255,255,0.1)' : 'white', color: isDrops ? 'rgba(255,255,255,0.85)' : '#111', border: isDrops ? '1px solid rgba(255,255,255,0.2)' : '1px solid #EDE8E2', padding: '8px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                       title="장바구니 담기"
                     >
                       <ShoppingBag size={16} />
@@ -4713,6 +4727,107 @@ export default function App({ role = 'FAN' }: { role?: string }) {
         </div>
       </footer>
 
+      {/* --- SHARE MODAL --- */}
+      {sharePost && (
+        <div className="modal-overlay" style={{ zIndex: 2000 }} onClick={() => setSharePost(null)}>
+          <div className="modal-content" style={{ maxWidth: '400px', padding: '28px' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ fontSize: '17px', fontWeight: 800, margin: 0 }}>공유하기</h3>
+              <X size={20} style={{ cursor: 'pointer', color: 'var(--text-sub)' }} onClick={() => setSharePost(null)} />
+            </div>
+
+            {/* URL 표시 + 복사 */}
+            <div style={{ display: 'flex', gap: '8px', background: '#F7F3EE', borderRadius: '12px', padding: '12px 16px', marginBottom: '24px', alignItems: 'center', border: '1px solid #EDE8E2' }}>
+              <span style={{ flex: 1, fontSize: '12px', color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {window.location.href}
+              </span>
+              <button
+                onClick={async () => { await navigator.clipboard.writeText(window.location.href); showToast('링크가 복사되었습니다!'); }}
+                style={{ flexShrink: 0, padding: '5px 12px', background: '#111', color: 'white', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
+              >
+                복사
+              </button>
+            </div>
+
+            {/* 공유 옵션 */}
+            <div style={{ display: 'flex', justifyContent: 'space-around' }}>
+              {/* 링크 복사 */}
+              <button
+                onClick={async () => { await navigator.clipboard.writeText(window.location.href); showToast('링크가 복사되었습니다!'); setSharePost(null); }}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', background: 'none', border: 'none', cursor: 'pointer', padding: '8px' }}
+              >
+                <div style={{ width: '52px', height: '52px', borderRadius: '50%', background: '#F0F0F0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Link size={22} color="#555" />
+                </div>
+                <span style={{ fontSize: '11px', color: '#555', fontWeight: 600 }}>링크 복사</span>
+              </button>
+
+              {/* 카카오톡 */}
+              <button
+                onClick={() => {
+                  const url = window.location.href;
+                  const title = `${selectedArtist?.name ?? 'FANDROPS'} — FANDROPS`;
+                  const kakao = (window as any).Kakao;
+                  if (kakao?.isInitialized?.()) {
+                    kakao.Share.sendDefault({ objectType: 'feed', content: { title, description: sharePost.content?.substring(0, 100) ?? '', link: { mobileWebUrl: url, webUrl: url } } });
+                  } else if (typeof navigator.share === 'function') {
+                    navigator.share({ title, url }).catch(() => {});
+                  } else {
+                    navigator.clipboard.writeText(url);
+                    showToast('링크를 복사했어요. 카카오톡에서 붙여넣기 해주세요.');
+                  }
+                  setSharePost(null);
+                }}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', background: 'none', border: 'none', cursor: 'pointer', padding: '8px' }}
+              >
+                <div style={{ width: '52px', height: '52px', borderRadius: '50%', background: '#FEE500', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+                    <path fillRule="evenodd" clipRule="evenodd" d="M12 3C6.477 3 2 6.477 2 10.5c0 2.533 1.448 4.765 3.636 6.18-.16.592-.58 2.148-.665 2.487-.104.416.153.41.32.298.132-.089 2.096-1.421 2.946-2.001.568.084 1.15.128 1.763.128 5.523 0 10-3.358 10-7.5S17.523 3 12 3z" fill="#191919"/>
+                  </svg>
+                </div>
+                <span style={{ fontSize: '11px', color: '#555', fontWeight: 600 }}>카카오톡</span>
+              </button>
+
+              {/* 트위터/X */}
+              <button
+                onClick={() => {
+                  const url = encodeURIComponent(window.location.href);
+                  const text = encodeURIComponent(`${selectedArtist?.name ?? 'FANDROPS'} — FANDROPS`);
+                  window.open(`https://twitter.com/intent/tweet?url=${url}&text=${text}`, '_blank', 'noopener,noreferrer');
+                  setSharePost(null);
+                }}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', background: 'none', border: 'none', cursor: 'pointer', padding: '8px' }}
+              >
+                <div style={{ width: '52px', height: '52px', borderRadius: '50%', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.738l7.737-8.84L1.254 2.25H8.08l4.258 5.628 5.906-5.628zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                  </svg>
+                </div>
+                <span style={{ fontSize: '11px', color: '#555', fontWeight: 600 }}>트위터/X</span>
+              </button>
+
+              {/* 더 보기 */}
+              <button
+                onClick={() => {
+                  if (typeof navigator.share === 'function') {
+                    navigator.share({ title: `${selectedArtist?.name ?? 'FANDROPS'} — FANDROPS`, url: window.location.href }).catch(() => {});
+                  } else {
+                    showToast('공유 기능을 지원하지 않는 환경입니다.');
+                  }
+                  setSharePost(null);
+                }}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', background: 'none', border: 'none', cursor: 'pointer', padding: '8px' }}
+              >
+                <div style={{ width: '52px', height: '52px', borderRadius: '50%', background: '#F0F0F0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <MoreHorizontal size={22} color="#555" />
+                </div>
+                <span style={{ fontSize: '11px', color: '#555', fontWeight: 600 }}>더 보기</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Welcome Onboarding Modal */}
       {showWelcomeModal && welcomeArtist && (
         <div className="modal-overlay" style={{ zIndex: 1100 }} onClick={() => setShowWelcomeModal(false)}>
@@ -4780,31 +4895,33 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                 >
                   나중에 하기
                 </button>
-                <button 
-                  onClick={() => {
-                    setSelectedArtist(welcomeArtist);
-                    setBoardTab('FEED');
-                    setShowWelcomeModal(false);
-                    window.scrollTo({ top: 0, behavior: 'instant' });
-                  }}
-                  style={{ 
-                    flex: 1, 
-                    padding: '16px', 
-                    borderRadius: '16px', 
-                    border: 'none', 
-                    background: 'linear-gradient(135deg, #C2507A, #7F77DD)', 
-                    color: 'white', 
-                    fontSize: '15px', 
-                    fontWeight: 800, 
-                    cursor: 'pointer',
-                    boxShadow: '0 8px 20px rgba(194, 80, 122, 0.25)',
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; }}
-                  onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
-                >
-                  지금 가기
-                </button>
+                {selectedArtist?.id !== welcomeArtist?.id && (
+                  <button
+                    onClick={() => {
+                      setSelectedArtist(welcomeArtist);
+                      setBoardTab('FEED');
+                      setShowWelcomeModal(false);
+                      window.scrollTo({ top: 0, behavior: 'instant' });
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: '16px',
+                      borderRadius: '16px',
+                      border: 'none',
+                      background: 'linear-gradient(135deg, #C2507A, #7F77DD)',
+                      color: 'white',
+                      fontSize: '15px',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      boxShadow: '0 8px 20px rgba(194, 80, 122, 0.25)',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; }}
+                    onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
+                  >
+                    지금 가기
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -4888,8 +5005,10 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                     setShowUnfollowModal(false);
                     try {
                       await followArtist(artist.id);
-                      setWelcomeArtist(artist);
-                      setShowWelcomeModal(true);
+                      if (selectedArtist?.id !== artist.id) {
+                        setWelcomeArtist(artist);
+                        setShowWelcomeModal(true);
+                      }
                     } catch {
                       setFavoriteArtists(prev => prev.filter(a => a.id !== artist.id));
                       setStoreArtists(prev => prev.map(a => a.id === artist.id ? { ...a, fanCount: Math.max(0, (a.fanCount ?? 0) - 1) } : a));

@@ -79,7 +79,7 @@ export default function AdminLoginPage() {
 
             <button
               type="button"
-              onClick={() => navigate('/login')}
+              onClick={() => navigate('/fan')}
               className="w-full text-xs text-[#888] mt-4 hover:text-[#111]"
             >
               ← 팬 로그인으로

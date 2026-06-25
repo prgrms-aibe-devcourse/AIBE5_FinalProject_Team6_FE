@@ -3510,9 +3510,9 @@ export default function App({ role = 'FAN' }: { role?: string }) {
         {/* --- ARTISTS PAGE --- */}
         {!selectedArtist && activeTab === 'ARTISTS' && (() => {
           const artistMetadata: Record<number, { agency: string; category: '아티스트' | '크리에이터' | '버튜버' }> = {
-            1: { agency: 'starlight 엔터', category: '아티스트' },
-            2: { agency: 'starlight 엔터', category: '아티스트' },
-            3: { agency: 'starlight 엔터', category: '아티스트' },
+            1: { agency: 'Starlight Ent.', category: '아티스트' },
+            2: { agency: 'Starlight Ent.', category: '아티스트' },
+            3: { agency: 'Starlight Ent.', category: '아티스트' },
             4: { agency: '글로벌 스타 엔터', category: '아티스트' },
             5: { agency: '스타뮤직 엔터테인먼트', category: '아티스트' },
             6: { agency: '스타뮤직 엔터테인먼트', category: '아티스트' },
@@ -3999,9 +3999,9 @@ export default function App({ role = 'FAN' }: { role?: string }) {
            {/* Grouped by Agency */}
            {(() => {
              const artistMetadata: Record<number, { agency: string }> = {
-               1: { agency: '테스트 기획사' },
-               2: { agency: '테스트 기획사' },
-               3: { agency: '테스트 기획사' },
+               1: { agency: 'Starlight Ent.' },
+               2: { agency: 'Starlight Ent.' },
+               3: { agency: 'Starlight Ent.' },
                4: { agency: '글로벌 스타 엔터' },
                5: { agency: '스타뮤직 엔터테인먼트' },
                6: { agency: '스타뮤직 엔터테인먼트' },

@@ -31,7 +31,8 @@ import type { NotificationResult } from '../types/notification';
 import { getMyProfile, updateMyProfile, getMyActivities } from '../api/fan';
 import { FanAvatar } from '../components/fanAvatars/FanAvatar';
 import type { FanResult, ActivityItem } from '../types/fan';
-import { getMyOrders, cancelOrder } from '../api/orders';
+import { getMyOrders, getOrderDetail, cancelOrder } from '../api/orders';
+import type { OrderDetail } from '../types/order';
 import type { OrderListItem } from '../types/order';
 import { getPaymentDetail } from '../api/payments';
 import type { PaymentDetail } from '../types/payment';
@@ -434,6 +435,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [cancellingOrderId, setCancellingOrderId] = useState<number | null>(null);
   const [paymentDetails, setPaymentDetails] = useState<Record<number, PaymentDetail | 'loading' | 'error'>>({});
   const [expandedPaymentIds, setExpandedPaymentIds] = useState<Set<number>>(new Set());
+  const [orderDetails, setOrderDetails] = useState<Record<number, OrderDetail | 'loading' | 'error'>>({});
   const [showAttendanceBanner, setShowAttendanceBanner] = useState(false);
   const [attendanceStep, setAttendanceStep] = useState<'IDLE' | 'STAMPING' | 'REWARD'>('IDLE');
   const [triggeredArtists, setTriggeredArtists] = useState<number[]>([]);
@@ -527,8 +529,22 @@ export default function App({ role = 'FAN' }: { role?: string }) {
 
   useEffect(() => {
     if (activeTab !== 'MY PAGE' || myPageTab !== 'ORDERS') return;
-    getMyOrders().then(res => setMyOrders(res.items)).catch(() => {});
+    setOrderDetails({});
+    getMyOrders().then(res => {
+      setMyOrders(res.items);
+      res.items.forEach(order => {
+        setOrderDetails(prev => ({ ...prev, [order.orderId]: 'loading' }));
+        getOrderDetail(order.orderId)
+          .then(d => setOrderDetails(prev => ({ ...prev, [order.orderId]: d })))
+          .catch(() => setOrderDetails(prev => ({ ...prev, [order.orderId]: 'error' })));
+      });
+    }).catch(() => {});
   }, [activeTab, myPageTab]);
+
+  // 결제 성공 후 장바구니 자동 비우기
+  useEffect(() => {
+    if (paymentStatus === 'success') setCartItems([]);
+  }, [paymentStatus]);
 
   // Trigger Intersection Observer again when activeTab changes
   useEffect(() => {
@@ -713,16 +729,20 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       .finally(() => setCartLoading(false));
   }, [showCart, isLoggedIn]);
 
-  // 마운트 시 장바구니/알림 데이터 초기 동기화 (배지 노출용)
+  // 마운트 시 장바구니/알림 데이터 초기 동기화 (배지 노출용) + 30초 폴링 (재입고 알림 실시간 반영)
   useEffect(() => {
-    if (isLoggedIn) {
-      getCart().then(res => setCartItems(res.items)).catch(() => {});
-      getNotifications().then(setNotifications).catch(() => {});
-    } else {
+    if (!isLoggedIn) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setCartItems([]);
       setNotifications([]);
+      return;
     }
+    getCart().then(res => setCartItems(res.items)).catch(() => {});
+    getNotifications().then(setNotifications).catch(() => {});
+    const id = setInterval(() => {
+      getNotifications().then(setNotifications).catch(() => {});
+    }, 30000);
+    return () => clearInterval(id);
   }, [isLoggedIn]);
 
   // 아티스트 목록 로드 — ARTIST role은 JWT sub + artists/members 2단계 조회, FAN은 팔로우 목록
@@ -4795,6 +4815,16 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                                     </span>
                                     <span style={{ fontSize: '12px', color: 'var(--text-sub)' }}>#{order.orderId}</span>
                                   </div>
+                                  {(() => {
+                                    const od = orderDetails[order.orderId];
+                                    if (od && od !== 'loading' && od !== 'error') {
+                                      const names = od.items.map(item =>
+                                        storeItems.find(s => s.id === item.productId)?.name ?? `상품 #${item.productId}`
+                                      );
+                                      return <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '4px', color: 'var(--text-main)' }}>{names.join(' · ')}</div>;
+                                    }
+                                    return null;
+                                  })()}
                                   <div style={{ fontSize: '18px', fontWeight: 800 }}>
                                     {order.totalAmount.toLocaleString()}원
                                   </div>
@@ -4850,31 +4880,37 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                                       결제 정보 {isExpanded ? '▲' : '▼'}
                                     </button>
                                     {isExpanded && (
-                                      <div style={{ marginTop: '10px', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                        {detail === 'loading' && <span style={{ color: 'var(--text-sub)' }}>불러오는 중...</span>}
+                                      <div style={{ marginTop: '12px', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '0' }}>
+                                        {(detail === 'loading' || orderDetails[order.orderId] === 'loading') && <span style={{ color: 'var(--text-sub)' }}>불러오는 중...</span>}
                                         {detail === 'error' && <span style={{ color: '#FF4444' }}>결제 정보를 불러올 수 없습니다.</span>}
-                                        {detail && detail !== 'loading' && detail !== 'error' && (
-                                          <>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                              <span style={{ color: 'var(--text-sub)' }}>결제 방법</span>
-                                              <span style={{ fontWeight: 700 }}>{(detail as PaymentDetail).paymentMethod}</span>
+                                        {detail && detail !== 'loading' && detail !== 'error' && (() => {
+                                          const pd = detail as PaymentDetail;
+                                          const od = orderDetails[order.orderId];
+                                          const odItems = (od && od !== 'loading' && od !== 'error') ? od.items : [];
+                                          const row = (label: string, value: string, bold = false) => (
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
+                                              <span style={{ color: 'var(--text-sub)' }}>{label}</span>
+                                              <span style={{ fontWeight: bold ? 800 : 700 }}>{value}</span>
                                             </div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                              <span style={{ color: 'var(--text-sub)' }}>결제 금액</span>
-                                              <span style={{ fontWeight: 700 }}>{(detail as PaymentDetail).amount.toLocaleString()}원</span>
-                                            </div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                              <span style={{ color: 'var(--text-sub)' }}>결제 상태</span>
-                                              <span style={{ fontWeight: 700 }}>{(detail as PaymentDetail).status}</span>
-                                            </div>
-                                            {(detail as PaymentDetail).paidAt && (
-                                              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                                <span style={{ color: 'var(--text-sub)' }}>결제 일시</span>
-                                                <span style={{ fontWeight: 700 }}>{new Date((detail as PaymentDetail).paidAt!).toLocaleString('ko-KR')}</span>
-                                              </div>
-                                            )}
-                                          </>
-                                        )}
+                                          );
+                                          return (
+                                            <>
+                                              {odItems.map((item, i) => {
+                                                const name = storeItems.find(s => s.id === item.productId)?.name ?? `상품 #${item.productId}`;
+                                                return (
+                                                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
+                                                    <span style={{ color: 'var(--text-sub)' }}>{name} × {item.quantity}</span>
+                                                    <span style={{ fontWeight: 700 }}>{item.subtotal.toLocaleString()}원</span>
+                                                  </div>
+                                                );
+                                              })}
+                                              {row('배송비', '3,000원')}
+                                              {row('총 결제 금액', `${pd.amount.toLocaleString()}원`, true)}
+                                              {row('결제 수단', pd.paymentMethod)}
+                                              {pd.paidAt && row('결제 일시', new Date(pd.paidAt).toLocaleString('ko-KR'))}
+                                            </>
+                                          );
+                                        })()}
                                       </div>
                                     )}
                                   </div>

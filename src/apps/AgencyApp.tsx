@@ -424,7 +424,11 @@ export default function AgencyApp() {
     fetchProducts();
     const onVisible = () => { if (document.visibilityState === 'visible') fetchProducts(); };
     document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
+    const intervalId = setInterval(fetchProducts, 15000);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      clearInterval(intervalId);
+    };
   }, [activeMenu, agencyArtistId]);
 
   useEffect(() => {

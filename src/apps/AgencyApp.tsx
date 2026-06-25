@@ -1977,9 +1977,13 @@ export default function AgencyApp() {
                     if (!qty || qty < 1) { showToast('수량을 입력해주세요.', 'error'); return; }
                     try {
                       await restockProduct(selectedProduct.id, qty);
-                      await refreshProductList();
                       const updated = await getProduct(selectedProduct.id);
                       setSelectedProduct(updated);
+                      setProductList(prev => prev.map(p =>
+                        p.id === selectedProduct.id
+                          ? { ...p, status: updated.status, totalQty: updated.totalQty, availableQty: updated.availableQty }
+                          : p
+                      ));
                       setShowRestockModal(false);
                       showToast('재입고가 완료되었습니다.');
                     } catch {

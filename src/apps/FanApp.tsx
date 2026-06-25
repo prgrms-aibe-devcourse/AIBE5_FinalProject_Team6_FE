@@ -4,7 +4,7 @@ import { logout, getSubFromToken, getToken, login, setToken, syncAppRole, signup
 import { ROLE_KEY } from '../App';
 import { AnimatePresence, motion } from 'motion/react';
 import { Plus, Search, Calendar, Heart, Share2, Image as ImageIcon, Smile, MoreHorizontal, MessageSquare, Bell, Pin, Play, Youtube, ChevronLeft, ChevronRight, X, User, ShoppingBag, LogOut, Ticket, Settings, CheckCircle2, Gift, Link } from 'lucide-react';
-import { useCheckout, DEFAULT_FORM } from '../hooks/useCheckout';
+import { useCheckout } from '../hooks/useCheckout';
 import { useQueue } from '../hooks/useQueue';
 import { getProducts, getProduct, subscribeRestock, unsubscribeRestock } from '../api/products';
 import type { ProductListItem, ProductImage } from '../types/product';
@@ -296,11 +296,11 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [showFollowRequiredModal, setShowFollowRequiredModal] = useState(false);
   const [votedVoteIds, setVotedVoteIds] = useState<Set<number>>(new Set());
   const skipRestockSyncRef = useRef(false);
-  const isPaymentReturnRef = useRef((() => {
+  const [isPaymentReturn] = useState(() => {
     const p = new URLSearchParams(window.location.search);
     const code = p.get('code');
     return !!(p.get('paymentKey') || (code && code !== 'PAY_PROCESS_CANCELED' && code !== 'USER_CANCEL'));
-  })());
+  });
   const [agreeOrder, setAgreeOrder] = useState(false);
   const [agreePrivacy, setAgreePrivacy] = useState(false);
 
@@ -681,11 +681,12 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       .then((fetched: BannerResponse[]) => {
         const activeFetched = fetched.filter((b: BannerResponse) => b.isActive && !b.title.includes('[Admin]'));
         setMainBanners(activeFetched);
+        setMainBannerIdx(0);
       })
       .catch(() => {
         setMainBanners([]);
+        setMainBannerIdx(0);
       });
-    setMainBannerIdx(0);
   }, [activeTab]);
 
   // HOME 배너 자동 슬라이드
@@ -826,7 +827,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   useEffect(() => {
     void (async () => {
       // Toss 결제 리다이렉트 복귀 시에는 URL에 tab 파라미터가 없으므로 HOME으로 덮어쓰지 않음
-      if (isPaymentReturnRef.current) return;
+      if (isPaymentReturn) return;
       if (searchParams.get('mode') === 'checkout') { setActiveTab('CHECKOUT'); return; }
       const urlTab = searchParams.get('tab');
       const tab = (urlTab && TAB_FROM_URL[urlTab]) ?? 'HOME';
@@ -955,9 +956,9 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   }, [storeItems]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 새로고침 시 mode=checkout이지만 checkoutData가 없으면 상품 상세로 복원
-  // isPaymentReturnRef: Toss 리다이렉트 복귀일 때는 STORE 복원을 건너뜀
+  // isPaymentReturn: Toss 리다이렉트 복귀일 때는 STORE 복원을 건너뜀
   useEffect(() => {
-    if (activeTab === 'CHECKOUT' && !checkoutData && !isPaymentReturnRef.current) {
+    if (activeTab === 'CHECKOUT' && !checkoutData && !isPaymentReturn) {
       void (async () => { setActiveTab('STORE'); })();
     }
   }, [activeTab, checkoutData]);
@@ -4538,7 +4539,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
 
 
         {/* --- PAYMENT RETURN LOADING/ERROR (Toss 리다이렉트 복귀, checkoutData 없음) --- */}
-        {activeTab === 'CHECKOUT' && !checkoutData && isPaymentReturnRef.current && (
+        {activeTab === 'CHECKOUT' && !checkoutData && isPaymentReturn && (
           <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-cream)' }}>
             <div style={{ textAlign: 'center', padding: '40px 24px' }}>
               {paymentStatus === 'failed' ? (

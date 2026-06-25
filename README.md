@@ -7,6 +7,12 @@
 
 ---
 
+## 📚 압도적인 설계 및 아키텍처 문서화 (28개의 ADR)
+본 프로젝트는 시스템의 안정성 확보를 위해 **총 28개의 ADR(Architecture Decision Record)**을 작성하고 세부 문서화를 거쳤습니다. 
+프론트엔드는 백엔드와의 API Contract([api-contract.md](../FANDROPS_BE/docs/api/api-contract.md)) 및 실시간 대기열 모니터링 흐름 등의 설계 스펙을 완벽하게 맞추어 개발되었습니다.
+
+---
+
 ## 1. 기획 소개 및 핵심 해결 과제 (Overview)
 
 ### 왜 FANDROPS인가

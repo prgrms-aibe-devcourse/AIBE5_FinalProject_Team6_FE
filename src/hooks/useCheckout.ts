@@ -24,7 +24,7 @@ export interface CheckoutForm {
 
 export type PaymentStatus = 'idle' | 'processing' | 'success' | 'failed'
 
-const DEFAULT_FORM: CheckoutForm = {
+export const DEFAULT_FORM: CheckoutForm = {
   name: '',
   phone1: '010',
   phone2: '',
@@ -34,7 +34,7 @@ const DEFAULT_FORM: CheckoutForm = {
   defaultAddr: false,
 }
 
-export function useCheckout(setActiveTab: (tab: string) => void) {
+export function useCheckout(setActiveTab: (tab: string) => void, onPaymentSuccess?: () => void) {
   const [checkoutData, setCheckoutData] = useState<CheckoutData | null>(null)
   const [checkoutForm, setCheckoutForm] = useState<CheckoutForm>(DEFAULT_FORM)
   const [payMethod, setPayMethod] = useState('toss')
@@ -61,6 +61,7 @@ export function useCheckout(setActiveTab: (tab: string) => void) {
           .then(() => {
             setPaymentStatus('success')
             setActiveTab('ORDER_COMPLETE')
+            onPaymentSuccess?.()
           })
           .catch(() => {
             const msg = '결제 확인 중 오류가 발생했습니다. 고객센터에 문의해 주세요.'
@@ -124,6 +125,10 @@ export function useCheckout(setActiveTab: (tab: string) => void) {
     setPaymentError('')
   }
 
+  const resetForm = () => {
+    setCheckoutForm(DEFAULT_FORM)
+  }
+
   return {
     checkoutData,
     setCheckoutData,
@@ -135,5 +140,6 @@ export function useCheckout(setActiveTab: (tab: string) => void) {
     paymentError,
     handlePay,
     resetCheckout,
+    resetForm,
   }
 }

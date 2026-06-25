@@ -520,6 +520,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       .filter(n => n.type === 'RESTOCK' && n.targetId !== null)
       .map(n => n.targetId as number);
     if (restockTargets.length === 0) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setRestockSubscribed(prev => {
       const next = new Set(prev);
       let changed = false;
@@ -543,6 +544,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
 
   useEffect(() => {
     if (activeTab !== 'MY PAGE' || myPageTab !== 'ORDERS') return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOrderDetails({});
     getMyOrders().then(res => {
       setMyOrders(res.items);
@@ -558,8 +560,8 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   // 결제 성공 후 장바구니 자동 비우기 (FE 상태 + BE 카트 아이템 동시 삭제)
   useEffect(() => {
     if (paymentStatus !== 'success') return;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     cartItems.forEach(ci => removeCartItem(ci.cartItemId).catch(() => {}));
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCartItems([]);
   }, [paymentStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 

@@ -117,6 +117,10 @@ export default function App({ role = 'FAN' }: { role?: string }) {
 
   const handleCommentSubmit = async (postId: number) => {
     if (!getToken()) { setShowLoginModal(true); return; }
+    if (role === 'FAN' && selectedArtist && !favoriteArtists.some(a => a.id === selectedArtist.id)) {
+      setShowFollowRequiredModal(true);
+      return;
+    }
     const key = String(postId);
     const content = commentInputs[key];
     if (!content?.trim() || !selectedArtist) return;
@@ -149,9 +153,15 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   };
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const [activeTab, setActiveTab] = useState<string>(() =>
-    TAB_FROM_URL[searchParams.get('tab') ?? ''] ?? 'HOME'
-  );
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    const p = new URLSearchParams(window.location.search);
+    const paymentKey = p.get('paymentKey');
+    const code = p.get('code');
+    if (paymentKey || (code && code !== 'PAY_PROCESS_CANCELED' && code !== 'USER_CANCEL')) {
+      return 'CHECKOUT';
+    }
+    return TAB_FROM_URL[searchParams.get('tab') ?? ''] ?? 'HOME';
+  });
   const [currentMemberName, setCurrentMemberName] = useState<string>('');
   const [currentMemberProfileImageUrl, setCurrentMemberProfileImageUrl] = useState<string>('');
   const [memberMap, setMemberMap] = useState<Record<number, { name: string; profileImageUrl?: string }>>({});
@@ -245,7 +255,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     checkoutForm, setCheckoutForm,
     payMethod, setPayMethod,
     paymentStatus, paymentError,
-    handlePay, resetCheckout,
+    handlePay, resetCheckout, resetForm,
   } = useCheckout(setActiveTab);
 
   const { queueState, startQueue, resetQueue } = useQueue();
@@ -283,6 +293,14 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [welcomeArtist, setWelcomeArtist] = useState<FanArtistEntry | null>(null);
   const [showUnfollowModal, setShowUnfollowModal] = useState(false);
   const [unfollowedArtist, setUnfollowedArtist] = useState<FanArtistEntry | null>(null);
+  const [showFollowRequiredModal, setShowFollowRequiredModal] = useState(false);
+  const [votedVoteIds, setVotedVoteIds] = useState<Set<number>>(new Set());
+  const skipRestockSyncRef = useRef(false);
+  const [isPaymentReturn] = useState(() => {
+    const p = new URLSearchParams(window.location.search);
+    const code = p.get('code');
+    return !!(p.get('paymentKey') || (code && code !== 'PAY_PROCESS_CANCELED' && code !== 'USER_CANCEL'));
+  });
   const [agreeOrder, setAgreeOrder] = useState(false);
   const [agreePrivacy, setAgreePrivacy] = useState(false);
 
@@ -348,68 +366,8 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     setTimeout(() => setFanToast(null), 3000);
   };
 
-  const handleBannerClick = async (banner: any) => {
-    if (banner.id === 101) {
-      try {
-        const novaArtist = storeArtists.find(a => a.id === 1) || { id: 1, name: 'NOVA' };
-        setSelectedArtist(toFanArtistEntry(novaArtist));
-        setBoardTab('NOTICE');
-        setSearchParams({ artistId: '1', board: 'notice' }, { replace: false });
-        const res = await getNotices(1);
-        if (res.items && res.items.length > 0) {
-          const targetNotice = res.items.find((n: any) => n.title.includes('1주년') || n.title.includes('이벤트')) || res.items[0];
-          setSelectedNotice(targetNotice);
-          setSearchParams({ artistId: '1', board: 'notice', noticeId: String(targetNotice.id) }, { replace: false });
-        }
-      } catch (e) {
-        console.error('Failed to route to NOVA notice banner', e);
-      }
-    }
-    else if (banner.id === 102) {
-      try {
-        const res = await getProducts('regular', undefined, 10, 2);
-        if (res.items && res.items.length > 0) {
-          const product = res.items[0];
-          setSelectedProduct(product);
-          setActiveTab('STORE');
-          setStoreArtist('2');
-          setSearchParams({ tab: 'store', productId: String(product.id), storeArtist: '2' }, { replace: false });
-        } else {
-          setActiveTab('STORE');
-          setStoreArtist('2');
-        }
-      } catch (e) {
-        console.error('Failed to route to LUNA product banner', e);
-        setActiveTab('STORE');
-        setStoreArtist('2');
-      }
-    }
-    else if (banner.id === 103) {
-      try {
-        const res = await getProducts('drops', undefined, 10, 7);
-        setActiveTab('STORE');
-        setStoreProductType('drops');
-        setStoreArtist('7');
-        if (res.items && res.items.length > 0) {
-          const product = res.items[0];
-          setSelectedProduct(product);
-          setSearchParams({ tab: 'store', productId: String(product.id), storeArtist: '7', productType: 'drops' }, { replace: false });
-        } else {
-          setSearchParams({ tab: 'store', storeArtist: '7', productType: 'drops' }, { replace: false });
-        }
-      } catch (e) {
-        console.error('Failed to route to Drops banner', e);
-        setActiveTab('STORE');
-        setStoreProductType('drops');
-      }
-    }
-    else if (banner.id === 104) {
-      const liaArtist = storeArtists.find(a => a.id === 12) || { id: 12, name: '리아' };
-      setSelectedArtist(toFanArtistEntry(liaArtist));
-      setBoardTab('FEED');
-      setSearchParams({ artistId: '12', board: 'feed' }, { replace: false });
-    }
-    else if (banner.landingUrl) {
+  const handleBannerClick = (banner: any) => {
+    if (banner.landingUrl) {
       window.open(banner.landingUrl, '_blank');
     }
   };
@@ -547,6 +505,10 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   }, [activeTab, restockSubscribed]);
 
   useEffect(() => {
+    if (skipRestockSyncRef.current) {
+      skipRestockSyncRef.current = false;
+      return;
+    }
     localStorage.setItem('fd_restock_subscribed', JSON.stringify(Array.from(restockSubscribed)));
   }, [restockSubscribed]);
 
@@ -712,64 +674,19 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       .catch(console.error);
   }, []);
 
-  // HOME 메인 배너 로드 (백엔드 등록 배너 + 하드코딩 기본 배너)
+  // HOME 메인 배너 로드 (백엔드 등록 배너만 노출)
   useEffect(() => {
     if (activeTab !== 'HOME') return;
-    const defaultBanners = [
-      {
-        id: 101,
-        title: "[공지] 팬클럽 1주년 기념 이벤트",
-        imageUrl: "",
-        landingUrl: "linear-gradient(135deg, var(--point-violet), var(--point-rose))",
-        subtitle: "NOVA와 함께하는 특별한 1주년 축제에 초대합니다! 지금 공지를 확인해보세요.",
-        badge: "NOTICE",
-        badgeColor: "rgba(255, 255, 255, 0.2)",
-      },
-      {
-        id: 102,
-        title: "LUNA 1주년 기념 포토북 오픈",
-        imageUrl: "",
-        landingUrl: "linear-gradient(135deg, #A5B4FC, #F472B6)",
-        subtitle: "오직 FANDROPS에서만 만나볼 수 있는 루나의 한정판 포토북 독점 발매!",
-        badge: "MERCH",
-        badgeColor: "rgba(255, 255, 255, 0.2)",
-      },
-      {
-        id: 103,
-        title: "VORTEX × Drops 단독 스트릿 캡슐 한정 세트 출시!",
-        imageUrl: "",
-        landingUrl: "linear-gradient(135deg, #1E293B, #475569)",
-        subtitle: "보텍스만의 힙하고 강렬한 무드가 돋보이는 캡슐 컬렉션을 만나보세요.",
-        badge: "DROPS 🔥",
-        badgeColor: "rgba(255, 255, 255, 0.15)",
-      },
-      {
-        id: 104,
-        title: "신규 버튜버 LIA 데뷔! 공식 커뮤니티 피드 바로가기",
-        imageUrl: "",
-        landingUrl: "linear-gradient(135deg, #FDE68A, #FCA5A5)",
-        subtitle: "귀여운 마법소녀 비주얼의 신예 버튜버 리아의 데뷔 피드가 공개되었습니다.",
-        badge: "NEW VTUBER",
-        badgeColor: "rgba(255, 255, 255, 0.3)",
-      }
-    ];
-
     getMainBanners()
       .then((fetched: BannerResponse[]) => {
-        // [Admin] 제목 배너 제외, 활성 상태인 것만 노출
         const activeFetched = fetched.filter((b: BannerResponse) => b.isActive && !b.title.includes('[Admin]'));
-        if (activeFetched.length > 0) {
-          setMainBanners([...activeFetched, ...defaultBanners] as any as BannerResponse[]);
-        } else {
-          setMainBanners(defaultBanners as any as BannerResponse[]);
-        }
+        setMainBanners(activeFetched);
+        setMainBannerIdx(0);
       })
       .catch(() => {
-        setMainBanners(defaultBanners as any as BannerResponse[]);
+        setMainBanners([]);
+        setMainBannerIdx(0);
       });
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setMainBannerIdx(0);
   }, [activeTab]);
 
   // HOME 배너 자동 슬라이드
@@ -909,6 +826,8 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   // URL → state: 뒤로가기/앞으로가기 시 React 상태를 URL에 맞게 동기화
   useEffect(() => {
     void (async () => {
+      // Toss 결제 리다이렉트 복귀 시에는 URL에 tab 파라미터가 없으므로 HOME으로 덮어쓰지 않음
+      if (isPaymentReturn) return;
       if (searchParams.get('mode') === 'checkout') { setActiveTab('CHECKOUT'); return; }
       const urlTab = searchParams.get('tab');
       const tab = (urlTab && TAB_FROM_URL[urlTab]) ?? 'HOME';
@@ -1037,8 +956,11 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   }, [storeItems]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 새로고침 시 mode=checkout이지만 checkoutData가 없으면 상품 상세로 복원
+  // isPaymentReturn: Toss 리다이렉트 복귀일 때는 STORE 복원을 건너뜀
   useEffect(() => {
-    if (activeTab === 'CHECKOUT' && !checkoutData) void (async () => { setActiveTab('STORE'); })();
+    if (activeTab === 'CHECKOUT' && !checkoutData && !isPaymentReturn) {
+      void (async () => { setActiveTab('STORE'); })();
+    }
   }, [activeTab, checkoutData]);
 
   // CHECKOUT 탈출(인앱 취소) 시 mode=checkout 파라미터 제거
@@ -1947,8 +1869,13 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                       key={p.id}
                       style={{ display: 'flex', gap: '16px', background: 'white', border: '1px solid var(--border)', borderRadius: '20px', padding: '20px', alignItems: 'center' }}
                     >
-                      <div style={{ width: '64px', height: '64px', borderRadius: '12px', background: p.thumbnailUrl ? 'transparent' : 'var(--bg-cream)', overflow: 'hidden', flexShrink: 0 }}>
-                        {p.thumbnailUrl && <img src={p.thumbnailUrl} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                      <div style={{ width: '64px', height: '64px', borderRadius: '12px', background: 'var(--bg-cream)', overflow: 'hidden', flexShrink: 0 }}>
+                        {(() => {
+                          const imgSrc = p.thumbnailUrl
+                            ?? (p as any).images?.find((i: any) => i.isPrimary)?.imageUrl
+                            ?? (p as any).images?.[0]?.imageUrl;
+                          return imgSrc ? <img src={imgSrc} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null;
+                        })()}
                       </div>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: '12px', fontWeight: 800, color: 'var(--point-rose)', marginBottom: '4px' }}>
@@ -1993,10 +1920,14 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                 <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-sub)' }}>장바구니가 비어있습니다.</div>
               ) : (
                 cartItems.map(item => {
-                  const productName = storeItems.find(p => p.id === item.productId)?.name ?? `상품 #${item.productId}`;
+                  const cartProduct = storeItems.find(p => p.id === item.productId);
+                  const productName = cartProduct?.name ?? `상품 #${item.productId}`;
+                  const cartThumb = cartProduct?.thumbnailUrl;
                   return (
                     <div key={item.cartItemId} className="cart-item">
-                      <div className="ci-img" style={{ background: 'linear-gradient(135deg, #E8E0D8, #D5CCC2)' }}></div>
+                      <div className="ci-img" style={{ background: cartThumb ? 'transparent' : 'linear-gradient(135deg, #E8E0D8, #D5CCC2)', overflow: 'hidden' }}>
+                        {cartThumb && <img src={cartThumb} alt={productName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                      </div>
                       <div className="ci-info">
                         <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-sub)', marginBottom: '4px' }}>상품 #{item.productId}</div>
                         <div className="ci-title">{productName}</div>
@@ -2044,6 +1975,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                   <div className="cf-total"><span>합계</span><span>₩{(subtotal + 3000).toLocaleString()}</span></div>
                   <button
                     className="btn-primary"
+                    style={{ background: 'linear-gradient(135deg, #C2507A, #7F77DD)' }}
                     onClick={() => {
                       setShowCart(false);
                       setCheckoutData({ title: `장바구니 상품 (${cartItems.length}개)`, price: subtotal, qty: 1, option: '', productId: cartItems[0]?.productId ?? null, accessTicket: null });
@@ -2595,8 +2527,11 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                   setSelectedArtist(null);
                   setCartItems([]);
                   setNotifications([]);
+                  skipRestockSyncRef.current = true;
                   setRestockSubscribed(new Set());
                   setSelectedProduct(null);
+                  resetCheckout();
+                  resetForm();
                   setActiveTab('HOME');
                   showToast('로그아웃되었습니다.');
                 }} style={{ flex: 1, padding: '14px', border: 'none', borderRadius: '12px', background: 'linear-gradient(135deg, var(--point-rose), var(--point-violet))', color: 'white', fontSize: '15px', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(194, 80, 122, 0.25)', transition: 'opacity 0.2s' }} onMouseOver={(e) => e.currentTarget.style.opacity = '0.9'} onMouseOut={(e) => e.currentTarget.style.opacity = '1'}>로그아웃하기</button>
@@ -3046,20 +2981,30 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                                         )}
                                       </div>
                                       {!isClosed ? (
-                                        <button
-                                          className="vote-btn active"
-                                          onClick={async () => {
-                                            if (!getToken()) { setShowLoginModal(true); return; }
-                                            try {
-                                              await castBallot(vote.id, option.id);
-                                              const id = selectedArtist!.id as number;
-                                              const res = await getVotes(id);
-                                              setGoodsVotes(res.items);
-                                            } catch { /* already voted or error */ }
-                                          }}
-                                        >
-                                          투표하기
-                                        </button>
+                                        votedVoteIds.has(vote.id) ? (
+                                          <button className="vote-btn disabled" disabled>
+                                            ✓ 투표 완료
+                                          </button>
+                                        ) : (
+                                          <button
+                                            className="vote-btn active"
+                                            onClick={async () => {
+                                              if (!getToken()) { setShowLoginModal(true); return; }
+                                              if (role === 'FAN' && selectedArtist && !favoriteArtists.some(a => a.id === selectedArtist!.id)) {
+                                                setShowFollowRequiredModal(true); return;
+                                              }
+                                              try {
+                                                await castBallot(vote.id, option.id);
+                                                setVotedVoteIds(prev => new Set(prev).add(vote.id));
+                                                const id = selectedArtist!.id as number;
+                                                const res = await getVotes(id);
+                                                setGoodsVotes(res.items);
+                                              } catch { /* already voted or error */ }
+                                            }}
+                                          >
+                                            투표하기
+                                          </button>
+                                        )
                                       ) : (
                                         <button className="vote-btn disabled" disabled>
                                           투표 마감
@@ -4426,7 +4371,11 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                 <section style={{ marginBottom: '48px' }}>
                   <h3 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '16px', borderBottom: '2px solid #111', paddingBottom: '12px' }}>주문 상품 확인</h3>
                   <div style={{ display: 'flex', gap: '16px', padding: '16px', border: '1px solid var(--border)', borderRadius: '12px' }}>
-                    <div style={{ width: '80px', height: '80px', background: '#e5e5e5', borderRadius: '8px' }}></div>
+                    {(() => { const thumb = storeItems.find(p => p.id === checkoutData?.productId)?.thumbnailUrl; return (
+                      <div style={{ width: '80px', height: '80px', background: thumb ? 'transparent' : '#e5e5e5', borderRadius: '8px', overflow: 'hidden', flexShrink: 0 }}>
+                        {thumb && <img src={thumb} alt={checkoutData?.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                      </div>
+                    ); })()}
                     <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: 800, fontSize: '16px', marginBottom: '8px' }}>{checkoutData.title}</div>
                       <div style={{ fontSize: '13px', color: 'var(--text-sub)', marginBottom: '4px' }}>옵션: {checkoutData.option}</div>
@@ -4458,7 +4407,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                       <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px' }}>주소 *</label>
                       <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
                         <input value={checkoutForm.zipcode} readOnly type="text" placeholder="우편번호" style={{ width: '150px', padding: '12px', border: '1px solid var(--border)', borderRadius: '8px', background: '#f5f5f5' }} />
-                        <button onClick={() => setCheckoutForm({...checkoutForm, zipcode: '12345 서울시 강남구 테헤란로 123'})} style={{ padding: '0 24px', background: 'var(--text-main)', color: 'white', borderRadius: '8px', fontWeight: 700, fontSize: '13px' }}>우편번호 검색 🔍</button>
+                        <button onClick={() => setCheckoutForm({...checkoutForm, zipcode: '12345 서울시 강남구 테헤란로 123'})} style={{ padding: '0 24px', background: 'linear-gradient(135deg, #C2507A, #7F77DD)', color: 'white', borderRadius: '8px', fontWeight: 700, fontSize: '13px' }}>우편번호 검색 🔍</button>
                       </div>
                       <input type="text" placeholder="도로명 주소 자동 입력" value={checkoutForm.zipcode.length > 5 ? checkoutForm.zipcode.substring(6) : ''} readOnly style={{ width: '100%', padding: '12px', border: '1px solid var(--border)', borderRadius: '8px', marginBottom: '8px', background: '#f5f5f5' }} />
                       <input type="text" placeholder="상세 주소 입력" style={{ width: '100%', padding: '12px', border: '1px solid var(--border)', borderRadius: '8px' }} />
@@ -4589,6 +4538,28 @@ export default function App({ role = 'FAN' }: { role?: string }) {
         )}
 
 
+        {/* --- PAYMENT RETURN LOADING/ERROR (Toss 리다이렉트 복귀, checkoutData 없음) --- */}
+        {activeTab === 'CHECKOUT' && !checkoutData && isPaymentReturn && (
+          <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-cream)' }}>
+            <div style={{ textAlign: 'center', padding: '40px 24px' }}>
+              {paymentStatus === 'failed' ? (
+                <>
+                  <div style={{ fontSize: '48px', marginBottom: '24px' }}>⚠️</div>
+                  <h2 style={{ fontSize: '24px', fontWeight: 800, marginBottom: '12px' }}>결제 확인 실패</h2>
+                  <p style={{ fontSize: '15px', color: 'var(--text-sub)', marginBottom: '32px' }}>{paymentError || '결제 확인 중 오류가 발생했습니다. 고객센터에 문의해 주세요.'}</p>
+                  <button onClick={() => setActiveTab('HOME')} style={{ padding: '14px 32px', background: '#111', color: 'white', borderRadius: '12px', fontWeight: 800, cursor: 'pointer', border: 'none', fontSize: '15px' }}>홈으로 돌아가기</button>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize: '48px', marginBottom: '24px' }}>⏳</div>
+                  <h2 style={{ fontSize: '24px', fontWeight: 800, marginBottom: '12px' }}>결제를 확인하는 중입니다</h2>
+                  <p style={{ fontSize: '15px', color: 'var(--text-sub)' }}>잠시만 기다려 주세요.</p>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* --- ORDER COMPLETE --- */}
         {activeTab === 'ORDER_COMPLETE' && (
           <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-cream)' }}>
@@ -4605,7 +4576,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
               <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
                 <button
                   onClick={() => { setActiveTab('MY PAGE'); setMyPageTab('ORDERS'); resetCheckout(); }}
-                  style={{ padding: '16px 32px', background: '#111', color: 'white', borderRadius: '12px', fontSize: '15px', fontWeight: 800, cursor: 'pointer', border: 'none' }}
+                  style={{ padding: '16px 32px', background: 'linear-gradient(135deg, #C2507A, #7F77DD)', color: 'white', borderRadius: '12px', fontSize: '15px', fontWeight: 800, cursor: 'pointer', border: 'none' }}
                 >주문 내역 보기</button>
                 <button
                   onClick={() => { setActiveTab('HOME'); resetCheckout(); }}
@@ -5715,6 +5686,26 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Follow Required Modal */}
+      {showFollowRequiredModal && (
+        <div className="modal-overlay" style={{ zIndex: 1200 }} onClick={() => setShowFollowRequiredModal(false)}>
+          <div className="modal-content" style={{ maxWidth: '360px', padding: '40px 32px', textAlign: 'center', borderRadius: '24px' }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>💜</div>
+            <h3 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '10px' }}>팔로우가 필요해요!</h3>
+            <p style={{ fontSize: '14px', color: 'var(--text-sub)', lineHeight: 1.6, marginBottom: '28px' }}>
+              댓글은 해당 아티스트를 팔로우한 팬만 작성할 수 있어요.<br />
+              팔로우하고 아티스트와 더 가까워져 보세요!
+            </p>
+            <button
+              onClick={() => setShowFollowRequiredModal(false)}
+              style={{ width: '100%', padding: '14px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg, var(--point-rose), var(--point-violet))', color: 'white', fontSize: '15px', fontWeight: 800, cursor: 'pointer' }}
+            >
+              확인
+            </button>
           </div>
         </div>
       )}

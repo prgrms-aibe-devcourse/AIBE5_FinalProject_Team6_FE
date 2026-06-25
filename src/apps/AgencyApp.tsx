@@ -413,12 +413,18 @@ export default function AgencyApp() {
 
   useEffect(() => {
     if (activeMenu !== 'products' || !agencyArtistId) return;
-    Promise.all([
-      getProducts('regular', undefined, 50, agencyArtistId),
-      getProducts('drops', undefined, 50, agencyArtistId),
-    ])
-      .then(([regular, drops]) => setProductList([...regular.items, ...drops.items]))
-      .catch(() => {});
+    const fetchProducts = () => {
+      Promise.all([
+        getProducts('regular', undefined, 50, agencyArtistId),
+        getProducts('drops', undefined, 50, agencyArtistId),
+      ])
+        .then(([regular, drops]) => setProductList([...regular.items, ...drops.items]))
+        .catch(() => {});
+    };
+    fetchProducts();
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchProducts(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
   }, [activeMenu, agencyArtistId]);
 
   useEffect(() => {

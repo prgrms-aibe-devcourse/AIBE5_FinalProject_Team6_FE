@@ -541,10 +541,13 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     }).catch(() => {});
   }, [activeTab, myPageTab]);
 
-  // 결제 성공 후 장바구니 자동 비우기
+  // 결제 성공 후 장바구니 자동 비우기 (FE 상태 + BE 카트 아이템 동시 삭제)
   useEffect(() => {
-    if (paymentStatus === 'success') setCartItems([]);
-  }, [paymentStatus]);
+    if (paymentStatus !== 'success') return;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    cartItems.forEach(ci => removeCartItem(ci.cartItemId).catch(() => {}));
+    setCartItems([]);
+  }, [paymentStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Trigger Intersection Observer again when activeTab changes
   useEffect(() => {

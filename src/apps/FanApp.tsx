@@ -436,6 +436,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
   const [paymentDetails, setPaymentDetails] = useState<Record<number, PaymentDetail | 'loading' | 'error'>>({});
   const [expandedPaymentIds, setExpandedPaymentIds] = useState<Set<number>>(new Set());
   const [orderDetails, setOrderDetails] = useState<Record<number, OrderDetail | 'loading' | 'error'>>({});
+  const [productNameCache, setProductNameCache] = useState<Record<number, string>>({});
   const [showAttendanceBanner, setShowAttendanceBanner] = useState(false);
   const [attendanceStep, setAttendanceStep] = useState<'IDLE' | 'STAMPING' | 'REWARD'>('IDLE');
   const [triggeredArtists, setTriggeredArtists] = useState<number[]>([]);
@@ -551,7 +552,16 @@ export default function App({ role = 'FAN' }: { role?: string }) {
       res.items.forEach(order => {
         setOrderDetails(prev => ({ ...prev, [order.orderId]: 'loading' }));
         getOrderDetail(order.orderId)
-          .then(d => setOrderDetails(prev => ({ ...prev, [order.orderId]: d })))
+          .then(d => {
+            setOrderDetails(prev => ({ ...prev, [order.orderId]: d }));
+            d.items.forEach(item => {
+              if (!storeItems.find(s => s.id === item.productId)) {
+                getProduct(item.productId).then(p => {
+                  setProductNameCache(prev => ({ ...prev, [item.productId]: p.name }));
+                }).catch(() => {});
+              }
+            });
+          })
           .catch(() => setOrderDetails(prev => ({ ...prev, [order.orderId]: 'error' })));
       });
     }).catch(() => {});
@@ -4843,7 +4853,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                                     const od = orderDetails[order.orderId];
                                     if (od && od !== 'loading' && od !== 'error') {
                                       const names = od.items.map(item =>
-                                        storeItems.find(s => s.id === item.productId)?.name ?? `상품 #${item.productId}`
+                                        storeItems.find(s => s.id === item.productId)?.name ?? productNameCache[item.productId] ?? `상품 #${item.productId}`
                                       );
                                       return <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '4px', color: 'var(--text-main)' }}>{names.join(' · ')}</div>;
                                     }
@@ -4920,7 +4930,7 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                                           return (
                                             <>
                                               {odItems.map((item, i) => {
-                                                const name = storeItems.find(s => s.id === item.productId)?.name ?? `상품 #${item.productId}`;
+                                                const name = storeItems.find(s => s.id === item.productId)?.name ?? productNameCache[item.productId] ?? `상품 #${item.productId}`;
                                                 return (
                                                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
                                                     <span style={{ color: 'var(--text-sub)' }}>{name} × {item.quantity}</span>

@@ -1886,11 +1886,16 @@ export default function App({ role = 'FAN' }: { role?: string }) {
                     <div
                       key={n.id}
                       onClick={async () => {
-                        if (n.isRead) return;
-                        await markAsRead(n.id).catch(() => {});
-                        setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, isRead: true } : x));
+                        if (!n.isRead) {
+                          await markAsRead(n.id).catch(() => {});
+                          setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, isRead: true } : x));
+                        }
+                        if (n.type === 'RESTOCK' && n.targetId != null) {
+                          const product = await getProduct(n.targetId).catch(() => null);
+                          if (product) setSelectedProduct(product);
+                        }
                       }}
-                      style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '20px', padding: '24px', position: 'relative', opacity: n.isRead ? 0.7 : 1, cursor: n.isRead ? 'default' : 'pointer' }}
+                      style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '20px', padding: '24px', position: 'relative', opacity: n.isRead ? 0.7 : 1, cursor: 'pointer' }}
                     >
                       {!n.isRead && <div style={{ position: 'absolute', top: 24, right: 24, width: '8px', height: '8px', background: 'var(--point-rose)', borderRadius: '50%' }}></div>}
                       <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--point-rose)', marginBottom: '8px' }}>{n.type}</div>

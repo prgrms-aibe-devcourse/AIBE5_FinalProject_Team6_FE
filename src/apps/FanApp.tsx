@@ -514,6 +514,20 @@ export default function App({ role = 'FAN' }: { role?: string }) {
     localStorage.setItem('fd_restock_subscribed', JSON.stringify(Array.from(restockSubscribed)));
   }, [restockSubscribed]);
 
+  // RESTOCK 알림이 수신되면 해당 상품을 '대기 중인 알림' 목록에서 자동 제거
+  useEffect(() => {
+    const restockTargets = notifications
+      .filter(n => n.type === 'RESTOCK' && n.targetId !== null)
+      .map(n => n.targetId as number);
+    if (restockTargets.length === 0) return;
+    setRestockSubscribed(prev => {
+      const next = new Set(prev);
+      let changed = false;
+      restockTargets.forEach(id => { if (next.has(id)) { next.delete(id); changed = true; } });
+      return changed ? next : prev;
+    });
+  }, [notifications]);
+
   useEffect(() => {
     if (activeTab !== 'MY PAGE') return;
     getMyProfile().then(p => {
